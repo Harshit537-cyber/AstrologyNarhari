@@ -16,7 +16,8 @@ app.use(cookieParser());
 app.use("/api/user", userAuthRoutes);
 app.use("/api/partner", partnerAuthRoutes);
 app.use("/api/admin", adminAuthRoutes);
-app.use("/api/otp", require("./routes/otp/otpRoutes"))
+app.use("/api/otp", require("./routes/otp/otpRoutes"));
+app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({
