@@ -53,4 +53,104 @@ const login = async (req, res) => {
     }
 };
 
-module.exports = { register, login };
+
+
+
+const getDashboardStats = async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const [
+            totalUsers,
+            totalPartners,
+            totalAdmins,
+            newUsersToday,
+            newPartnersToday
+        ] = await Promise.all([
+            User.countDocuments({ role: "user" }),
+            User.countDocuments({ role: "partner" }),
+            User.countDocuments({ role: "admin" }),
+            User.countDocuments({
+                role: "user",
+                createdAt: { $gte: today }
+            }),
+            User.countDocuments({
+                role: "partner",
+                createdAt: { $gte: today }
+            })
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalUsers,
+                totalPartners,
+                totalAdmins,
+                newUsersToday,
+                newPartnersToday
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+const getRecentUsers = async (req, res) => {
+    try {
+
+        const users = await User.find()
+            .select("-password")
+            .sort({ createdAt: -1 })
+            .limit(10);
+
+        res.json({
+            success: true,
+            data: users
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+const getUserAnalytics = async (req, res) => {
+
+    try {
+
+        const analytics = await User.aggregate([
+            {
+                $group: {
+                    _id: "$role",
+                    total: {
+                        $sum: 1
+                    }
+                }
+            }
+        ]);
+
+        res.json({
+            success: true,
+            data: analytics
+        });
+
+    } catch (err) {
+
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+
+    }
+
+};
+
+module.exports = { 
+    register, login, getDashboardStats, getRecentUsers, getUserAnalytics
+ };
