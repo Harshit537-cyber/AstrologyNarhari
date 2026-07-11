@@ -20,7 +20,7 @@ app.use("/api/admin", adminAuthRoutes);
 app.get("/", (req, res) => {
     res.status(200).json({
         success: true,
-        message: "Astrlogy Narhari Backend Running 🚀"
+        message: "Astrlogy Narhari Backend Running "
     });
 });
 
