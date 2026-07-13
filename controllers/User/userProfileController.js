@@ -3,6 +3,7 @@ const cloudinary = require('../../config/cloudinary');
 const getZodiacSign = require('../../utils/zodiacHelper');
 const fs = require('fs');
 const path = require('path');
+const getDailyHoroscope = require('../../utils/horoscopeGenerator');
 
 exports.createProfile = async (req, res) => {
     const filePath = req.file ? req.file.path : null;
@@ -61,6 +62,47 @@ exports.createProfile = async (req, res) => {
             success: false, 
             message: "Server Error", 
             error: error.message 
+        });
+    }
+};
+
+
+exports.getDashboardHoroscope = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const profile = await UserProfile.findOne({ user: userId });
+        if (!profile) {
+            return res.status(404).json({
+                success: false,
+                message: "Profile not found. Please create your profile first."
+            });
+        }
+        const horoscopeData = getDailyHoroscope(profile.zodiac);
+        res.status(200).json({
+            success: true,
+            data: {
+                user: {
+                    fullName: profile.fullName,
+                    profilePic: profile.profilePic || "default_url_here",
+                    zodiac: profile.zodiac
+                },
+                horoscope: {
+                    zodiacSign: profile.zodiac,
+                    prediction: horoscopeData.prediction,
+                    luckyColor: horoscopeData.luckyColor,
+                    luckyNumber: horoscopeData.luckyNumber,
+                    alignment: horoscopeData.alignment,
+                    date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error("Dashboard Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal Server Error",
+            error: error.message
         });
     }
 };
