@@ -257,5 +257,69 @@ const register = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+const getProfile = async (req, res) => {
+    try {
 
-module.exports = { sendOtp, verifyOtp, sendLoginOtp, loginWithOtp, register };
+        const partner = await Partner.findById(req.user.id)
+            .select("-otp -otpExpiry");
+
+        if (!partner) {
+            return res.status(404).json({
+                success: false,
+                message: "Partner not found"
+            });
+        }
+
+
+        res.status(200).json({
+            success: true,
+            message: "Profile fetched successfully",
+            partner
+        });
+
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+const deleteAccount = async (req, res) => {
+    try {
+        const { reason } = req.body;
+
+        if (!reason) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide a reason for deleting the account"
+            });
+        }
+
+        const partner = await Partner.findById(req.user.id);
+
+        if (!partner) {
+            return res.status(404).json({
+                success: false,
+                message: "Partner not found"
+            });
+        }
+
+        // Optional: reason ko alag collection me save kar sakte ho
+        console.log("Delete Reason:", reason);
+
+        await Partner.findByIdAndDelete(req.user.id);
+
+        res.status(200).json({
+            success: true,
+            message: "Account deleted successfully"
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+module.exports = { sendOtp, verifyOtp, sendLoginOtp, loginWithOtp, register,  getProfile, deleteAccount};
