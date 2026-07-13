@@ -1,7 +1,7 @@
 const User = require('../../models/User');
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
+const JWT_SECRET = process.env.JWT_SECRET;
 const HARDCODED_OTP = "123456";
 
 exports.sendOTP = async (req, res) => {
