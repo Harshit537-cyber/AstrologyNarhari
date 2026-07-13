@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const documentSchema = new mongoose.Schema({
     url: {
-        type: String
+        type: String,
     },
     status: {
         type: String,
