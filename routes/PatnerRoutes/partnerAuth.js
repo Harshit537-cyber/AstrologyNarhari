@@ -3,6 +3,7 @@ const router = express.Router();
 const upload = require('../../middleware/upload');
 const { verifyToken, isPartner } = require('../../middleware/auth');
 const { sendOtp, verifyOtp, sendLoginOtp, loginWithOtp, register, getProfile, deleteAccount } = require('../../controllers/Patner/partnerAuth');
+const { uploadKycDocuments, getKycStatus } = require('../../controllers/Patner/partnerKyc');
 
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
@@ -32,5 +33,20 @@ router.delete(
     isPartner,
     deleteAccount
 );
+
+router.post(
+    '/kyc/upload',
+    verifyToken,
+    isPartner,
+    upload.fields([
+        { name: 'selfie', maxCount: 1 },
+        { name: 'nationalId', maxCount: 1 },
+        { name: 'astrologyCertificate', maxCount: 1 },
+        { name: 'addressProof', maxCount: 1 }
+    ]),
+    uploadKycDocuments
+);
+
+router.get('/kyc/status', verifyToken, isPartner, getKycStatus);
 
 module.exports = router;
