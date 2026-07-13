@@ -85,6 +85,72 @@ const verifyOtp = async (req, res) => {
     }
 };
 
+const sendLoginOtp = async (req, res) => {
+    try {
+        const { mobile } = req.body;
+        if (!mobile) {
+            return res.status(400).json({ message: 'Mobile number is required' });
+        }
+
+        const partner = await Partner.findOne({ mobile });
+        if (!partner) {
+            return res.status(404).json({ message: 'Partner is not registered. Please register first.' });
+        }
+
+        const dummyOtp = '123456';
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+        partner.otp = dummyOtp;
+        partner.otpExpiry = otpExpiry;
+        await partner.save();
+
+        res.status(200).json({ message: 'Login OTP sent successfully', otp: dummyOtp });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+const loginWithOtp = async (req, res) => {
+    try {
+        const { mobile, otp } = req.body;
+        if (!mobile || !otp) {
+            return res.status(400).json({ message: 'Mobile and OTP are required' });
+        }
+
+        const partner = await Partner.findOne({ mobile });
+        if (!partner) {
+            return res.status(404).json({ message: 'Partner not found' });
+        }
+
+        if (partner.otp !== otp || new Date() > partner.otpExpiry) {
+            return res.status(400).json({ message: 'Invalid or expired OTP' });
+        }
+
+        partner.otp = undefined;
+        partner.otpExpiry = undefined;
+        await partner.save();
+
+        const token = jwt.sign(
+            { id: partner._id, role: partner.role },
+            process.env.JWT_SECRET || 'secretkey',
+            { expiresIn: '30d' }
+        );
+
+        res.status(200).json({
+            message: 'Login successful',
+            token,
+            isProfileComplete: partner.isProfileComplete,
+            partner: {
+                id: partner._id,
+                mobile: partner.mobile,
+                role: partner.role
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 const register = async (req, res) => {
     try {
         const partner = await Partner.findById(req.user.id);
@@ -192,4 +258,4 @@ const register = async (req, res) => {
     }
 };
 
-module.exports = { sendOtp, verifyOtp, register };
+module.exports = { sendOtp, verifyOtp, sendLoginOtp, loginWithOtp, register };
