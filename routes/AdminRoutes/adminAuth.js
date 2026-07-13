@@ -3,15 +3,10 @@ const router = express.Router();
 const { register, login, getDashboardStats,
      getRecentUsers, getUserAnalytics, getAllUsers, updateUser, getAllPartners, updatePartner } = require('../../controllers/admin/adminAuth');
 
+
+//auth
 router.post('/register', register);
 router.post('/login', login);
-
-
-
-
-
-
-
 
 //dashboard ki apis 
 

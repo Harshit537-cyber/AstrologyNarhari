@@ -1,5 +1,5 @@
-const User = require('../../models/User');
-const Partner = require("../models/Partner");
+const User = require('../../models/User.js');
+const Partner = require("../../models/Partner/Partner.js");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -417,5 +417,5 @@ const updatePartner = async (req, res) => {
 
 module.exports = {
     register, login, getDashboardStats, getRecentUsers, getUserAnalytics,
-     getAllUsers, updateUser, getAllPartners, updatePartner
+    getAllUsers, updateUser, getAllPartners, updatePartner
 };
