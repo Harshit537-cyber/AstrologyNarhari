@@ -1,5 +1,20 @@
 const mongoose = require('mongoose');
 
+const documentSchema = new mongoose.Schema({
+    url: {
+        type: String,
+    },
+    status: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected'],
+        default: 'Pending'
+    },
+    uploadedAt: {
+        type: Date,
+        default: Date.now
+    }
+}, { _id: false });
+
 const partnerSchema = new mongoose.Schema({
     mobile: {
         type: String,
@@ -64,6 +79,27 @@ const partnerSchema = new mongoose.Schema({
     bio: {
         type: String,
         trim: true
+    },
+    kycStatus: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected'],
+        default: 'Pending'
+    },
+    selfie: {
+        type: documentSchema,
+        default: () => ({})
+    },
+    nationalId: {
+        type: documentSchema,
+        default: () => ({})
+    },
+    astrologyCertificate: {
+        type: documentSchema,
+        default: () => ({})
+    },
+    addressProof: {
+        type: documentSchema,
+        default: () => ({})
     }
 }, { timestamps: true });
 

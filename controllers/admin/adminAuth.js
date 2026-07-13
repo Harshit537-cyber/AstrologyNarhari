@@ -1,5 +1,5 @@
 const User = require('../../models/User.js');
-const Partner = require("../../models/Partner/Partner.js");
+const Partner = require("../../models/Partner/Partner");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -56,7 +56,6 @@ const login = async (req, res) => {
 
 
 
-
 const getDashboardStats = async (req, res) => {
     try {
         const today = new Date();
@@ -70,7 +69,7 @@ const getDashboardStats = async (req, res) => {
             newPartnersToday
         ] = await Promise.all([
             User.countDocuments({ role: "user" }),
-            User.countDocuments({ role: "partner" }),
+            Partner.countDocuments(),
             User.countDocuments({ role: "admin" }),
             User.countDocuments({
                 role: "user",
@@ -121,6 +120,8 @@ const getRecentUsers = async (req, res) => {
         });
     }
 };
+
+
 const getUserAnalytics = async (req, res) => {
 
     try {
@@ -324,6 +325,34 @@ const getAllPartners = async (req, res) => {
     }
 };
 
+const getPartnerById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const partner = await Partner.findById(id);
+
+        if (!partner) {
+            return res.status(404).json({
+                success: false,
+                message: "Partner not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Partner details fetched successfully",
+            data: partner
+        });
+
+    } catch (error) {
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
+    }
+};
 
 
 
@@ -415,7 +444,90 @@ const updatePartner = async (req, res) => {
     }
 };
 
+
+const updatePartnerDocumentStatus = async (req, res) => {
+    try {
+        const { partnerId, document, status } = req.body;
+
+        // Valid documents
+        const validDocuments = [
+            "selfie",
+            "nationalId",
+            "astrologyCertificate",
+            "addressProof"
+        ];
+
+        if (!validDocuments.includes(document)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid document type"
+            });
+        }
+
+        // Valid status
+        if (!["Approved", "Rejected"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid status"
+            });
+        }
+
+        const partner = await Partner.findById(partnerId);
+
+        if (!partner) {
+            return res.status(404).json({
+                success: false,
+                message: "Partner not found"
+            });
+        }
+
+        // Check document uploaded or not
+        if (!partner[document] || !partner[document].url) {
+            return res.status(400).json({
+                success: false,
+                message: `${document} not uploaded`
+            });
+        }
+
+        // Update document status
+        partner[document].status = status;
+
+        // Update overall KYC Status
+        const docs = [
+            partner.selfie,
+            partner.nationalId,
+            partner.astrologyCertificate,
+            partner.addressProof
+        ];
+
+        if (docs.some(doc => doc.status === "Rejected")) {
+            partner.kycStatus = "Rejected";
+        } else if (docs.every(doc => doc.status === "Approved")) {
+            partner.kycStatus = "Approved";
+        } else {
+            partner.kycStatus = "Pending";
+        }
+
+        await partner.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `${document} ${status} successfully`,
+            data: partner
+        });
+
+    } catch (error) {
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
+    }
+};
+
 module.exports = {
     register, login, getDashboardStats, getRecentUsers, getUserAnalytics,
-    getAllUsers, updateUser, getAllPartners, updatePartner
+    getAllUsers, updateUser, getAllPartners, updatePartner, getPartnerById,
+    updatePartnerDocumentStatus
 };
