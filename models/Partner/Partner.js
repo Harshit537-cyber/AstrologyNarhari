@@ -85,6 +85,10 @@ const partnerSchema = new mongoose.Schema({
         enum: ['Pending', 'Approved', 'Rejected'],
         default: 'Pending'
     },
+    selfie: {
+        type: documentSchema,
+        default: () => ({})
+    },
     nationalId: {
         type: documentSchema,
         default: () => ({})
