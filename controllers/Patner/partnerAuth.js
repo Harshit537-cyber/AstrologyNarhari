@@ -305,7 +305,7 @@ const deleteAccount = async (req, res) => {
             });
         }
 
-        // Optional: reason ko alag collection me save kar sakte ho
+       
         console.log("Delete Reason:", reason);
 
         await Partner.findByIdAndDelete(req.user.id);

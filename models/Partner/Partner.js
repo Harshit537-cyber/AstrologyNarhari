@@ -1,106 +1,122 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const documentSchema = new mongoose.Schema({
+const documentSchema = new mongoose.Schema(
+  {
     url: {
-        type: String,
+      type: String,
     },
     status: {
-        type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
-        default: 'Pending'
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
     },
     uploadedAt: {
-        type: Date,
-        default: Date.now
-    }
-}, { _id: false });
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
 
-const partnerSchema = new mongoose.Schema({
+const partnerSchema = new mongoose.Schema(
+  {
     mobile: {
-        type: String,
-        required: true,
-        unique: true
+      type: String,
+      required: true,
+      unique: true,
     },
     role: {
-        type: String,
-        default: 'partner'
+      type: String,
+      default: "partner",
     },
     otp: {
-        type: String
+      type: String,
     },
     otpExpiry: {
-        type: Date
+      type: Date,
     },
     isVerified: {
-        type: Boolean,
-        default: false
+      type: Boolean,
+      default: false,
     },
     isProfileComplete: {
-        type: Boolean,
-        default: false
+      type: Boolean,
+      default: false,
     },
     fullName: {
-        type: String,
-        trim: true
+      type: String,
+      trim: true,
     },
     profilePic: {
-        type: String
+      type: String,
     },
     dateOfBirth: {
-        type: Date
+      type: Date,
     },
     gender: {
-        type: String,
-        enum: ['Male', 'Female', 'Other']
+      type: String,
+      enum: ["Male", "Female", "Other"],
     },
     city: {
-        type: String,
-        trim: true
+      type: String,
+      trim: true,
     },
-    specialties: [{
-        type: String
-    }],
-    languages: [{
-        type: String
-    }],
+    specialties: [
+      {
+        type: String,
+      },
+    ],
+    languages: [
+      {
+        type: String,
+      },
+    ],
     experience: {
-        type: Number
+      type: Number,
     },
     qualification: {
-        type: String,
-        trim: true
+      type: String,
+      trim: true,
     },
     expectedSalary: {
-        type: Number
+      type: Number,
     },
-    additionalPhotos: [{
-        type: String
-    }],
-    bio: {
+    additionalPhotos: [
+      {
         type: String,
-        trim: true
+      },
+    ],
+    bio: {
+      type: String,
+      trim: true,
+    },
+    isOnline: {
+      type: Boolean,
+      default: false,
     },
     kycStatus: {
-        type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
-        default: 'Pending'
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
     },
     selfie: {
-        type: documentSchema,
-        default: () => ({})
+      type: documentSchema,
+      default: () => ({}),
     },
     nationalId: {
-        type: documentSchema,
-        default: () => ({})
+      type: documentSchema,
+      default: () => ({}),
     },
     astrologyCertificate: {
-        type: documentSchema,
-        default: () => ({})
+      type: documentSchema,
+      default: () => ({}),
     },
     addressProof: {
-        type: documentSchema,
-        default: () => ({})
-    }
-}, { timestamps: true });
+      type: documentSchema,
+      default: () => ({}),
+    },
+  },
+  { timestamps: true },
+);
 
-module.exports = mongoose.model('Partner', partnerSchema);
+module.exports = mongoose.model("Partner", partnerSchema);
