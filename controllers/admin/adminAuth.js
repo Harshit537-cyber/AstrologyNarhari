@@ -2,6 +2,7 @@ const User = require('../../models/User.js');
 const Partner = require("../../models/Partner/Partner");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const UserProfile = require('../../models/user/UserProfile.js');
 
 const register = async (req, res) => {
     try {
@@ -155,17 +156,17 @@ const getUserAnalytics = async (req, res) => {
 
 
 
-
 const getAllUsers = async (req, res) => {
     try {
         const {
             page = 1,
             limit = 10,
-            search = "",
-            role
+            search = ""
         } = req.query;
 
-        const filter = {};
+        const filter = {
+            role: "user"
+        };
 
         if (search) {
             filter.$or = [
@@ -175,14 +176,10 @@ const getAllUsers = async (req, res) => {
             ];
         }
 
-        if (role) {
-            filter.role = role;
-        }
-
         const users = await User.find(filter)
             .select("-password -otp")
             .sort({ createdAt: -1 })
-            .skip((page - 1) * limit)
+            .skip((Number(page) - 1) * Number(limit))
             .limit(Number(limit));
 
         const total = await User.countDocuments(filter);
@@ -191,7 +188,7 @@ const getAllUsers = async (req, res) => {
             success: true,
             total,
             page: Number(page),
-            totalPages: Math.ceil(total / limit),
+            totalPages: Math.ceil(total / Number(limit)),
             data: users
         });
 
@@ -203,6 +200,41 @@ const getAllUsers = async (req, res) => {
     }
 };
 
+
+
+const getUserById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const user = await User.findById(id)
+            .select("-password -otp");
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const userProfile = await UserProfile.findOne({
+            user: id
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                user,
+                profile: userProfile
+            }
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
 
 
 
@@ -268,6 +300,38 @@ const updateUser = async (req, res) => {
 };
 
 
+const deleteUserById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const user = await User.findById(id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        // User Profile delete
+        await UserProfile.findOneAndDelete({ user: id });
+
+        // User delete
+        await User.findByIdAndDelete(id);
+
+        return res.status(200).json({
+            success: true,
+            message: "User deleted successfully."
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 const getAllPartners = async (req, res) => {
     try {
         const {
@@ -275,7 +339,8 @@ const getAllPartners = async (req, res) => {
             limit = 10,
             search = "",
             isVerified,
-            isProfileComplete
+            isProfileComplete,
+            isActive
         } = req.query;
 
         const filter = {};
@@ -298,6 +363,11 @@ const getAllPartners = async (req, res) => {
         // Profile Complete Filter
         if (isProfileComplete !== undefined) {
             filter.isProfileComplete = isProfileComplete === "true";
+        }
+
+        // Active/Deactivated Filter
+        if (isActive !== undefined) {
+            filter.isActive = isActive === "true";
         }
 
         const partners = await Partner.find(filter)
@@ -444,6 +514,36 @@ const updatePartner = async (req, res) => {
     }
 };
 
+const deletePartner = async (req, res) => {
+    try {
+
+        const { id } = req.params;
+
+        const partner = await Partner.findById(id);
+
+        if (!partner) {
+            return res.status(404).json({
+                success: false,
+                message: "Partner not found"
+            });
+        }
+
+        await Partner.findByIdAndDelete(id);
+
+        return res.status(200).json({
+            success: true,
+            message: "Partner deleted successfully"
+        });
+
+    } catch (error) {
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
+    }
+};
 
 const updatePartnerDocumentStatus = async (req, res) => {
     try {
@@ -526,8 +626,153 @@ const updatePartnerDocumentStatus = async (req, res) => {
     }
 };
 
+const deactivateUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason, reasonNote } = req.body;
+
+        if (!reason) {
+            return res.status(400).json({
+                success: false,
+                message: "Reason is required"
+            });
+        }
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        if (!user.isActive) {
+            return res.status(400).json({ success: false, message: "User is already deactivated" });
+        }
+
+        user.isActive = false;
+        user.deactivatedBy = 'admin';
+        user.deactivatedAt = new Date();
+        user.deactivationReason = reason;
+        user.deactivationReasonNote = reasonNote || null;
+        user.deactivationDuration = null;
+        user.reactivateAt = null; // admin-deactivated: no auto-reactivation, admin must activate manually
+
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "User deactivated by admin"
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const activateUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        if (user.isActive) {
+            return res.status(400).json({ success: false, message: "User is already active" });
+        }
+
+        user.isActive = true;
+        user.deactivatedBy = null;
+        user.deactivatedAt = null;
+        user.reactivateAt = null;
+        user.deactivationReason = null;
+        user.deactivationReasonNote = null;
+        user.deactivationDuration = null;
+
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "User activated by admin"
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const deactivatePartner = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason, reasonNote } = req.body;
+
+        if (!reason) {
+            return res.status(400).json({
+                success: false,
+                message: "Reason is required"
+            });
+        }
+
+        const partner = await Partner.findById(id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: "Partner not found" });
+        }
+
+        if (!partner.isActive) {
+            return res.status(400).json({ success: false, message: "Partner is already deactivated" });
+        }
+
+        partner.isActive = false;
+        partner.deactivatedBy = 'admin';
+        partner.deactivatedAt = new Date();
+        partner.deactivationReason = reason;
+        partner.deactivationReasonNote = reasonNote || null;
+        partner.deactivationDuration = null;
+        partner.reactivateAt = null;
+
+        await partner.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Partner deactivated by admin"
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const activatePartner = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const partner = await Partner.findById(id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: "Partner not found" });
+        }
+
+        if (partner.isActive) {
+            return res.status(400).json({ success: false, message: "Partner is already active" });
+        }
+
+        partner.isActive = true;
+        partner.deactivatedBy = null;
+        partner.deactivatedAt = null;
+        partner.reactivateAt = null;
+        partner.deactivationReason = null;
+        partner.deactivationReasonNote = null;
+        partner.deactivationDuration = null;
+
+        await partner.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Partner activated by admin"
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     register, login, getDashboardStats, getRecentUsers, getUserAnalytics,
     getAllUsers, updateUser, getAllPartners, updatePartner, getPartnerById,
-    updatePartnerDocumentStatus
+    updatePartnerDocumentStatus,getUserById,deleteUserById,deletePartner,
+    deactivateUser, activateUser, deactivatePartner, activatePartner
 };
