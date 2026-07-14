@@ -2,6 +2,7 @@ const Partner = require('../../models/Partner/Partner');
 const jwt = require('jsonwebtoken');
 const cloudinary = require('../../config/cloudinary');
 const fs = require('fs');
+const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
 
 const uploadToCloudinary = async (filePath, folder) => {
     try {
@@ -128,6 +129,28 @@ const loginWithOtp = async (req, res) => {
 
         partner.otp = undefined;
         partner.otpExpiry = undefined;
+
+        // --- Deactivation check ---
+        if (!partner.isActive) {
+            if (partner.deactivatedBy === 'admin') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Your account has been deactivated by admin. Please contact admin for assistance.'
+                });
+            }
+
+            // self-deactivated: agar duration poori ho chuki hai to auto-reactivate
+            if (partner.reactivateAt && new Date() >= partner.reactivateAt) {
+                partner.isActive = true;
+                partner.deactivatedBy = null;
+                partner.deactivatedAt = null;
+                partner.reactivateAt = null;
+                partner.deactivationReason = null;
+                partner.deactivationReasonNote = null;
+                partner.deactivationDuration = null;
+            }
+        }
+
         await partner.save();
 
         const token = jwt.sign(
@@ -136,16 +159,30 @@ const loginWithOtp = async (req, res) => {
             { expiresIn: '30d' }
         );
 
-        res.status(200).json({
+        const response = {
             message: 'Login successful',
             token,
             isProfileComplete: partner.isProfileComplete,
             partner: {
                 id: partner._id,
                 mobile: partner.mobile,
-                role: partner.role
+                role: partner.role,
+                isActive: partner.isActive
             }
-        });
+        };
+
+        if (!partner.isActive) {
+            response.message = 'Your account is deactivated. Reactivate to continue.';
+            response.deactivationInfo = {
+                reason: partner.deactivationReason,
+                reasonNote: partner.deactivationReasonNote,
+                duration: partner.deactivationDuration,
+                deactivatedAt: partner.deactivatedAt,
+                reactivateAt: partner.reactivateAt
+            };
+        }
+
+        res.status(200).json(response);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -257,6 +294,7 @@ const register = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
 const getProfile = async (req, res) => {
     try {
 
@@ -285,6 +323,7 @@ const getProfile = async (req, res) => {
         });
     }
 };
+
 const deleteAccount = async (req, res) => {
     try {
         const { reason } = req.body;
@@ -322,4 +361,101 @@ const deleteAccount = async (req, res) => {
         });
     }
 };
-module.exports = { sendOtp, verifyOtp, sendLoginOtp, loginWithOtp, register,  getProfile, deleteAccount};
+
+const deactivateAccount = async (req, res) => {
+    try {
+        const { reason, reasonNote, duration } = req.body;
+
+        if (!reason || !DEACTIVATION_REASONS.includes(reason)) {
+            return res.status(400).json({
+                success: false,
+                message: `Reason is required and must be one of: ${DEACTIVATION_REASONS.join(', ')}`
+            });
+        }
+
+        if (duration !== undefined && duration !== null && !ALLOWED_DURATIONS.includes(Number(duration))) {
+            return res.status(400).json({
+                success: false,
+                message: 'Duration must be 7, 15, 30, or omitted for indefinite deactivation'
+            });
+        }
+
+        const partner = await Partner.findById(req.user.id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: 'Partner not found' });
+        }
+
+        if (!partner.isActive) {
+            return res.status(400).json({ success: false, message: 'Account is already deactivated' });
+        }
+
+        const now = new Date();
+        partner.isActive = false;
+        partner.deactivatedBy = 'self';
+        partner.deactivatedAt = now;
+        partner.deactivationReason = reason;
+        partner.deactivationReasonNote = reasonNote || null;
+        partner.deactivationDuration = duration ? Number(duration) : null;
+        partner.reactivateAt = duration ? new Date(now.getTime() + Number(duration) * 24 * 60 * 60 * 1000) : null;
+
+        await partner.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Account deactivated successfully',
+            data: {
+                deactivatedAt: partner.deactivatedAt,
+                reactivateAt: partner.reactivateAt,
+                reason: partner.deactivationReason
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const activateAccount = async (req, res) => {
+    try {
+        const partner = await Partner.findById(req.user.id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: 'Partner not found' });
+        }
+
+        if (partner.isActive) {
+            return res.status(400).json({ success: false, message: 'Account is already active' });
+        }
+
+        if (partner.deactivatedBy === 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'This account was deactivated by admin. Please contact admin to reactivate.'
+            });
+        }
+
+        partner.isActive = true;
+        partner.deactivatedBy = null;
+        partner.deactivatedAt = null;
+        partner.reactivateAt = null;
+        partner.deactivationReason = null;
+        partner.deactivationReasonNote = null;
+        partner.deactivationDuration = null;
+
+        await partner.save();
+
+        res.status(200).json({ success: true, message: 'Account activated successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+module.exports = {
+    sendOtp,
+    verifyOtp,
+    sendLoginOtp,
+    loginWithOtp,
+    register,
+    getProfile,
+    deleteAccount,
+    deactivateAccount,
+    activateAccount
+};

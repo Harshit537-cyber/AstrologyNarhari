@@ -100,7 +100,16 @@ const partnerSchema = new mongoose.Schema({
     addressProof: {
         type: documentSchema,
         default: () => ({})
-    }
+    },
+
+    // --- Deactivation fields ---
+    isActive: { type: Boolean, default: true },
+    deactivatedBy: { type: String, enum: ['self', 'admin', null], default: null },
+    deactivatedAt: { type: Date, default: null },
+    reactivateAt: { type: Date, default: null },
+    deactivationReason: { type: String, default: null },
+    deactivationReasonNote: { type: String, default: null },
+    deactivationDuration: { type: Number, default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Partner', partnerSchema);
