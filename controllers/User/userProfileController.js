@@ -106,3 +106,41 @@ exports.getDashboardHoroscope = async (req, res) => {
         });
     }
 };
+
+
+exports.getProfileForKundli = async (req, res) => {
+    try {
+        const userId = req.user.id; 
+
+        const profile = await UserProfile.findOne({ user: userId }).select(
+            'fullName gender dateOfBirth timeOfBirth placeOfBirth profilePic'
+        );
+
+        if (!profile) {
+            return res.status(404).json({
+                success: false,
+                message: "Profile not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                fullName: profile.fullName,
+                profilePic: profile.profilePic,
+                gender: profile.gender,
+                dateOfBirth: profile.dateOfBirth,
+                timeOfBirth: profile.timeOfBirth,
+                placeOfBirth: profile.placeOfBirth
+            }
+        });
+
+    } catch (error) {
+        console.error("Error fetching pre-fill details:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
+        });
+    }
+};

@@ -1,70 +1,72 @@
 const mongoose = require('mongoose');
 
 const partnerSchema = new mongoose.Schema({
-    mobile: { 
-        type: String, 
-        required: true, 
-        unique: true 
+    mobile: {
+        type: String,
+        required: true,
+        unique: true
     },
-    role: { 
-        type: String, 
-        default: 'partner' 
+    role: {
+        type: String,
+        default: 'partner'
     },
-    otp: { 
-        type: String 
+    otp: {
+        type: String
     },
-    otpExpiry: { 
-        type: Date 
+    otpExpiry: {
+        type: Date
     },
-    isVerified: { 
-        type: Boolean, 
-        default: false 
+    isVerified: {
+        type: Boolean,
+        default: false
     },
-    isProfileComplete: { 
-        type: Boolean, 
-        default: false 
+    isProfileComplete: {
+        type: Boolean,
+        default: false
     },
-    fullName: { 
-        type: String, 
-        trim: true 
+    fullName: {
+        type: String,
+        trim: true
     },
-    profilePic: { 
-        type: String 
+    profilePic: {
+        type: String
     },
-    dateOfBirth: { 
-        type: Date 
+    dateOfBirth: {
+        type: Date
     },
-    gender: { 
-        type: String, 
-        enum: ['Male', 'Female', 'Other'] 
+    gender: {
+        type: String,
+        enum: ['Male', 'Female', 'Other']
     },
-    city: { 
-        type: String, 
-        trim: true 
+    city: {
+        type: String,
+        trim: true
     },
-    specialties: [{ 
-        type: String 
+    specialties: [{
+        type: String
     }],
-    languages: [{ 
-        type: String 
+    languages: [{
+        type: String
     }],
-    experience: { 
-        type: Number 
+    experience: {
+        type: Number
     },
-    qualification: { 
-        type: String, 
-        trim: true 
+    qualification: {
+        type: String,
+        trim: true
     },
-    expectedSalary: { 
-        type: Number 
+    expectedSalary: {
+        type: Number
     },
-    additionalPhotos: [{ 
-        type: String 
+    additionalPhotos: [{
+        type: String
     }],
-    bio: { 
-        type: String, 
-        trim: true 
-    }
+    bio: {
+        type: String,
+        trim: true
+    },
+    averageRating: { type: Number, default: 0 },
+    totalReviews: { type: Number, default: 0 },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Partner', partnerSchema);
