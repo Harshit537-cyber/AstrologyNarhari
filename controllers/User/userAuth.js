@@ -1,4 +1,5 @@
 const User = require('../../models/User');
+const Partner = require('../../models/Partner/Partner');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
@@ -75,7 +76,6 @@ const login = async (req, res) => {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
-        // --- Deactivation check ---
         if (!user.isActive) {
             if (user.deactivatedBy === 'admin') {
                 return res.status(403).json({
@@ -84,7 +84,6 @@ const login = async (req, res) => {
                 });
             }
 
-            // self-deactivated: agar duration poori ho chuki hai to auto-reactivate
             if (user.reactivateAt && new Date() >= user.reactivateAt) {
                 user.isActive = true;
                 user.deactivatedBy = null;
@@ -217,4 +216,28 @@ const activateAccount = async (req, res) => {
     }
 };
 
-module.exports = { register, login, deactivateAccount, activateAccount };
+const getPartners = async (req, res) => {
+    try {
+        const partners = await Partner.find({
+            isProfileComplete: true,
+            isVerified: true,
+            isActive: { $ne: false }
+        })
+        .select(
+            'fullName profilePic specialties languages experience qualification expectedSalary averageRating totalReviews bio'
+        )
+        .sort({ averageRating: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: partners
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+module.exports = { register, login, deactivateAccount, activateAccount, getPartners };
