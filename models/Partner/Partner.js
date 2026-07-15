@@ -41,7 +41,8 @@ const partnerSchema = new mongoose.Schema({
     },
     fullName: {
         type: String,
-        trim: true
+        trim: true,
+        required: true,
     },
     profilePic: {
         type: String
