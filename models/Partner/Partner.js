@@ -41,8 +41,7 @@ const partnerSchema = new mongoose.Schema({
     },
     fullName: {
         type: String,
-        trim: true,
-        required: true,
+        trim: true
     },
     profilePic: {
         type: String
@@ -81,27 +80,8 @@ const partnerSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
-    kycStatus: {
-        type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
-        default: 'Pending'
-    },
-    selfie: {
-        type: documentSchema,
-        default: () => ({})
-    },
-    nationalId: {
-        type: documentSchema,
-        default: () => ({})
-    },
-    astrologyCertificate: {
-        type: documentSchema,
-        default: () => ({})
-    },
-    addressProof: {
-        type: documentSchema,
-        default: () => ({})
-    }
+    averageRating: { type: Number, default: 0 },
+    totalReviews: { type: Number, default: 0 },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Partner', partnerSchema);
