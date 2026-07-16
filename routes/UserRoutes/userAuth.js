@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, deactivateAccount, activateAccount, getPartners } = require('../../controllers/User/userAuth');
+const { sendOTP, verifyOTP, deactivateAccount, activateAccount, getPartners } = require('../../controllers/User/userAuth');
 const { verifyToken, isUser } = require('../../middleware/auth');
 
-router.post('/register', register);
-router.post('/login', login);
+router.post('/send-otp', sendOTP);
+router.post('/verify-otp', verifyOTP);
 router.post('/deactivate-account', verifyToken, isUser, deactivateAccount);
 router.post('/activate-account', verifyToken, isUser, activateAccount);
 

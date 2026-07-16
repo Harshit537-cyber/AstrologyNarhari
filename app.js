@@ -17,10 +17,10 @@ app.use(cookieParser());
 app.use("/api/user", userAuthRoutes);
 app.use("/api/partner", partnerAuthRoutes);
 app.use("/api/admin", adminAuthRoutes);
-app.use("/api/otp", require("./routes/otp/otpRoutes"));
 app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
-app.use("/api/review", require("./routes/review/reviewRoutes"))
+app.use("/api/review", require("./routes/review/reviewRoutes"));
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/wallet", require("./routes/UserRoutes/walletRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({

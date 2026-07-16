@@ -1,4 +1,4 @@
-const UserProfile = require('../../models/user/UserProfile');
+const User = require('../../models/User');
 const cloudinary = require('../../config/cloudinary');
 const getZodiacSign = require('../../utils/zodiacHelper');
 const fs = require('fs');
@@ -12,8 +12,13 @@ exports.createProfile = async (req, res) => {
         const { fullName, gender, dateOfBirth, timeOfBirth, placeOfBirth } = req.body;
         const userId = req.user.id;
 
-        let profile = await UserProfile.findOne({ user: userId });
-        if (profile) {
+        let user = await User.findById(userId);
+        if (!user) {
+            if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (user.fullName) {
             if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
             return res.status(400).json({ message: "Profile already exists" });
         }
@@ -27,25 +32,21 @@ exports.createProfile = async (req, res) => {
                     folder: "user_profiles",
                 });
                 profilePicUrl = result.secure_url;
-                                fs.unlinkSync(filePath);
-            } else {
-                console.log("File not found at path:", filePath);
+                fs.unlinkSync(filePath);
             }
         }
 
-        profile = new UserProfile({
-            user: userId,
-            fullName,
-            gender,
-            dateOfBirth,
-            timeOfBirth,
-            placeOfBirth,
-            profilePic: profilePicUrl,
-            zodiac: zodiacSign
-        });
+        user.fullName = fullName;
+        user.name = fullName;
+        user.gender = gender;
+        user.dateOfBirth = dateOfBirth;
+        user.timeOfBirth = timeOfBirth;
+        user.placeOfBirth = placeOfBirth;
+        user.profilePic = profilePicUrl;
+        user.zodiac = zodiacSign;
 
-        await profile.save();
-        res.status(201).json({ success: true, data: profile });
+        await user.save();
+        res.status(201).json({ success: true, data: user });
 
     } catch (error) {
         console.error("Error in createProfile:", error);
@@ -54,7 +55,7 @@ exports.createProfile = async (req, res) => {
             try {
                 fs.unlinkSync(filePath);
             } catch (unlinkError) {
-                console.error("Could not delete temp file:", unlinkError);
+                console.error(unlinkError);
             }
         }
 
@@ -66,12 +67,11 @@ exports.createProfile = async (req, res) => {
     }
 };
 
-
 exports.getDashboardHoroscope = async (req, res) => {
     try {
         const userId = req.user.id;
-        const profile = await UserProfile.findOne({ user: userId });
-        if (!profile) {
+        const profile = await User.findById(userId);
+        if (!profile || !profile.fullName) {
             return res.status(404).json({
                 success: false,
                 message: "Profile not found. Please create your profile first."
@@ -107,16 +107,15 @@ exports.getDashboardHoroscope = async (req, res) => {
     }
 };
 
-
 exports.getProfileForKundli = async (req, res) => {
     try {
         const userId = req.user.id; 
 
-        const profile = await UserProfile.findOne({ user: userId }).select(
+        const profile = await User.findById(userId).select(
             'fullName gender dateOfBirth timeOfBirth placeOfBirth profilePic'
         );
 
-        if (!profile) {
+        if (!profile || !profile.fullName) {
             return res.status(404).json({
                 success: false,
                 message: "Profile not found"

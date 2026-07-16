@@ -1,7 +1,7 @@
 const Ritual = require('../../models/Ritual/Ritual');
 const mongoose = require('mongoose');
 const RitualSlot = require('../../models/Ritual/RitualSlot');
-
+const RitualBooking = require('../../models/Ritual/RitualBooking');
 
 exports.getRituals = async (req, res) => {
     try {
@@ -28,7 +28,6 @@ exports.getRituals = async (req, res) => {
         });
     }
 };
-
 
 exports.searchRituals = async (req, res) => {
     try {
@@ -93,8 +92,6 @@ exports.getRitualById = async (req, res) => {
         });
     }
 };
-
-
 
 exports.getSlotsByPartner = async (req, res) => {
     try {

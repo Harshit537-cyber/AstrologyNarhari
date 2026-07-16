@@ -1,20 +1,5 @@
 const mongoose = require('mongoose');
 
-const documentSchema = new mongoose.Schema({
-    url: {
-        type: String,
-    },
-    status: {
-        type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
-        default: 'Pending'
-    },
-    uploadedAt: {
-        type: Date,
-        default: Date.now
-    }
-}, { _id: false });
-
 const partnerSchema = new mongoose.Schema({
     mobile: {
         type: String,
@@ -38,6 +23,11 @@ const partnerSchema = new mongoose.Schema({
     isProfileComplete: {
         type: Boolean,
         default: false
+    },
+    profileApprovalStatus: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected'],
+        default: 'Pending'
     },
     fullName: {
         type: String,
@@ -72,6 +62,10 @@ const partnerSchema = new mongoose.Schema({
     },
     expectedSalary: {
         type: Number
+    },
+    minRate: {
+        type: Number,
+        default: 25
     },
     additionalPhotos: [{
         type: String

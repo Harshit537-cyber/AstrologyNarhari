@@ -1,79 +1,54 @@
 const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
 
-const register = async (req, res) => {
+const sendOTP = async (req, res) => {
     try {
-        const { name, email, password, mobile, role } = req.body;
+        const { mobile } = req.body;
 
-        if (!name || !email || !password || !mobile) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'All fields (name, email, password, mobile) are required' 
-            });
+        if (!mobile) {
+            return res.status(400).json({ success: false, message: 'Mobile number is required' });
         }
 
-        const existingUser = await User.findOne({ 
-            $or: [{ email }, { mobile }] 
-        });
+        let user = await User.findOne({ mobile });
 
-        if (existingUser) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'User with this email or mobile already exists' 
+        if (!user) {
+            user = new User({
+                mobile,
+                otp: '123456'
             });
+        } else {
+            user.otp = '123456';
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        await user.save();
 
-        const allowedRoles = ['user', 'partner', 'admin'];
-        const assignedRole = allowedRoles.includes(role?.toLowerCase()) 
-            ? role.toLowerCase() 
-            : 'user';
-
-        const newUser = new User({
-            name,
-            email,
-            password: hashedPassword,
-            mobile,
-            role: assignedRole
-        });
-
-        await newUser.save();
-
-        res.status(201).json({ 
+        res.status(200).json({
             success: true,
-            message: `${assignedRole.charAt(0).toUpperCase() + assignedRole.slice(1)} registered successfully`,
-            user: {
-                id: newUser._id,
-                name: newUser.name,
-                email: newUser.email,
-                role: newUser.role
-            }
+            message: 'OTP sent successfully'
         });
-
     } catch (error) {
-        console.error("Registration Error:", error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Internal server error', 
-            error: error.message 
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-const login = async (req, res) => {
+const verifyOTP = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        const user = await User.findOne({ email, role: 'user' });
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+        const { mobile, otp } = req.body;
+
+        if (!mobile || !otp) {
+            return res.status(400).json({ success: false, message: 'Mobile and OTP are required' });
         }
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(400).json({ message: 'Invalid credentials' });
+
+        const user = await User.findOne({ mobile });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        if (otp !== '123456') {
+            return res.status(400).json({ success: false, message: 'Invalid OTP' });
         }
 
         if (!user.isActive) {
@@ -92,23 +67,30 @@ const login = async (req, res) => {
                 user.deactivationReason = null;
                 user.deactivationReasonNote = null;
                 user.deactivationDuration = null;
-                await user.save();
             }
         }
+
+        user.otp = null;
+        await user.save();
 
         const token = jwt.sign(
             { id: user._id, role: user.role },
             process.env.JWT_SECRET || 'secretkey',
-            { expiresIn: '1d' }
+            { expiresIn: '30d' }
         );
 
+        const isProfileComplete = !!user.fullName;
+
         const response = {
+            success: true,
+            message: 'OTP verified successfully',
             token,
+            isProfileComplete,
             user: {
                 id: user._id,
-                name: user.name,
-                email: user.email,
+                mobile: user.mobile,
                 role: user.role,
+                fullName: user.fullName,
                 isActive: user.isActive
             }
         };
@@ -126,7 +108,7 @@ const login = async (req, res) => {
 
         res.status(200).json(response);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -240,4 +222,4 @@ const getPartners = async (req, res) => {
     }
 };
 
-module.exports = { register, login, deactivateAccount, activateAccount, getPartners };
+module.exports = { sendOTP, verifyOTP, deactivateAccount, activateAccount, getPartners };

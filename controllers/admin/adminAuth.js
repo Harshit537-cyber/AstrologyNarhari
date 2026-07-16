@@ -2,7 +2,6 @@ const User = require('../../models/User.js');
 const Partner = require("../../models/Partner/Partner");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const UserProfile = require('../../models/user/UserProfile.js');
 
 const register = async (req, res) => {
     try {
@@ -55,8 +54,6 @@ const login = async (req, res) => {
     }
 };
 
-
-
 const getDashboardStats = async (req, res) => {
     try {
         const today = new Date();
@@ -103,7 +100,6 @@ const getDashboardStats = async (req, res) => {
 
 const getRecentUsers = async (req, res) => {
     try {
-
         const users = await User.find()
             .select("-password")
             .sort({ createdAt: -1 })
@@ -122,11 +118,8 @@ const getRecentUsers = async (req, res) => {
     }
 };
 
-
 const getUserAnalytics = async (req, res) => {
-
     try {
-
         const analytics = await User.aggregate([
             {
                 $group: {
@@ -144,17 +137,12 @@ const getUserAnalytics = async (req, res) => {
         });
 
     } catch (err) {
-
         res.status(500).json({
             success: false,
             message: err.message
         });
-
     }
-
 };
-
-
 
 const getAllUsers = async (req, res) => {
     try {
@@ -200,8 +188,6 @@ const getAllUsers = async (req, res) => {
     }
 };
 
-
-
 const getUserById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -216,15 +202,11 @@ const getUserById = async (req, res) => {
             });
         }
 
-        const userProfile = await UserProfile.findOne({
-            user: id
-        });
-
         return res.status(200).json({
             success: true,
             data: {
                 user,
-                profile: userProfile
+                profile: user
             }
         });
 
@@ -236,11 +218,8 @@ const getUserById = async (req, res) => {
     }
 };
 
-
-
 const updateUser = async (req, res) => {
     try {
-
         const { id } = req.params;
         const { name, email, mobile, role } = req.body;
 
@@ -253,9 +232,7 @@ const updateUser = async (req, res) => {
             });
         }
 
-        // Email duplicate check
         if (email && email !== user.email) {
-
             const emailExists = await User.findOne({
                 email,
                 _id: { $ne: id }
@@ -267,7 +244,6 @@ const updateUser = async (req, res) => {
                     message: "Email already exists"
                 });
             }
-
         }
 
         user.name = name || user.name;
@@ -290,15 +266,12 @@ const updateUser = async (req, res) => {
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
-
 
 const deleteUserById = async (req, res) => {
     try {
@@ -313,10 +286,6 @@ const deleteUserById = async (req, res) => {
             });
         }
 
-        // User Profile delete
-        await UserProfile.findOneAndDelete({ user: id });
-
-        // User delete
         await User.findByIdAndDelete(id);
 
         return res.status(200).json({
@@ -340,12 +309,12 @@ const getAllPartners = async (req, res) => {
             search = "",
             isVerified,
             isProfileComplete,
-            isActive
+            isActive,
+            profileApprovalStatus
         } = req.query;
 
         const filter = {};
 
-        // Search
         if (search) {
             filter.$or = [
                 { fullName: { $regex: search, $options: "i" } },
@@ -355,19 +324,20 @@ const getAllPartners = async (req, res) => {
             ];
         }
 
-        // Verification Filter
         if (isVerified !== undefined) {
             filter.isVerified = isVerified === "true";
         }
 
-        // Profile Complete Filter
         if (isProfileComplete !== undefined) {
             filter.isProfileComplete = isProfileComplete === "true";
         }
 
-        // Active/Deactivated Filter
         if (isActive !== undefined) {
             filter.isActive = isActive === "true";
+        }
+
+        if (profileApprovalStatus) {
+            filter.profileApprovalStatus = profileApprovalStatus;
         }
 
         const partners = await Partner.find(filter)
@@ -386,12 +356,10 @@ const getAllPartners = async (req, res) => {
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
@@ -415,20 +383,15 @@ const getPartnerById = async (req, res) => {
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
-
-
 const updatePartner = async (req, res) => {
     try {
-
         const { id } = req.params;
 
         const {
@@ -458,9 +421,7 @@ const updatePartner = async (req, res) => {
             });
         }
 
-        // Mobile duplicate check
         if (mobile && mobile !== partner.mobile) {
-
             const mobileExists = await Partner.findOne({
                 mobile,
                 _id: { $ne: id }
@@ -505,18 +466,15 @@ const updatePartner = async (req, res) => {
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
 const deletePartner = async (req, res) => {
     try {
-
         const { id } = req.params;
 
         const partner = await Partner.findById(id);
@@ -536,12 +494,10 @@ const deletePartner = async (req, res) => {
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
@@ -549,7 +505,6 @@ const updatePartnerDocumentStatus = async (req, res) => {
     try {
         const { partnerId, document, status } = req.body;
 
-        // Valid documents
         const validDocuments = [
             "selfie",
             "nationalId",
@@ -564,7 +519,6 @@ const updatePartnerDocumentStatus = async (req, res) => {
             });
         }
 
-        // Valid status
         if (!["Approved", "Rejected"].includes(status)) {
             return res.status(400).json({
                 success: false,
@@ -581,7 +535,6 @@ const updatePartnerDocumentStatus = async (req, res) => {
             });
         }
 
-        // Check document uploaded or not
         if (!partner[document] || !partner[document].url) {
             return res.status(400).json({
                 success: false,
@@ -589,10 +542,8 @@ const updatePartnerDocumentStatus = async (req, res) => {
             });
         }
 
-        // Update document status
         partner[document].status = status;
 
-        // Update overall KYC Status
         const docs = [
             partner.selfie,
             partner.nationalId,
@@ -617,12 +568,46 @@ const updatePartnerDocumentStatus = async (req, res) => {
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message
         });
+    }
+};
 
+const approvePartnerProfile = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!['Approved', 'Rejected'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Status must be Approved or Rejected"
+            });
+        }
+
+        const partner = await Partner.findById(id);
+        if (!partner) {
+            return res.status(404).json({
+                success: false,
+                message: "Partner not found"
+            });
+        }
+
+        partner.profileApprovalStatus = status;
+        await partner.save();
+
+        res.status(200).json({
+            success: true,
+            message: `Partner profile ${status} successfully`,
+            data: partner
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
 
@@ -653,7 +638,7 @@ const deactivateUser = async (req, res) => {
         user.deactivationReason = reason;
         user.deactivationReasonNote = reasonNote || null;
         user.deactivationDuration = null;
-        user.reactivateAt = null; // admin-deactivated: no auto-reactivation, admin must activate manually
+        user.reactivateAt = null;
 
         await user.save();
 
@@ -773,6 +758,6 @@ const activatePartner = async (req, res) => {
 module.exports = {
     register, login, getDashboardStats, getRecentUsers, getUserAnalytics,
     getAllUsers, updateUser, getAllPartners, updatePartner, getPartnerById,
-    updatePartnerDocumentStatus,getUserById,deleteUserById,deletePartner,
-    deactivateUser, activateUser, deactivatePartner, activatePartner
+    updatePartnerDocumentStatus, getUserById, deleteUserById, deletePartner,
+    deactivateUser, activateUser, deactivatePartner, activatePartner, approvePartnerProfile
 };

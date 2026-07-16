@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Booking = require('../../models/Booking/Booking');
 const User = require('../../models/User');
-const UserProfile = require('../../models/user/UserProfile');
 const Partner = require('../../models/Partner/Partner');
 
 const scheduleBooking = async (req, res) => {
@@ -24,7 +23,7 @@ const scheduleBooking = async (req, res) => {
             });
         }
 
-        const ratePerMinute = partner.expectedSalary || 25;
+        const ratePerMinute = partner.minRate || 25;
         const totalFee = ratePerMinute * duration;
 
         const userId = new mongoose.Types.ObjectId(rawUserId);
@@ -33,22 +32,16 @@ const scheduleBooking = async (req, res) => {
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found',
-                debugInfo: {
-                    userIdReceived: rawUserId,
-                    castedObjectId: userId,
-                    tokenPayload: req.user
-                }
+                message: 'User not found'
             });
         }
 
-        const walletBalance = user.walletBalance || 0;
-        if (walletBalance < totalFee) {
+        if ((user.walletBalance || 0) < totalFee) {
             return res.status(400).json({
                 success: false,
                 message: 'Insufficient balance to schedule this consultation',
                 requiredBalance: totalFee,
-                currentBalance: walletBalance
+                currentBalance: user.walletBalance || 0
             });
         }
 
@@ -133,7 +126,11 @@ const respondToBooking = async (req, res) => {
 
         if (action === 'accepted') {
             const user = await User.findById(booking.user);
-            if (!user || (user.walletBalance || 0) < booking.totalFee) {
+            if (!user) {
+                return res.status(404).json({ success: false, message: 'User not found' });
+            }
+
+            if ((user.walletBalance || 0) < booking.totalFee) {
                 booking.status = 'rejected';
                 await booking.save();
                 return res.status(400).json({
@@ -174,7 +171,7 @@ const getUserBookings = async (req, res) => {
         const userId = new mongoose.Types.ObjectId(rawUserId);
 
         const bookings = await Booking.find({ user: userId })
-            .populate('partner', 'fullName profilePic specialties expectedSalary')
+            .populate('partner', 'fullName profilePic specialties expectedSalary minRate')
             .sort({ date: -1 });
 
         res.status(200).json({

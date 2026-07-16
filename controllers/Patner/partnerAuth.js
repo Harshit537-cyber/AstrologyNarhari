@@ -75,6 +75,7 @@ const verifyOtp = async (req, res) => {
             message: 'OTP verified successfully',
             token,
             isProfileComplete: partner.isProfileComplete,
+            profileApprovalStatus: partner.profileApprovalStatus,
             partner: {
                 id: partner._id,
                 mobile: partner.mobile,
@@ -130,7 +131,6 @@ const loginWithOtp = async (req, res) => {
         partner.otp = undefined;
         partner.otpExpiry = undefined;
 
-        // --- Deactivation check ---
         if (!partner.isActive) {
             if (partner.deactivatedBy === 'admin') {
                 return res.status(403).json({
@@ -139,7 +139,6 @@ const loginWithOtp = async (req, res) => {
                 });
             }
 
-            // self-deactivated: agar duration poori ho chuki hai to auto-reactivate
             if (partner.reactivateAt && new Date() >= partner.reactivateAt) {
                 partner.isActive = true;
                 partner.deactivatedBy = null;
@@ -163,6 +162,7 @@ const loginWithOtp = async (req, res) => {
             message: 'Login successful',
             token,
             isProfileComplete: partner.isProfileComplete,
+            profileApprovalStatus: partner.profileApprovalStatus,
             partner: {
                 id: partner._id,
                 mobile: partner.mobile,
@@ -221,6 +221,7 @@ const register = async (req, res) => {
             experience,
             qualification,
             expectedSalary,
+            minRate,
             bio
         } = req.body;
 
@@ -251,9 +252,11 @@ const register = async (req, res) => {
         partner.experience = experience;
         partner.qualification = qualification;
         partner.expectedSalary = expectedSalary;
+        partner.minRate = minRate ? Number(minRate) : partner.minRate;
         partner.additionalPhotos = additionalPhotosUrls;
         partner.bio = bio;
         partner.isProfileComplete = true;
+        partner.profileApprovalStatus = 'Pending';
 
         await partner.save();
 
@@ -264,6 +267,7 @@ const register = async (req, res) => {
                 mobile: partner.mobile,
                 role: partner.role,
                 isProfileComplete: partner.isProfileComplete,
+                profileApprovalStatus: partner.profileApprovalStatus,
                 fullName: partner.fullName,
                 profilePic: partner.profilePic,
                 dateOfBirth: partner.dateOfBirth,
@@ -274,6 +278,7 @@ const register = async (req, res) => {
                 experience: partner.experience,
                 qualification: partner.qualification,
                 expectedSalary: partner.expectedSalary,
+                minRate: partner.minRate,
                 additionalPhotos: partner.additionalPhotos,
                 bio: partner.bio
             }
@@ -297,7 +302,6 @@ const register = async (req, res) => {
 
 const getProfile = async (req, res) => {
     try {
-
         const partner = await Partner.findById(req.user.id)
             .select("-otp -otpExpiry");
 
@@ -308,14 +312,11 @@ const getProfile = async (req, res) => {
             });
         }
 
-
         res.status(200).json({
             success: true,
             message: "Profile fetched successfully",
             partner
         });
-
-
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -344,7 +345,6 @@ const deleteAccount = async (req, res) => {
             });
         }
 
-       
         console.log("Delete Reason:", reason);
 
         await Partner.findByIdAndDelete(req.user.id);
@@ -353,7 +353,6 @@ const deleteAccount = async (req, res) => {
             success: true,
             message: "Account deleted successfully"
         });
-
     } catch (error) {
         res.status(500).json({
             success: false,
