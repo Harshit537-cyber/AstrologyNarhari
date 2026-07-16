@@ -143,3 +143,92 @@ exports.getProfileForKundli = async (req, res) => {
         });
     }
 };
+
+exports.getProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const user = await User.findById(userId).select('-otp -__v');
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "User not found" 
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+    } catch (error) {
+        console.error("Error in getProfile:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
+        });
+    }
+};
+
+exports.editProfile = async (req, res) => {
+    const filePath = req.file ? req.file.path : null;
+
+    try {
+        const userId = req.user.id;
+        const { fullName, gender, dateOfBirth, timeOfBirth, placeOfBirth } = req.body;
+
+        let user = await User.findById(userId);
+        if (!user) {
+            if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        if (fullName !== undefined) {
+            user.fullName = fullName;
+            user.name = fullName;
+        }
+        if (gender !== undefined) user.gender = gender;
+        if (timeOfBirth !== undefined) user.timeOfBirth = timeOfBirth;
+        if (placeOfBirth !== undefined) user.placeOfBirth = placeOfBirth;
+
+        if (dateOfBirth !== undefined) {
+            user.dateOfBirth = dateOfBirth;
+            user.zodiac = getZodiacSign(dateOfBirth);
+        }
+
+        if (filePath) {
+            if (fs.existsSync(filePath)) {
+                const result = await cloudinary.uploader.upload(filePath, {
+                    folder: "user_profiles",
+                });
+                user.profilePic = result.secure_url;
+                fs.unlinkSync(filePath);
+            }
+        }
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            data: user
+        });
+
+    } catch (error) {
+        console.error("Error in editProfile:", error);
+        
+        if (filePath && fs.existsSync(filePath)) {
+            try {
+                fs.unlinkSync(filePath);
+            } catch (unlinkError) {
+                console.error("Error deleting temp file:", unlinkError);
+            }
+        }
+
+        res.status(500).json({ 
+            success: false, 
+            message: "Server Error", 
+            error: error.message 
+        });
+    }
+};
