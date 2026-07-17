@@ -19,7 +19,14 @@ const uploadToCloudinary = async (filePath, folder) => {
 
 const uploadKycDocuments = async (req, res) => {
     try {
-        const partner = await Partner.findById(req.user.id);
+        const partner = await Partner.findOne({
+            $or: [
+                { _id: req.user.id },
+                { userId: req.user.id },
+                { user: req.user.id }
+            ]
+        });
+
         if (!partner) {
             if (req.files) {
                 Object.keys(req.files).forEach((key) => {
@@ -30,7 +37,7 @@ const uploadKycDocuments = async (req, res) => {
                     });
                 });
             }
-            return res.status(404).json({ message: 'Partner not found' });
+            return res.status(404).json({ success: false, message: 'Partner not found' });
         }
 
         const files = req.files || {};
@@ -46,30 +53,30 @@ const uploadKycDocuments = async (req, res) => {
         };
 
         if (files.selfie && files.selfie[0]) {
-            if (partner.selfie && partner.selfie.status && partner.selfie.status !== 'Rejected') {
+            if (partner.selfie && partner.selfie.url && partner.selfie.status && partner.selfie.status !== 'Rejected') {
                 cleanUploadedFiles();
-                return res.status(400).json({ message: 'Selfie is already approved or pending review' });
+                return res.status(400).json({ success: false, message: 'Selfie is already approved or pending review' });
             }
         }
 
         if (files.nationalId && files.nationalId[0]) {
-            if (partner.nationalId && partner.nationalId.status && partner.nationalId.status !== 'Rejected') {
+            if (partner.nationalId && partner.nationalId.url && partner.nationalId.status && partner.nationalId.status !== 'Rejected') {
                 cleanUploadedFiles();
-                return res.status(400).json({ message: 'National ID is already approved or pending review' });
+                return res.status(400).json({ success: false, message: 'National ID is already approved or pending review' });
             }
         }
 
         if (files.astrologyCertificate && files.astrologyCertificate[0]) {
-            if (partner.astrologyCertificate && partner.astrologyCertificate.status && partner.astrologyCertificate.status !== 'Rejected') {
+            if (partner.astrologyCertificate && partner.astrologyCertificate.url && partner.astrologyCertificate.status && partner.astrologyCertificate.status !== 'Rejected') {
                 cleanUploadedFiles();
-                return res.status(400).json({ message: 'Astrology Certificate is already approved or pending review' });
+                return res.status(400).json({ success: false, message: 'Astrology Certificate is already approved or pending review' });
             }
         }
 
         if (files.addressProof && files.addressProof[0]) {
-            if (partner.addressProof && partner.addressProof.status && partner.addressProof.status !== 'Rejected') {
+            if (partner.addressProof && partner.addressProof.url && partner.addressProof.status && partner.addressProof.status !== 'Rejected') {
                 cleanUploadedFiles();
-                return res.status(400).json({ message: 'Address Proof is already approved or pending review' });
+                return res.status(400).json({ success: false, message: 'Address Proof is already approved or pending review' });
             }
         }
 
@@ -82,6 +89,7 @@ const uploadKycDocuments = async (req, res) => {
                 status: 'Pending',
                 uploadedAt: new Date()
             };
+            partner.markModified('selfie');
             updated = true;
         }
 
@@ -92,6 +100,7 @@ const uploadKycDocuments = async (req, res) => {
                 status: 'Pending',
                 uploadedAt: new Date()
             };
+            partner.markModified('nationalId');
             updated = true;
         }
 
@@ -102,6 +111,7 @@ const uploadKycDocuments = async (req, res) => {
                 status: 'Pending',
                 uploadedAt: new Date()
             };
+            partner.markModified('astrologyCertificate');
             updated = true;
         }
 
@@ -112,6 +122,7 @@ const uploadKycDocuments = async (req, res) => {
                 status: 'Pending',
                 uploadedAt: new Date()
             };
+            partner.markModified('addressProof');
             updated = true;
         }
 
@@ -131,18 +142,26 @@ const uploadKycDocuments = async (req, res) => {
                 partner.kycStatus = 'Pending';
             }
 
+            partner.markModified('kycStatus');
             await partner.save();
         }
 
-        res.status(200).json({
+        return res.status(200).json({
+            success: true,
             message: 'Documents uploaded successfully',
-            kycStatus: partner.kycStatus,
-            selfie: partner.selfie,
-            nationalId: partner.nationalId,
-            astrologyCertificate: partner.astrologyCertificate,
-            addressProof: partner.addressProof
+            kycStatus: partner.kycStatus || 'Not Submitted',
+            selfie: partner.selfie || null,
+            nationalId: partner.nationalId || null,
+            astrologyCertificate: partner.astrologyCertificate || null,
+            addressProof: partner.addressProof || null
         });
+
     } catch (error) {
+        // यहाँ टर्मिनल में एरर की पूरी डिटेल दिखेगी
+        console.log("================= KYC UPLOAD ERROR =================");
+        console.error(error);
+        console.log("====================================================");
+
         if (req.files) {
             Object.keys(req.files).forEach((key) => {
                 req.files[key].forEach((file) => {
@@ -152,26 +171,39 @@ const uploadKycDocuments = async (req, res) => {
                 });
             });
         }
-        res.status(500).json({ error: error.message });
+        
+        // यह Postman में भी एरर का मैसेज भेजेगा
+        return res.status(500).json({ 
+            success: false, 
+            error: error.message || error.toString() || "Unknown server error" 
+        });
     }
 };
 
 const getKycStatus = async (req, res) => {
     try {
-        const partner = await Partner.findById(req.user.id);
+        const partner = await Partner.findOne({
+            $or: [
+                { _id: req.user.id },
+                { userId: req.user.id },
+                { user: req.user.id }
+            ]
+        });
+
         if (!partner) {
-            return res.status(404).json({ message: 'Partner not found' });
+            return res.status(404).json({ success: false, message: 'Partner not found' });
         }
 
-        res.status(200).json({
-            kycStatus: partner.kycStatus,
-            selfie: partner.selfie,
-            nationalId: partner.nationalId,
-            astrologyCertificate: partner.astrologyCertificate,
-            addressProof: partner.addressProof
+        return res.status(200).json({
+            success: true,
+            kycStatus: partner.kycStatus || 'Not Submitted',
+            selfie: partner.selfie || null,
+            nationalId: partner.nationalId || null,
+            astrologyCertificate: partner.astrologyCertificate || null,
+            addressProof: partner.addressProof || null
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
