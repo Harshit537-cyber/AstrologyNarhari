@@ -31,4 +31,21 @@ const getMatchMakingReport = async (data) => {
     }
 };
 
-module.exports = { getMatchMakingReport };
+
+
+const getAstrologyData = async (endpoint, data) => {
+    const auth = Buffer.from(`${config.userId}:${config.apiKey}`).toString('base64');
+    try {
+        const response = await axios.post(`${config.baseUrl}${endpoint}`, data, {
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.data;
+    } catch (error) {
+        throw new Error(error.response?.data?.msg || "Astrology API Error");
+    }
+};
+
+module.exports = { getMatchMakingReport,getAstrologyData };
