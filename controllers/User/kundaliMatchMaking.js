@@ -230,11 +230,12 @@ exports.getDetailedHoroscope = async (req, res) => {
         }
 
         const zodiacSign = user.zodiac.toLowerCase();
-        const [basicPred, analysis, remedy] = await Promise.all([
-            getAstrologyData(`sun_sign_prediction/daily/${zodiacSign}`, {}),
-            getAstrologyData(`daily_prediction_analysis/${zodiacSign}`, {}),
-            getAstrologyData(`daily_remedies/${zodiacSign}`, {})
-        ]);
+        const basicPred = await getAstrologyData(`sun_sign_prediction/daily/${zodiacSign}`, {});
+console.log('basicPred OK');
+const analysis = await getAstrologyData(`daily_prediction_analysis/${zodiacSign}`, {});
+console.log('analysis OK');
+const remedy = await getAstrologyData(`daily_remedies/${zodiacSign}`, {});
+console.log('remedy OK');
 
         res.status(200).json({
             success: true,
