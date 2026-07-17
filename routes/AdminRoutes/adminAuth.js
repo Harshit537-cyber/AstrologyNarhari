@@ -1,13 +1,31 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, getDashboardStats,
-     getRecentUsers, getUserAnalytics, getAllUsers,
-      updateUser, getAllPartners, updatePartner, getPartnerById,
-     updatePartnerDocumentStatus,
-     deactivateUser, activateUser, deactivatePartner, activatePartner, getUserById, deleteUserById, deletePartner, approvePartnerProfile } = require('../../controllers/admin/adminAuth');
+const { 
+    sendAdminOTP, 
+    register, 
+    login, 
+    getDashboardStats,
+    getRecentUsers, 
+    getUserAnalytics, 
+    getAllUsers,
+    updateUser, 
+    getAllPartners, 
+    updatePartner, 
+    getPartnerById,
+    updatePartnerDocumentStatus,
+    deactivateUser, 
+    activateUser, 
+    deactivatePartner, 
+    activatePartner, 
+    getUserById, 
+    deleteUserById, 
+    deletePartner, 
+    approvePartnerProfile 
+} = require('../../controllers/admin/adminAuth');
 
 const { verifyToken, isAdmin } = require('../../middleware/auth');
 
+router.post('/send-otp', sendAdminOTP);
 router.post('/register', register);
 router.post('/login', login);
 

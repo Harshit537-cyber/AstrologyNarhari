@@ -1,56 +1,149 @@
 const User = require('../../models/User.js');
 const Partner = require("../../models/Partner/Partner");
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const register = async (req, res) => {
+const generateOTP = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const sendAdminOTP = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Email already exists' });
+        const { mobile, action } = req.body;
+
+        if (!mobile) {
+            return res.status(400).json({ success: false, message: 'Mobile number is required' });
         }
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newAdmin = new User({
-            name,
-            email,
-            password: hashedPassword,
-            role: 'admin'
+
+        const existingAdmin = await User.findOne({ mobile, role: 'admin' });
+
+        if (action === 'register') {
+            const existingUser = await User.findOne({ mobile });
+            if (existingUser) {
+                return res.status(400).json({ success: false, message: 'Mobile number already registered' });
+            }
+        } else if (action === 'login') {
+            if (!existingAdmin) {
+                return res.status(404).json({ success: false, message: 'Admin not found with this mobile number' });
+            }
+        } else {
+            return res.status(400).json({ success: false, message: 'Invalid action type' });
+        }
+
+        const otp = generateOTP();
+
+        if (action === 'register') {
+            await User.findOneAndUpdate(
+                { mobile },
+                { otp, role: 'admin' },
+                { upsert: true, new: true }
+            );
+        } else {
+            existingAdmin.otp = otp;
+            await existingAdmin.save();
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'OTP sent successfully',
+            otp: otp
         });
-        await newAdmin.save();
-        res.status(201).json({ message: 'Admin registered successfully' });
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
-const login = async (req, res) => {
+const register = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        const admin = await User.findOne({ email, role: 'admin' });
+        const { name, mobile, otp } = req.body;
+
+        if (!name || !mobile || !otp) {
+            return res.status(400).json({ success: false, message: 'Name, mobile, and OTP are required' });
+        }
+
+        const admin = await User.findOne({ mobile, role: 'admin' });
+
         if (!admin) {
-            return res.status(404).json({ message: 'Admin not found' });
+            return res.status(404).json({ success: false, message: 'Registration not initiated. Request OTP first.' });
         }
-        const isPasswordValid = await bcrypt.compare(password, admin.password);
-        if (!isPasswordValid) {
-            return res.status(400).json({ message: 'Invalid credentials' });
+
+        if (admin.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP' });
         }
+
+        admin.name = name;
+        admin.otp = null;
+        admin.isActive = true;
+        await admin.save();
+
         const token = jwt.sign(
             { id: admin._id, role: admin.role },
             process.env.JWT_SECRET || 'secretkey',
             { expiresIn: '1d' }
         );
-        res.status(200).json({
+
+        return res.status(201).json({
+            success: true,
+            message: 'Admin registered successfully',
             token,
             admin: {
                 id: admin._id,
                 name: admin.name,
-                email: admin.email,
+                mobile: admin.mobile,
                 role: admin.role
             }
         });
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const login = async (req, res) => {
+    try {
+        const { mobile, otp } = req.body;
+
+        if (!mobile || !otp) {
+            return res.status(400).json({ success: false, message: 'Mobile and OTP are required' });
+        }
+
+        const admin = await User.findOne({ mobile, role: 'admin' });
+
+        if (!admin) {
+            return res.status(404).json({ success: false, message: 'Admin not found' });
+        }
+
+        if (admin.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP' });
+        }
+
+        if (!admin.isActive) {
+            return res.status(403).json({ success: false, message: 'This admin account is deactivated' });
+        }
+
+        admin.otp = null;
+        await admin.save();
+
+        const token = jwt.sign(
+            { id: admin._id, role: admin.role },
+            process.env.JWT_SECRET || 'secretkey',
+            { expiresIn: '1d' }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Admin logged in successfully',
+            token,
+            admin: {
+                id: admin._id,
+                name: admin.name,
+                mobile: admin.mobile,
+                role: admin.role
+            }
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -756,8 +849,24 @@ const activatePartner = async (req, res) => {
 };
 
 module.exports = {
-    register, login, getDashboardStats, getRecentUsers, getUserAnalytics,
-    getAllUsers, updateUser, getAllPartners, updatePartner, getPartnerById,
-    updatePartnerDocumentStatus, getUserById, deleteUserById, deletePartner,
-    deactivateUser, activateUser, deactivatePartner, activatePartner, approvePartnerProfile
+    sendAdminOTP,
+    register,
+    login,
+    getDashboardStats,
+    getRecentUsers,
+    getUserAnalytics,
+    getAllUsers,
+    updateUser,
+    getAllPartners,
+    updatePartner,
+    getPartnerById,
+    updatePartnerDocumentStatus,
+    getUserById,
+    deleteUserById,
+    deletePartner,
+    deactivateUser,
+    activateUser,
+    deactivatePartner,
+    activatePartner,
+    approvePartnerProfile
 };
