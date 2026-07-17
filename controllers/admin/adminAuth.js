@@ -14,32 +14,36 @@ const sendAdminOTP = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Mobile number is required' });
         }
 
-        const existingAdmin = await User.findOne({ mobile, role: 'admin' });
+        const otp = generateOTP();
 
         if (action === 'register') {
             const existingUser = await User.findOne({ mobile });
             if (existingUser) {
                 return res.status(400).json({ success: false, message: 'Mobile number already registered' });
             }
-        } else if (action === 'login') {
-            if (!existingAdmin) {
-                return res.status(404).json({ success: false, message: 'Admin not found with this mobile number' });
+
+            const adminCount = await User.countDocuments({ role: 'admin' });
+            if (adminCount >= 2) {
+                return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
             }
-        } else {
-            return res.status(400).json({ success: false, message: 'Invalid action type' });
-        }
 
-        const otp = generateOTP();
-
-        if (action === 'register') {
             await User.findOneAndUpdate(
                 { mobile },
                 { otp, role: 'admin' },
                 { upsert: true, new: true }
             );
-        } else {
+
+        } else if (action === 'login') {
+            const existingAdmin = await User.findOne({ mobile, role: 'admin' });
+            if (!existingAdmin) {
+                return res.status(404).json({ success: false, message: 'Admin not found with this mobile number' });
+            }
+
             existingAdmin.otp = otp;
             await existingAdmin.save();
+
+        } else {
+            return res.status(400).json({ success: false, message: 'Invalid action type' });
         }
 
         return res.status(200).json({
@@ -98,7 +102,6 @@ const register = async (req, res) => {
         return res.status(500).json({ success: false, message: error.message });
     }
 };
-
 
 const login = async (req, res) => {
     try {
