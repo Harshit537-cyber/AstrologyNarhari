@@ -21,6 +21,7 @@ app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
 app.use("/api/review", require("./routes/review/reviewRoutes"));
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/wallet", require("./routes/UserRoutes/walletRoutes"));
+app.use("/api/match", require("./routes/UserRoutes/kundaliMatchMakingRoutes"))
 
 app.get("/", (req, res) => {
     res.status(200).json({
