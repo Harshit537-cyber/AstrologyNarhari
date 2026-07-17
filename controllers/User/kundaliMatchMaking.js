@@ -117,20 +117,37 @@ exports.generateKundli =  async (req, res) => {
 };
 
 
-exports.getFestivalCalendar = async (req, res) => {
+exports.getFestivalCalendar =  async (req, res) => {
     try {
         const { month, year, lat, lon, timezone } = req.body;
+
+        if (!month || !year) {
+            return res.status(400).json({
+                success: false,
+                message: "month and year are required"
+            });
+        }
 
         const payload = {
             day: 1,
             month: parseInt(month),
             year: parseInt(year),
+            hour: 12,   // required field by the API — defaulting to noon
+            min: 0,     // required field by the API
             lat: parseFloat(lat || 28.6139),
             lon: parseFloat(lon || 77.2090),
             tzone: parseFloat(timezone || 5.5)
         };
 
-        const festivalsList = await getAstrologyData('major_festivals', payload);
+        console.log('Festival payload being sent:', payload);
+
+        let festivalsList;
+        try {
+            festivalsList = await getAstrologyData('major_festivals', payload);
+        } catch (apiErr) {
+            console.error('Festival API call failed with payload:', payload, 'Error:', apiErr.message);
+            throw apiErr;
+        }
 
         const monthFestivals = festivalsList.filter(f => {
             const date = new Date(f.date);
@@ -139,7 +156,7 @@ exports.getFestivalCalendar = async (req, res) => {
 
         const calendarDots = {};
         monthFestivals.forEach(f => {
-            const dateKey = f.date.split('T')[0]; 
+            const dateKey = f.date.split('T')[0];
             if (!calendarDots[dateKey]) calendarDots[dateKey] = [];
             calendarDots[dateKey].push(f.name);
         });
@@ -156,8 +173,8 @@ exports.getFestivalCalendar = async (req, res) => {
                 totalFestivals: monthFestivals.length,
                 calendarDots: calendarDots
             },
-            festivals: monthFestivals, 
-            upcomingHighlights: upcomingHighlights 
+            festivals: monthFestivals,
+            upcomingHighlights: upcomingHighlights
         });
 
     } catch (error) {
@@ -168,7 +185,6 @@ exports.getFestivalCalendar = async (req, res) => {
         });
     }
 };
-
 
 exports.getDailyBasisDashboardHoroscope = async (req, res) => {
     try {

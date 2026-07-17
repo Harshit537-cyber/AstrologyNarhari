@@ -48,4 +48,6 @@ const getAstrologyData = async (endpoint, data) => {
     }
 };
 
+
+
 module.exports = { getMatchMakingReport,getAstrologyData };
