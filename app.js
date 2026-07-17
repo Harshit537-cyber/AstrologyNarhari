@@ -6,6 +6,7 @@ const userAuthRoutes = require("./routes/UserRoutes/userAuth");
 const partnerAuthRoutes = require("./routes/PatnerRoutes/partnerAuth");
 const adminAuthRoutes = require("./routes/AdminRoutes/adminAuth");
 const bookingRoutes = require("./routes/bookingRoutes/bookingRoutes");
+const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes")
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use(cookieParser());
 app.use("/api/user", userAuthRoutes);
 app.use("/api/partner", partnerAuthRoutes);
 app.use("/api/admin", adminAuthRoutes);
+app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
 app.use("/api/review", require("./routes/review/reviewRoutes"));
 app.use("/api/bookings", bookingRoutes);

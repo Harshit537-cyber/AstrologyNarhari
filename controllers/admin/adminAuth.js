@@ -315,12 +315,35 @@ const getUserById = async (req, res) => {
     }
 };
 
+
+
+
 const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, mobile, role } = req.body;
 
-        const user = await User.findById(id);
+        const existingUser = await User.findOne({
+            email: req.body.email,
+            _id: { $ne: id }
+        });
+
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: "Email already exists"
+            });
+        }
+
+        // Update User
+        const user = await User.findByIdAndUpdate(
+            id,
+            {
+                name: req.body.name,
+                email: req.body.email,
+                mobile: req.body.mobile
+            },
+            { new: true }
+        );
 
         if (!user) {
             return res.status(404).json({
@@ -329,36 +352,33 @@ const updateUser = async (req, res) => {
             });
         }
 
-        if (email && email !== user.email) {
-            const emailExists = await User.findOne({
-                email,
-                _id: { $ne: id }
-            });
-
-            if (emailExists) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Email already exists"
-                });
+        // Update UserProfile
+        const profile = await UserProfile.findOneAndUpdate(
+            { user: id },
+            {
+                fullName: req.body.fullName,
+                gender: req.body.gender,
+                zodiac: req.body.zodiac,
+                dateOfBirth: req.body.dateOfBirth,
+                timeOfBirth: req.body.timeOfBirth,
+                placeOfBirth: req.body.placeOfBirth,
+                profilePic: req.body.profilePic
+            },
+            {
+                new: true,
+                runValidators: true,
+                upsert:true
             }
-        }
+        );
 
-        user.name = name || user.name;
-        user.email = email || user.email;
-        user.mobile = mobile || user.mobile;
-        user.role = role || user.role;
-
-        await user.save();
+    
 
         return res.status(200).json({
             success: true,
-            message: "User updated successfully",
+            message: "User and profile updated successfully",
             data: {
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                mobile: user.mobile,
-                role: user.role
+                user,
+                profile
             }
         });
 
@@ -369,6 +389,10 @@ const updateUser = async (req, res) => {
         });
     }
 };
+
+
+
+
 
 const deleteUserById = async (req, res) => {
     try {
