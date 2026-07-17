@@ -187,9 +187,55 @@ const getUserBookings = async (req, res) => {
     }
 };
 
+const getPartnerAcceptedBookings = async (req, res) => {
+    try {
+        const rawPartnerId = req.user?.id || req.user?._id;
+        const partnerId = new mongoose.Types.ObjectId(rawPartnerId);
+
+        const bookings = await Booking.find({ partner: partnerId, status: 'accepted' })
+            .populate('user', 'name email mobile walletBalance')
+            .sort({ date: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: bookings
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+const getPartnerRejectedBookings = async (req, res) => {
+    try {
+        const rawPartnerId = req.user?.id || req.user?._id;
+        const partnerId = new mongoose.Types.ObjectId(rawPartnerId);
+
+        const bookings = await Booking.find({ partner: partnerId, status: 'rejected' })
+            .populate('user', 'name email mobile walletBalance')
+            .sort({ date: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: bookings
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     scheduleBooking,
     getPartnerBookingRequests,
     respondToBooking,
-    getUserBookings
+    getUserBookings,
+    getPartnerAcceptedBookings,
+    getPartnerRejectedBookings
 };
