@@ -7,5 +7,6 @@ router.post('/check-compatibility', verifyToken, isUser, matchController.checkCo
 router.post("/generate-kundali", verifyToken, isUser, matchController.generateKundli);
 router.post("/festivals", verifyToken, isUser, matchController.getFestivalCalendar);
 router.get("/get-daily-horoscope", verifyToken, isUser, matchController.getDailyBasisDashboardHoroscope);
+router.get("/get-detailed-horoscope", verifyToken, isUser, matchController.getDetailedHoroscope);
 
 module.exports = router;

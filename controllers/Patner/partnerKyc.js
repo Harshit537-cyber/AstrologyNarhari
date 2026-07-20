@@ -52,32 +52,28 @@ const uploadKycDocuments = async (req, res) => {
             });
         };
 
-        if (files.selfie && files.selfie[0]) {
-            if (partner.selfie && partner.selfie.url && partner.selfie.status && partner.selfie.status !== 'Rejected') {
-                cleanUploadedFiles();
-                return res.status(400).json({ success: false, message: 'Selfie is already approved or pending review' });
-            }
+        const isDocLocked = (doc) => {
+            return doc && doc.url && (doc.status === 'Approved' || doc.status === 'Pending');
+        };
+
+        if (files.selfie && files.selfie[0] && isDocLocked(partner.selfie)) {
+            cleanUploadedFiles();
+            return res.status(400).json({ success: false, message: 'Selfie is already approved or pending review' });
         }
 
-        if (files.nationalId && files.nationalId[0]) {
-            if (partner.nationalId && partner.nationalId.url && partner.nationalId.status && partner.nationalId.status !== 'Rejected') {
-                cleanUploadedFiles();
-                return res.status(400).json({ success: false, message: 'National ID is already approved or pending review' });
-            }
+        if (files.nationalId && files.nationalId[0] && isDocLocked(partner.nationalId)) {
+            cleanUploadedFiles();
+            return res.status(400).json({ success: false, message: 'National ID is already approved or pending review' });
         }
 
-        if (files.astrologyCertificate && files.astrologyCertificate[0]) {
-            if (partner.astrologyCertificate && partner.astrologyCertificate.url && partner.astrologyCertificate.status && partner.astrologyCertificate.status !== 'Rejected') {
-                cleanUploadedFiles();
-                return res.status(400).json({ success: false, message: 'Astrology Certificate is already approved or pending review' });
-            }
+        if (files.astrologyCertificate && files.astrologyCertificate[0] && isDocLocked(partner.astrologyCertificate)) {
+            cleanUploadedFiles();
+            return res.status(400).json({ success: false, message: 'Astrology Certificate is already approved or pending review' });
         }
 
-        if (files.addressProof && files.addressProof[0]) {
-            if (partner.addressProof && partner.addressProof.url && partner.addressProof.status && partner.addressProof.status !== 'Rejected') {
-                cleanUploadedFiles();
-                return res.status(400).json({ success: false, message: 'Address Proof is already approved or pending review' });
-            }
+        if (files.addressProof && files.addressProof[0] && isDocLocked(partner.addressProof)) {
+            cleanUploadedFiles();
+            return res.status(400).json({ success: false, message: 'Address Proof is already approved or pending review' });
         }
 
         let updated = false;
@@ -157,7 +153,6 @@ const uploadKycDocuments = async (req, res) => {
         });
 
     } catch (error) {
-        // यहाँ टर्मिनल में एरर की पूरी डिटेल दिखेगी
         console.log("================= KYC UPLOAD ERROR =================");
         console.error(error);
         console.log("====================================================");
@@ -172,7 +167,6 @@ const uploadKycDocuments = async (req, res) => {
             });
         }
         
-        // यह Postman में भी एरर का मैसेज भेजेगा
         return res.status(500).json({ 
             success: false, 
             error: error.message || error.toString() || "Unknown server error" 

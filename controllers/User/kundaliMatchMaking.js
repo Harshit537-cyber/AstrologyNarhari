@@ -3,71 +3,79 @@ const { getMatchMakingReport ,getAstrologyData} = require('../../utils/astrology
 
 exports.checkCompatibility = async (req, res) => {
     try {
-        const { partnerDetails } = req.body;
+        const { boyDetails, girlDetails } = req.body;
         
-        console.log("Logged in User ID from Token:", req.user ? req.user.id : "No User ID found");
+        const formatForAPI = (details) => {
+            const dateObj = new Date(details.dob); 
+            let [hour, min] = details.tob.split(':').map(Number); 
 
-const currentUser = await User.findById(req.user.id || req.user._id || req.userId);
-        console.log("User Data from DB:", currentUser);
+            if (details.ampm === "PM" && hour < 12) hour += 12;
+            if (details.ampm === "AM" && hour === 12) hour = 0;
 
-        if (!currentUser) {
-            return res.status(404).json({ success: false, message: "User not found in database" });
-        }
-
-        if (!currentUser.dateOfBirth || !currentUser.timeOfBirth) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Complete your profile (DOB and Time of Birth are required)",
-                db_data: { 
-                    dob: currentUser.dateOfBirth, 
-                    tob: currentUser.timeOfBirth 
-                } 
-            });
-        }
-
-        const formatForAPI = (dob, tob, lat, lon) => {
-            const dateObj = new Date(dob);
-            const [hour, min] = tob.split(':');
             return {
                 day: dateObj.getDate(),
                 month: dateObj.getMonth() + 1,
                 year: dateObj.getFullYear(),
-                hour: parseInt(hour),
-                min: parseInt(min),
-                lat: parseFloat(lat || 28.61),
-                lon: parseFloat(lon || 77.20),
+                hour: hour,
+                min: min,
+                lat: parseFloat(details.lat),
+                lon: parseFloat(details.lon),
                 tzone: 5.5
             };
         };
 
-        let maleData, femaleData;
-        const userLat = currentUser.lat || 28.61; 
-        const userLon = currentUser.lon || 77.20;
-
-        if (currentUser.gender === 'Male') {
-            maleData = formatForAPI(currentUser.dateOfBirth, currentUser.timeOfBirth, userLat, userLon);
-            femaleData = formatForAPI(partnerDetails.dateOfBirth, partnerDetails.timeOfBirth, partnerDetails.lat, partnerDetails.lon);
-        } else {
-            femaleData = formatForAPI(currentUser.dateOfBirth, currentUser.timeOfBirth, userLat, userLon);
-            maleData = formatForAPI(partnerDetails.dateOfBirth, partnerDetails.timeOfBirth, partnerDetails.lat, partnerDetails.lon);
-        }
+        const mData = formatForAPI(boyDetails);
+        const fData = formatForAPI(girlDetails);
 
         const apiPayload = {
-            m_day: maleData.day, m_month: maleData.month, m_year: maleData.year,
-            m_hour: maleData.hour, m_min: maleData.min, m_lat: maleData.lat, m_lon: maleData.lon, m_tzone: 5.5,
-            f_day: femaleData.day, f_month: femaleData.month, f_year: femaleData.year,
-            f_hour: femaleData.hour, f_min: femaleData.min, f_lat: femaleData.lat, f_lon: femaleData.lon, f_tzone: 5.5
+            m_day: mData.day, m_month: mData.month, m_year: mData.year,
+            m_hour: mData.hour, m_min: mData.min, m_lat: mData.lat, m_lon: mData.lon, m_tzone: 5.5,
+            f_day: fData.day, f_month: fData.month, f_year: fData.year,
+            f_hour: fData.hour, f_min: fData.min, f_lat: fData.lat, f_lon: fData.lon, f_tzone: 5.5
         };
 
-        const report = await getMatchMakingReport(apiPayload);
+        const [report, maleManglik, femaleManglik] = await Promise.all([
+            getMatchMakingReport('match_ashtakoot_points', apiPayload),
+            getMatchMakingReport('manglik', mData),
+            getMatchMakingReport('manglik', fData)
+        ]);
+
+        let manglikConclusion = "";
+        if(maleManglik.is_present && femaleManglik.is_present) {
+            manglikConclusion = "Both are Manglik. Match is good.";
+        } else if (!maleManglik.is_present && !femaleManglik.is_present) {
+            manglikConclusion = "Both are Non-Manglik. Excellent match.";
+        } else {
+            manglikConclusion = "Manglik Dosha Mismatch. Caution required.";
+        }
 
         res.status(200).json({
             success: true,
-            score: report.total.received_points,
+            boyName: boyDetails.name,
+            girlName: girlDetails.name,
+            score: report.total.received_points, 
+            total_points: 36,
             conclusion: report.total.conclusion,
-            fullReport: report
-        });
+            
+            manglikStatus: {
+                boy: maleManglik.is_present,
+                girl: femaleManglik.is_present,
+                message: manglikConclusion
+            },
 
+            details: {
+                varna: report.varna,
+                vashya: report.vashya,
+                tara: report.tara,
+                yoni: report.yoni,
+                maitri: report.maitri,
+                gana: report.gana,
+                bhakoot: report.bhakoot,
+                nadi: report.nadi
+            },
+
+            full_report: report 
+        });
     } catch (error) {
         console.error("Error Detail:", error);
         res.status(500).json({ success: false, message: error.message });
@@ -230,11 +238,12 @@ exports.getDetailedHoroscope = async (req, res) => {
         }
 
         const zodiacSign = user.zodiac.toLowerCase();
-        const [basicPred, analysis, remedy] = await Promise.all([
-            getAstrologyData(`sun_sign_prediction/daily/${zodiacSign}`, {}),
-            getAstrologyData(`daily_prediction_analysis/${zodiacSign}`, {}),
-            getAstrologyData(`daily_remedies/${zodiacSign}`, {})
-        ]);
+        const basicPred = await getAstrologyData(`sun_sign_prediction/daily/${zodiacSign}`, {});
+console.log('basicPred OK');
+const analysis = await getAstrologyData(`daily_prediction_analysis/${zodiacSign}`, {});
+console.log('analysis OK');
+const remedy = await getAstrologyData(`daily_remedies/${zodiacSign}`, {});
+console.log('remedy OK');
 
         res.status(200).json({
             success: true,

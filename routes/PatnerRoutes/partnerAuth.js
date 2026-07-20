@@ -1,5 +1,5 @@
 const express = require('express');
-const router = Router = express.Router();
+const router = express.Router();
 const upload = require('../../middleware/upload');
 const { verifyToken, isPartner } = require('../../middleware/auth');
 const { sendOtp, verifyOtp, sendLoginOtp, loginWithOtp, register, getProfile, deleteAccount } = require('../../controllers/Patner/partnerAuth');
