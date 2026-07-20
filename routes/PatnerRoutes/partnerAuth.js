@@ -1,9 +1,5 @@
 const express = require('express');
 const router = express.Router();
-<<<<<<< HEAD
-=======
-
->>>>>>> ab79c08 (Banner APIs and Firebase setup)
 const upload = require('../../middleware/upload');
 const { verifyToken, isPartner } = require('../../middleware/auth');
 

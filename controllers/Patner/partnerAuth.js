@@ -1,4 +1,4 @@
-const { initializeApp, cert, apps } = require('firebase-admin/app');
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
@@ -7,18 +7,57 @@ const Partner = require('../../models/Partner/Partner');
 const cloudinary = require('../../config/cloudinary');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
 
-const serviceAccount = require('./../../config/astro-narhari-firebase-adminsdk-fbsvc-536f643de4.json');
+// सुरक्षित रूप से Firebase क्रेडेंशियल पार्स करने का फ़ंक्शन
+const parseServiceAccount = () => {
+    const envValue = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!envValue) {
+        console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT environment variable is not defined.");
+        return null;
+    }
+    try {
+        let cleanValue = envValue.trim();
+        cleanValue = cleanValue.replace(/\r?\n|\r/g, "");
+        if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
+            cleanValue = cleanValue.slice(1, -1);
+        } else if (cleanValue.startsWith('"') && cleanValue.endsWith('"')) {
+            cleanValue = cleanValue.slice(1, -1);
+        }
+        const parsed = JSON.parse(cleanValue);
+        if (parsed && parsed.private_key) {
+            parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+        }
+        return parsed;
+    } catch (error) {
+        console.warn("⚠️ PartnerAuth: Failed to parse FIREBASE_SERVICE_ACCOUNT env variable. Error:", error.message);
+        return null;
+    }
+};
 
+let serviceAccount = parseServiceAccount();
+
+// यदि Env क्रेडेंशियल नहीं मिले, तो सुरक्षित तरीके से लोकल JSON फ़ाइल लोड करने का प्रयास करें
+if (!serviceAccount) {
+    try {
+        serviceAccount = require('./../../config/astro-narhari-firebase-adminsdk-fbsvc-536f643de4.json');
+    } catch (error) {
+        console.warn("⚠️ PartnerAuth: Local Firebase config file also not found.");
+    }
+}
+
+// Firebase SDK का इनिशियलाइजेशन
 try {
-    const activeApps = apps || [];
-    if (activeApps.length === 0) {
+    const activeApps = getApps() || [];
+    if (activeApps.length > 0) {
+        console.log("ℹ Firebase Admin SDK is already initialized.");
+    } else if (serviceAccount) {
         initializeApp({
             credential: cert(serviceAccount),
         });
-
         console.log("=========================================");
-        console.log("🔥 Firebase Admin SDK Successfully Initialized!");
+        console.log("🔥 Firebase Admin SDK Successfully Initialized via Partner Auth!");
         console.log("=========================================");
+    } else {
+        console.error("❌ Firebase Admin Initialization Skipped: No valid credentials found.");
     }
 } catch (error) {
     console.error("=========================================");
