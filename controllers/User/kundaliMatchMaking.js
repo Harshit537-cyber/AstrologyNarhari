@@ -130,69 +130,55 @@ exports.getFestivalCalendar =  async (req, res) => {
         const { month, year, lat, lon, timezone } = req.body;
 
         if (!month || !year) {
-            return res.status(400).json({
-                success: false,
-                message: "month and year are required"
-            });
+            return res.status(400).json({ success: false, message: "month and year are required" });
         }
 
+       
         const payload = {
             day: 1,
-            month: parseInt(month),
-            year: parseInt(year),
-            hour: 12,   // required field by the API — defaulting to noon
-            min: 0,     // required field by the API
-            lat: parseFloat(lat || 28.6139),
-            lon: parseFloat(lon || 77.2090),
-            tzone: parseFloat(timezone || 5.5)
+            month: Number(month),
+            year: Number(year),
+            hour: 12,
+            min: 0,
+            lat: Number(lat || 28.6139),
+            lon: Number(lon || 77.2090),
+            tzone: Number(timezone || 5.5) 
         };
 
-        console.log('Festival payload being sent:', payload);
+        console.log('Sending Payload to Vedic Rishi:', payload);
 
+        
         let festivalsList;
         try {
             festivalsList = await getAstrologyData('major_festivals', payload);
-        } catch (apiErr) {
-            console.error('Festival API call failed with payload:', payload, 'Error:', apiErr.message);
-            throw apiErr;
+        } catch (e) {
+            console.log("Retrying with backup endpoint...");
+            festivalsList = await getAstrologyData('festival_calendar', payload);
         }
 
-        const monthFestivals = festivalsList.filter(f => {
-            const date = new Date(f.date);
-            return (date.getMonth() + 1) === parseInt(month) && date.getFullYear() === parseInt(year);
-        });
+        if (!Array.isArray(festivalsList)) {
+            return res.status(200).json({ success: true, festivals: [], summary: { total: 0 } });
+        }
 
         const calendarDots = {};
-        monthFestivals.forEach(f => {
-            const dateKey = f.date.split('T')[0];
+        const formatted = festivalsList.map(f => {
+            const dateKey = f.date ? f.date.split(' ')[0] : `${f.year}-${String(f.month).padStart(2, '0')}-${String(f.day).padStart(2, '0')}`;
             if (!calendarDots[dateKey]) calendarDots[dateKey] = [];
             calendarDots[dateKey].push(f.name);
+            return { name: f.name, date: dateKey, desc: f.description || "" };
         });
-
-        const today = new Date();
-        const upcomingHighlights = festivalsList
-            .filter(f => new Date(f.date) >= today)
-            .slice(0, 5);
 
         res.status(200).json({
             success: true,
-            meta: { month, year },
-            summary: {
-                totalFestivals: monthFestivals.length,
-                calendarDots: calendarDots
-            },
-            festivals: monthFestivals,
-            upcomingHighlights: upcomingHighlights
+            summary: { total: formatted.length, calendarDots },
+            festivals: formatted
         });
 
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch festival calendar",
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
+
 
 exports.getDailyBasisDashboardHoroscope = async (req, res) => {
     try {
@@ -229,43 +215,84 @@ exports.getDailyBasisDashboardHoroscope = async (req, res) => {
 };
 
 
-exports.getDetailedHoroscope = async (req, res) => {
+exports.getDetailedHoroscope =  async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
 
         if (!user || !user.zodiac || user.zodiac === "Auto-calculated") {
-            return res.status(400).json({ success: false, message: "Please set your zodiac sign" });
+            return res.status(400).json({
+                success: false,
+                message: "Please set your zodiac sign in profile first"
+            });
         }
 
+        const period = req.query.period || "daily";
         const zodiacSign = user.zodiac.toLowerCase();
-        const basicPred = await getAstrologyData(`sun_sign_prediction/daily/${zodiacSign}`, {});
-console.log('basicPred OK');
-const analysis = await getAstrologyData(`daily_prediction_analysis/${zodiacSign}`, {});
-console.log('analysis OK');
-const remedy = await getAstrologyData(`daily_remedies/${zodiacSign}`, {});
-console.log('remedy OK');
+
+        const endpoint = `horoscope_prediction/${period}/${zodiacSign}`;
+console.log("Endpoint:", endpoint);
+        const response = await getAstrologyData(endpoint, {
+            timezone: 5.5,
+        });
+
+        console.log("API RAW DATA:", JSON.stringify(response, null, 2));
+
+        let forecast = "";
+
+        if (typeof response.prediction === "object") {
+            forecast = Object.values(response.prediction).join(" ");
+        } else {
+            forecast = response.prediction || "";
+        }
 
         res.status(200).json({
             success: true,
             data: {
                 zodiac: user.zodiac,
-                date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-                
+                date:
+                    response.prediction_date ||
+                    response.date ||
+                    response.week_range ||
+                    response.month_name ||
+                    response.year ||
+                    "",
+
                 ratings: {
-                    love: analysis.rating.love * 20 + "%", 
-                    career: analysis.rating.career * 20 + "%",
-                    health: analysis.rating.health * 20 + "%",
-                    finance: analysis.rating.finance * 20 + "%"
+                    love: response.rating?.love
+                        ? `${response.rating.love * 20}%`
+                        : null,
+                    career: response.rating?.career
+                        ? `${response.rating.career * 20}%`
+                        : null,
+                    health: response.rating?.health
+                        ? `${response.rating.health * 20}%`
+                        : null,
+                    finance: response.rating?.finance
+                        ? `${response.rating.finance * 20}%`
+                        : null,
                 },
 
-                forecast: basicPred.prediction,
-                lucky_color: basicPred.lucky_color,
-                lucky_number: `Number ${basicPred.lucky_number}`,
-                remedy: remedy.remedies?.[0] || "Maintain a positive mindset today", 
-                is_premium_unlocked: false 
-            }
+                forecast: {
+                    title: `${period.toUpperCase()} FORECAST`,
+                    content: forecast,
+                },
+
+                lucky: {
+                    color: response.lucky_color || null,
+                    number: response.lucky_number || null,
+                    time:
+                        response.lucky_time ||
+                        response.lucky_hour ||
+                        null,
+                },
+            },
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error("HOROSCOPE API ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
     }
 };
