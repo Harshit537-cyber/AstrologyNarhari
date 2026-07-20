@@ -1,9 +1,72 @@
-const User = require('../../models/User.js');
-const Partner = require("../../models/Partner/Partner");
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 const jwt = require('jsonwebtoken');
 
-const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+const User = require('../../models/User.js');
+const UserProfile = require('../../models/User.js');
+const Partner = require("../../models/Partner/Partner");
+
+const parseServiceAccount = () => {
+    const envValue = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!envValue) {
+        console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT environment variable is not defined.");
+        return null;
+    }
+    try {
+        let cleanValue = envValue.trim();
+        cleanValue = cleanValue.replace(/\r?\n|\r/g, "");
+        if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
+            cleanValue = cleanValue.slice(1, -1);
+        } else if (cleanValue.startsWith('"') && cleanValue.endsWith('"')) {
+            cleanValue = cleanValue.slice(1, -1);
+        }
+        const parsed = JSON.parse(cleanValue);
+        if (parsed && parsed.private_key) {
+            parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+        }
+        return parsed;
+    } catch (error) {
+        console.warn("⚠️ AdminAuth: Failed to parse FIREBASE_SERVICE_ACCOUNT env variable. Error:", error.message);
+        return null;
+    }
+};
+
+let serviceAccount = parseServiceAccount();
+
+if (!serviceAccount) {
+    try {
+        serviceAccount = require('./../../config/astro-narhari-firebase-adminsdk-fbsvc-536f643de4.json');
+    } catch (error) {
+        console.warn(" AdminAuth: Local Firebase config file also not found.");
+    }
+}
+
+try {
+    const activeApps = getApps() || [];
+    if (activeApps.length > 0) {
+        console.log("ℹ Firebase Admin SDK is already initialized.");
+    } else if (serviceAccount) {
+        initializeApp({
+            credential: cert(serviceAccount)
+        });
+        console.log(" Firebase Admin SDK successfully initialized via Admin Auth!");
+    } else {
+        console.error(" Firebase Admin Initialization Skipped: No valid credentials found.");
+    }
+} catch (error) {
+    console.error(" Firebase Admin Initialization Failed (Admin):", error.message);
+}
+
+const verifyFirebaseIdToken = async (firebaseToken) => {
+    try {
+        const decodedToken = await getAuth().verifyIdToken(firebaseToken);
+        if (!decodedToken.phone_number) {
+            throw new Error('Phone number not verified on Firebase');
+        }
+        return decodedToken;
+    } catch (error) {
+        throw new Error(`Firebase Auth Error: ${error.message}`);
+    }
 };
 
 const sendAdminOTP = async (req, res) => {
@@ -13,8 +76,6 @@ const sendAdminOTP = async (req, res) => {
         if (!mobile) {
             return res.status(400).json({ success: false, message: 'Mobile number is required' });
         }
-
-        const otp = generateOTP();
 
         if (action === 'register') {
             const existingUser = await User.findOne({ mobile });
@@ -27,29 +88,18 @@ const sendAdminOTP = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
             }
 
-            await User.findOneAndUpdate(
-                { mobile },
-                { otp, role: 'admin' },
-                { upsert: true, new: true }
-            );
-
         } else if (action === 'login') {
             const existingAdmin = await User.findOne({ mobile, role: 'admin' });
             if (!existingAdmin) {
                 return res.status(404).json({ success: false, message: 'Admin not found with this mobile number' });
             }
-
-            existingAdmin.otp = otp;
-            await existingAdmin.save();
-
         } else {
             return res.status(400).json({ success: false, message: 'Invalid action type' });
         }
 
         return res.status(200).json({
             success: true,
-            message: 'OTP sent successfully',
-            otp: otp
+            message: 'Validation checks passed. Trigger OTP on client.'
         });
 
     } catch (error) {
@@ -59,24 +109,26 @@ const sendAdminOTP = async (req, res) => {
 
 const register = async (req, res) => {
     try {
-        const { name, mobile, otp } = req.body;
+        const { name, mobile, firebaseToken } = req.body;
 
-        if (!name || !mobile || !otp) {
-            return res.status(400).json({ success: false, message: 'Name, mobile, and OTP are required' });
+        if (!name || !mobile || !firebaseToken) {
+            return res.status(400).json({ success: false, message: 'Name, mobile, and firebaseToken are required' });
         }
 
-        const admin = await User.findOne({ mobile, role: 'admin' });
+        await verifyFirebaseIdToken(firebaseToken);
 
+        const adminCount = await User.countDocuments({ role: 'admin' });
+        if (adminCount >= 2) {
+            return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
+        }
+
+        let admin = await User.findOne({ mobile });
         if (!admin) {
-            return res.status(404).json({ success: false, message: 'Registration not initiated. Request OTP first.' });
-        }
-
-        if (admin.otp !== otp) {
-            return res.status(400).json({ success: false, message: 'Invalid OTP' });
+            admin = new User({ mobile });
         }
 
         admin.name = name;
-        admin.otp = null;
+        admin.role = 'admin';
         admin.isActive = true;
         await admin.save();
 
@@ -105,11 +157,13 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
     try {
-        const { mobile, otp } = req.body;
+        const { mobile, firebaseToken } = req.body;
 
-        if (!mobile || !otp) {
-            return res.status(400).json({ success: false, message: 'Mobile and OTP are required' });
+        if (!mobile || !firebaseToken) {
+            return res.status(400).json({ success: false, message: 'Mobile and firebaseToken are required' });
         }
+
+        await verifyFirebaseIdToken(firebaseToken);
 
         const admin = await User.findOne({ mobile, role: 'admin' });
 
@@ -117,16 +171,9 @@ const login = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Admin not found' });
         }
 
-        if (admin.otp !== otp) {
-            return res.status(400).json({ success: false, message: 'Invalid OTP' });
-        }
-
         if (!admin.isActive) {
             return res.status(403).json({ success: false, message: 'This admin account is deactivated' });
         }
-
-        admin.otp = null;
-        await admin.save();
 
         const token = jwt.sign(
             { id: admin._id, role: admin.role },
@@ -170,8 +217,7 @@ const getDashboardStats = async (req, res) => {
                 role: "user",
                 createdAt: { $gte: today }
             }),
-            User.countDocuments({
-                role: "partner",
+            Partner.countDocuments({
                 createdAt: { $gte: today }
             })
         ]);
@@ -334,7 +380,10 @@ const updateUser = async (req, res) => {
             });
         }
 
+<<<<<<< HEAD
         // Update User
+=======
+>>>>>>> ab79c08 (Banner APIs and Firebase setup)
         const user = await User.findByIdAndUpdate(
             id,
             {
@@ -352,7 +401,10 @@ const updateUser = async (req, res) => {
             });
         }
 
+<<<<<<< HEAD
         // Update UserProfile
+=======
+>>>>>>> ab79c08 (Banner APIs and Firebase setup)
         const profile = await UserProfile.findOneAndUpdate(
             { user: id },
             {
@@ -367,11 +419,17 @@ const updateUser = async (req, res) => {
             {
                 new: true,
                 runValidators: true,
+<<<<<<< HEAD
                 upsert:true
             }
         );
 
     
+=======
+                upsert: true
+            }
+        );
+>>>>>>> ab79c08 (Banner APIs and Firebase setup)
 
         return res.status(200).json({
             success: true,

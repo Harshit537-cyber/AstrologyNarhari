@@ -1,18 +1,40 @@
 const express = require('express');
 const router = express.Router();
+<<<<<<< HEAD
+=======
+
+>>>>>>> ab79c08 (Banner APIs and Firebase setup)
 const upload = require('../../middleware/upload');
 const { verifyToken, isPartner } = require('../../middleware/auth');
-const { sendOtp, verifyOtp, sendLoginOtp, loginWithOtp, register, getProfile, deleteAccount } = require('../../controllers/Patner/partnerAuth');
+
+// Controllers Imports
+const { 
+    sendOtp, 
+    verifyOtp, 
+    sendLoginOtp, 
+    loginWithOtp, 
+    register, 
+    getProfile, 
+    deleteAccount,
+    deactivateAccount,
+    activateAccount
+} = require('../../controllers/Patner/partnerAuth');
+
 const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/partnerDuty');
 const { addBankAccount, updateBankAccount, getBankAccount } = require('../../controllers/Patner/partnerBank');
 const { uploadKycDocuments, getKycStatus } = require('../../controllers/Patner/partnerKyc');
 
+// ==========================================
+// 1. AUTHENTICATION ROUTES (Firebase flow)
+// ==========================================
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
-
 router.post('/login-send-otp', sendLoginOtp);
 router.post('/login-verify', loginWithOtp);
 
+// ==========================================
+// 2. PROFILE & ACCOUNT MANAGEMENT ROUTES
+// ==========================================
 router.get(
     '/profile',
     verifyToken,
@@ -39,6 +61,23 @@ router.delete(
 );
 
 router.patch(
+    '/deactivate',
+    verifyToken,
+    isPartner,
+    deactivateAccount
+);
+
+router.patch(
+    '/activate',
+    verifyToken,
+    isPartner,
+    activateAccount
+);
+
+// ==========================================
+// 3. DUTY STATUS ROUTES
+// ==========================================
+router.patch(
     '/duty-on',
     verifyToken,
     isPartner,
@@ -59,6 +98,9 @@ router.get(
     getDutyStatus
 );
 
+// ==========================================
+// 4. BANK ACCOUNT ROUTES
+// ==========================================
 router.post(
     '/bank-account',
     verifyToken,
@@ -80,6 +122,9 @@ router.get(
     getBankAccount
 );
 
+// ==========================================
+// 5. KYC ROUTES
+// ==========================================
 router.post(
     '/kyc/upload',
     verifyToken,
@@ -93,6 +138,11 @@ router.post(
     uploadKycDocuments
 );
 
-router.get('/kyc/status', verifyToken, isPartner, getKycStatus);
+router.get(
+    '/kyc/status', 
+    verifyToken, 
+    isPartner, 
+    getKycStatus
+);
 
 module.exports = router;
