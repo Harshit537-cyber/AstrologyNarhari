@@ -23,7 +23,7 @@ const sendAdminOTP = async (req, res) => {
             }
 
             const adminCount = await User.countDocuments({ role: 'admin' });
-            if (adminCount >= 6) {
+            if (adminCount <= 6) {
                 return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
             }
 
