@@ -1,4 +1,4 @@
-const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { initializeApp, cert, apps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
@@ -7,57 +7,39 @@ const Partner = require('../../models/Partner/Partner');
 const cloudinary = require('../../config/cloudinary');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
 
-const parseServiceAccount = () => {
-    const envValue = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!envValue) {
-        console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT environment variable is not defined.");
-        return null;
-    }
-    try {
-        let cleanValue = envValue.trim();
-        cleanValue = cleanValue.replace(/\r?\n|\r/g, "");
-        if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
-            cleanValue = cleanValue.slice(1, -1);
-        } else if (cleanValue.startsWith('"') && cleanValue.endsWith('"')) {
-            cleanValue = cleanValue.slice(1, -1);
-        }
-        const parsed = JSON.parse(cleanValue);
-        if (parsed && parsed.private_key) {
-            parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-        }
-        return parsed;
-    } catch (error) {
-        console.warn("⚠️ PartnerAuth: Failed to parse FIREBASE_SERVICE_ACCOUNT env variable. Error:", error.message);
-        return null;
-    }
-};
-
-const serviceAccount = parseServiceAccount();
+const serviceAccount = require('./../../config/astro-narhari-firebase-adminsdk-fbsvc-536f643de4.json');
 
 try {
-    const activeApps = getApps() || [];
-    if (activeApps.length > 0) {
-        console.log("ℹ️ Firebase Admin SDK is already initialized.");
-    } else if (serviceAccount) {
+    const activeApps = apps || [];
+    if (activeApps.length === 0) {
         initializeApp({
             credential: cert(serviceAccount),
         });
-        console.log("🔥 Firebase Admin SDK successfully initialized via Partner Auth!");
-    } else {
-        console.error("❌ Firebase Admin Initialization Skipped: No valid credentials found.");
+
+        console.log("=========================================");
+        console.log("🔥 Firebase Admin SDK Successfully Initialized!");
+        console.log("=========================================");
     }
 } catch (error) {
-    console.error("❌ Firebase Admin Initialization Failed (Partner):", error.message);
+    console.error("=========================================");
+    console.error("❌ Firebase Admin Initialization Failed:", error.message);
+    console.error("=========================================");
 }
 
 const verifyFirebaseIdToken = async (firebaseToken) => {
     try {
+        console.log("🕒 Verifying Firebase ID Token...");
         const decodedToken = await getAuth().verifyIdToken(firebaseToken);
+        
         if (!decodedToken.phone_number) {
+            console.warn(" Token is valid, but no phone number associated.");
             throw new Error('Phone number not verified on Firebase');
         }
+        
+        console.log(`✅ Firebase Token verified for: ${decodedToken.phone_number}`);
         return decodedToken;
     } catch (error) {
+        console.error(`Firebase Auth Verification Failed: ${error.message}`);
         throw new Error(`Firebase Auth Error: ${error.message}`);
     }
 };
@@ -130,6 +112,7 @@ const verifyOtp = async (req, res) => {
         if (!partner) {
             partner = new Partner({ mobile, isVerified: true });
             await partner.save();
+            console.log(`👤 New partner registered with mobile: ${mobile}`);
         }
 
         const token = generateToken(partner);
@@ -200,6 +183,7 @@ const loginWithOtp = async (req, res) => {
                 partner.deactivationReasonNote = null;
                 partner.deactivationDuration = null;
                 await partner.save();
+                console.log(` Account auto-reactivated for: ${mobile}`);
             }
         }
 

@@ -84,7 +84,7 @@ const sendAdminOTP = async (req, res) => {
             }
 
             const adminCount = await User.countDocuments({ role: 'admin' });
-            if (adminCount <= 6) {
+            if (adminCount >= 2) {
                 return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
             }
 
@@ -361,9 +361,6 @@ const getUserById = async (req, res) => {
     }
 };
 
-
-
-
 const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
@@ -380,10 +377,6 @@ const updateUser = async (req, res) => {
             });
         }
 
-<<<<<<< HEAD
-        // Update User
-=======
->>>>>>> ab79c08 (Banner APIs and Firebase setup)
         const user = await User.findByIdAndUpdate(
             id,
             {
@@ -401,10 +394,6 @@ const updateUser = async (req, res) => {
             });
         }
 
-<<<<<<< HEAD
-        // Update UserProfile
-=======
->>>>>>> ab79c08 (Banner APIs and Firebase setup)
         const profile = await UserProfile.findOneAndUpdate(
             { user: id },
             {
@@ -419,17 +408,9 @@ const updateUser = async (req, res) => {
             {
                 new: true,
                 runValidators: true,
-<<<<<<< HEAD
-                upsert:true
-            }
-        );
-
-    
-=======
                 upsert: true
             }
         );
->>>>>>> ab79c08 (Banner APIs and Firebase setup)
 
         return res.status(200).json({
             success: true,
@@ -447,10 +428,6 @@ const updateUser = async (req, res) => {
         });
     }
 };
-
-
-
-
 
 const deleteUserById = async (req, res) => {
     try {
