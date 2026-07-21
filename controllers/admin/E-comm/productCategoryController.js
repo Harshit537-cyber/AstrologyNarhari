@@ -1,4 +1,4 @@
-const Category = require("../../models/Category");
+const Category = require("../../../models/E-comm/productCategory");
 const { cloudinary } = require("../../../config/cloudinary");
 
 exports.addCategory = async (req, res) => {
@@ -156,6 +156,54 @@ exports.deleteCategory = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+
+
+
+
+
+exports.getAllCategories = async (req, res) => {
+    try {
+        const {
+            page = 1,
+            limit = 10,
+            search = "",
+            isActive,
+        } = req.query;
+
+        const filter = {};
+
+        if (search) {
+            filter.name = { $regex: search, $options: "i" };
+        }
+
+        if (isActive !== undefined) {
+            filter.isActive = isActive === "true";
+        }
+
+        const total = await Category.countDocuments(filter);
+
+        const categories = await Category.find(filter)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(Number(limit));
+
+        return res.status(200).json({
+            success: true,
+            message: "Categories fetched successfully",
+            total,
+            currentPage: Number(page),
+            totalPages: Math.ceil(total / limit),
+            data: categories,
+        });
+
+    } catch (error) {
+        return res.status(500).json({
             success: false,
             message: error.message,
         });

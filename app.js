@@ -7,6 +7,8 @@ const partnerAuthRoutes = require("./routes/PatnerRoutes/partnerAuth");
 const adminAuthRoutes = require("./routes/AdminRoutes/adminAuth");
 const bookingRoutes = require("./routes/bookingRoutes/bookingRoutes");
 const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes")
+const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes")
+const productRoutes = require("./routes/AdminRoutes/E-comm/productRoutes")
 
 const app = express();
 
@@ -17,13 +19,20 @@ app.use(cookieParser());
 
 app.use("/api/user", userAuthRoutes);
 app.use("/api/partner", partnerAuthRoutes);
-app.use("/api/admin", adminAuthRoutes);
-app.use("/api/admin/banner", bannerRoutes);
+
 app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
 app.use("/api/review", require("./routes/review/reviewRoutes"));
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/wallet", require("./routes/UserRoutes/walletRoutes"));
 app.use("/api/match", require("./routes/UserRoutes/kundaliMatchMakingRoutes"))
+
+
+
+// admin routes
+app.use("/api/admin", adminAuthRoutes);
+app.use("/api/admin/banner", bannerRoutes);
+app.use("/api/admin/product-category",productCategoryRoutes)
+app.use("/api/admin/product",productRoutes)
 
 app.get("/", (req, res) => {
     res.status(200).json({
