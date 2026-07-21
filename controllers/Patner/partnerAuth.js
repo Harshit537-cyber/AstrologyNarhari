@@ -457,6 +457,80 @@ const activateAccount = async (req, res) => {
     }
 };
 
+
+const getLiveAstrologers = async (req, res) => {
+    try {
+        let query = {
+            isVerified: true,
+            isProfileComplete: true,
+            profileApprovalStatus: 'Approved',
+            kycStatus: 'Approved' 
+        };
+
+        const { specialty, language, gender, search, sortBy } = req.query;
+
+        if (specialty) {
+            query.specialties = { $in: [specialty] };
+        }
+
+        if (language) {
+            query.languages = { $in: [language] };
+        }
+
+        if (gender) {
+            query.gender = gender;
+        }
+
+        if (search) {
+            query.fullName = { $regex: search, $options: 'i' };
+        }
+
+        let sortOption = {};
+        if (sortBy === 'experience') {
+            sortOption = { experience: -1 };
+        } else if (sortBy === 'rating') {
+            sortOption = { averageRating: -1 };
+        } else if (sortBy === 'price_low') {
+            sortOption = { minRate: 1 };
+        } else if (sortBy === 'price_high') {
+            sortOption = { minRate: -1 };
+        } else {
+            sortOption = { isOnline: -1, averageRating: -1 }; 
+        }
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const astrologers = await Partner.find(query)
+            .select('fullName profilePic specialties languages experience minRate averageRating totalReviews isOnline isBusy bio')
+            .sort(sortOption)
+            .skip(skip)
+            .limit(limit);
+
+        const total = await Partner.countDocuments(query);
+
+        res.status(200).json({
+            success: true,
+            count: astrologers.length,
+            total,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            data: astrologers
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error fetching live astrologers",
+            error: error.message
+        });
+    }
+};
+
+
+
+
 module.exports = {
     sendOtp,
     verifyOtp,
@@ -466,5 +540,6 @@ module.exports = {
     getProfile,
     deleteAccount,
     deactivateAccount,
-    activateAccount
+    activateAccount,
+    getLiveAstrologers
 };
