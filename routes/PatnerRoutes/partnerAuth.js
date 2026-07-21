@@ -7,8 +7,8 @@ const { verifyToken, isPartner } = require('../../middleware/auth');
 const { 
     sendOtp, 
     verifyOtp, 
-    sendLoginOtp, 
-    loginWithOtp, 
+    // sendLoginOtp, 
+    // loginWithOtp, 
     register, 
     getProfile, 
     deleteAccount,
@@ -25,9 +25,9 @@ const { uploadKycDocuments, getKycStatus } = require('../../controllers/Patner/p
 // ==========================================
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
-router.post('/login-send-otp', sendLoginOtp);
-router.post('/login-verify', loginWithOtp);
-
+// router.post('/login-send-otp', sendLoginOtp);
+// router.post('/login-verify', loginWithOtp);
+// 
 // ==========================================
 // 2. PROFILE & ACCOUNT MANAGEMENT ROUTES
 // ==========================================

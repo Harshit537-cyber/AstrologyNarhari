@@ -77,7 +77,6 @@ const partnerSchema = new mongoose.Schema({
     averageRating: { type: Number, default: 0 },
     totalReviews: { type: Number, default: 0 },
 
-    // --- यहाँ KYC फील्ड्स जोड़ी गई हैं ---
     kycStatus: {
         type: String,
         enum: ['Not Submitted', 'Pending', 'Approved', 'Rejected'],
@@ -102,7 +101,12 @@ const partnerSchema = new mongoose.Schema({
         url: { type: String, default: null },
         status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
         uploadedAt: { type: Date, default: null }
-    }
+    },
+    isOnline: { type: Boolean, default: false },
+    isBusy: { type: Boolean, default: false },
+
+
 }, { timestamps: true });
+
 
 module.exports = mongoose.model('Partner', partnerSchema);
