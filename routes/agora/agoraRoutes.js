@@ -13,16 +13,15 @@ router.post('/join', agoraController.joinLive);
 // 3. User Side: Active sessions ki list dekhne ke liye (Home Screen & View All)
 // Method: GET | Query: ?category=Love (optional)
 router.get('/active-sessions', agoraController.getActiveSessions);
-
 // 4. Partner Side: Live khatam karne ke liye
 // Method: POST | Body: { partnerId }
 router.post('/end', agoraController.endLive);
-
 // 5. User Side: Live video like karne ke liye
 // Method: POST | Body: { sessionId }
 router.post('/like', agoraController.likeSession);
-
-
 router.get("/viewer-count/:sessionId", agoraController.getViewerCount);
+router.get("/like-stats/:sessionId", agoraController.getLikeStats)
+
+
 
 module.exports = router;

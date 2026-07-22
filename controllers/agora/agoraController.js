@@ -194,7 +194,7 @@ exports.getViewerCount = async (req, res) => {
         const session = await LiveSession.findById(sessionId).select('viewerCount');
 
         if (!session) {
-            return res.status(404).json({ success: false, message: "Session nahi mila" });
+            return res.status(404).json({ success: false, message: "Session does not found" });
         }
 
         res.status(200).json({ 
@@ -203,5 +203,32 @@ exports.getViewerCount = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
+
+exports.getLikeStats = async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        const session = await LiveSession.findById(sessionId)
+            .select('likeCount likedByUsers') 
+            .populate('likedByUsers', 'fullName'); 
+
+        if (!session) {
+            return res.status(404).json({ success: false, message: "Session nahi mila!" });
+        }
+
+        const likersNames = session.likedByUsers.map(user => user.fullName);
+
+        res.status(200).json({
+            success: true,
+            totalLikes: session.likeCount,    
+            allLikedBy: likersNames        
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 };
