@@ -449,13 +449,27 @@ const register = async (req, res) => {
 
 const getProfile = async (req, res) => {
     try {
+        // Partner ka saara data fetch karega (sirf sensitive fields 'otp' aur 'otpExpiry' ko chhod kar)
         const partner = await Partner.findById(req.user.id).select('-otp -otpExpiry');
+
         if (!partner) {
-            return res.status(404).json({ success: false, message: 'Partner not found' });
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Partner not found' 
+            });
         }
-        return res.status(200).json({ success: true, partner });
+
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Partner profile retrieved successfully',
+            partner 
+        });
+
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ 
+            success: false, 
+            message: error.message 
+        });
     }
 };
 
