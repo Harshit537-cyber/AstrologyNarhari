@@ -25,7 +25,7 @@ const {
 
 const { verifyToken, isAdmin } = require('../../middleware/auth');
 
-router.post('/send-otp', sendAdminOTP);
+// router.post('/send-otp', sendAdminOTP);
 router.post('/register', register);
 router.post('/login', login);
 
