@@ -66,15 +66,23 @@ exports.joinLive = async (req, res) => {
 exports.getActiveSessions = async (req, res) => {
     try {
         const { category } = req.query; 
-        let query = { status: 'Active' };
-        if (category) query.category = category;
+                let query = { status: 'Active' };
+
+        if (category && category.trim() !== "") {
+            query.category = { $regex: new RegExp(`^${category.trim()}$`, "i") };
+        } 
 
         const sessions = await LiveSession.find(query)
             .populate('partnerId', 'fullName profilePic specialties averageRating');
             
-        res.status(200).json({ success: true, sessions });
+        res.status(200).json({ 
+            success: true, 
+            total: sessions.length,
+            sessions 
+        });
+
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
