@@ -34,12 +34,8 @@ app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/admin/product-category",productCategoryRoutes)
 app.use("/api/admin/product",productRoutes)
-<<<<<<< HEAD
-app.use("/api/admin/coupon",couponRoutes);
-app.use("/api/agora", require("./routes/agora/agoraRoutes"));
-=======
+//coupon api
 app.use("/api/admin/coupon", require("./routes/AdminRoutes/E-comm/couponRoutes"))
->>>>>>> 4a631da108c45db9b42e2a08351793461e8db0a4
 
 app.get("/", (req, res) => {
     res.status(200).json({
