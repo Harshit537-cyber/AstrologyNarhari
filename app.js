@@ -9,6 +9,7 @@ const bookingRoutes = require("./routes/bookingRoutes/bookingRoutes");
 const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes")
 const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes")
 const productRoutes = require("./routes/AdminRoutes/E-comm/productRoutes")
+const couponRoutes = require("./routes/AdminRoutes/E-comm/couponRoutes")
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/admin/product-category",productCategoryRoutes)
 app.use("/api/admin/product",productRoutes)
+app.use("/api/admin/coupon",couponRoutes)
 
 app.get("/", (req, res) => {
     res.status(200).json({

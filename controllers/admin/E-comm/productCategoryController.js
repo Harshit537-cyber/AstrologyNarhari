@@ -1,5 +1,5 @@
 const Category = require("../../../models/E-comm/productCategory");
-const { cloudinary } = require("../../../config/cloudinary");
+const  cloudinary  = require("../../../config/cloudinary");
 
 exports.addCategory = async (req, res) => {
     try {
@@ -26,14 +26,12 @@ exports.addCategory = async (req, res) => {
         let image = "";
 
         if (req.file) {
-            const uploadedImage = await uploadOnCloudinary(req.file.path);
-
-            if (!uploadedImage) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Image upload failed",
-                });
-            }
+            const uploadedImage = await cloudinary.uploader.upload(
+                req.file.path,
+                {
+                    folder: "categories",
+                }
+            );
 
             image = uploadedImage.secure_url;
         }
@@ -57,6 +55,8 @@ exports.addCategory = async (req, res) => {
         });
     }
 };
+
+
 exports.getCategoryById = async (req, res) => {
     try {
         const category = await Category.findById(req.params.id);
@@ -116,8 +116,16 @@ exports.updateCategory = async (req, res) => {
         if (isActive !== undefined)
             category.isActive = isActive;
 
-        if (req.file)
-            category.image = req.file.path;
+        if (req.file) {
+            const uploadedImage = await cloudinary.uploader.upload(
+                req.file.path,
+                {
+                    folder: "categories",
+                }
+            );
+
+            category.image = uploadedImage.secure_url;
+        }
 
         await category.save();
 

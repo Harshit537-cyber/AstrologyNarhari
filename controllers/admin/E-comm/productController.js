@@ -1,5 +1,6 @@
 const Product = require("../../../models/E-comm/Product");
 const Category = require("../../../models/E-comm/productCategory");
+const cloudinary = require("../../../config/cloudinary")
 
 
 // ==========================
@@ -41,7 +42,18 @@ exports.addProduct = async (req, res) => {
         let images = [];
 
         if (req.files && req.files.length > 0) {
-            images = req.files.map(file => file.path);
+
+            for (const file of req.files) {
+
+                const uploadedImage = await cloudinary.uploader.upload(
+                    file.path,
+                    {
+                        folder: "products",
+                    }
+                );
+
+                images.push(uploadedImage.secure_url);
+            }
         }
 
         const product = await Product.create({
@@ -63,16 +75,19 @@ exports.addProduct = async (req, res) => {
             isActive,
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: "Product added successfully.",
             data: product,
         });
+
     } catch (error) {
-        res.status(500).json({
+
+        return res.status(500).json({
             success: false,
             message: error.message,
         });
+
     }
 };
 
@@ -158,7 +173,22 @@ exports.updateProduct = async (req, res) => {
         }
 
         if (req.files && req.files.length > 0) {
-            product.images = req.files.map(file => file.path);
+
+            const images = [];
+
+            for (const file of req.files) {
+
+                const uploadedImage = await cloudinary.uploader.upload(
+                    file.path,
+                    {
+                        folder: "products",
+                    }
+                );
+
+                images.push(uploadedImage.secure_url);
+            }
+
+            product.images = images;
         }
 
         product.name = req.body.name ?? product.name;

@@ -10,40 +10,40 @@ const upload = require("../../../middleware/upload");
 // Add Coupon
 router.post(
     "/add",
-    auth,
-    adminAuth,
+    verifyToken,
+    isAdmin,
     couponController.addCoupon
 );
 
 // Get All Coupons
 router.get(
     "/list",
-    auth,
-    adminAuth,
+     verifyToken,
+    // isAdmin,
     couponController.getAllCoupons
 );
 
 // Get Coupon By ID
 router.get(
     "/:id",
-    auth,
-    adminAuth,
+      verifyToken,
+    isAdmin,
     couponController.getCouponById
 );
 
 // Update Coupon
 router.put(
     "/update/:id",
-    auth,
-    adminAuth,
+      verifyToken,
+    isAdmin,
     couponController.updateCoupon
 );
 
 // Delete Coupon
 router.delete(
     "/delete/:id",
-    auth,
-    adminAuth,
+      verifyToken,
+    isAdmin,
     couponController.deleteCoupon
 );
 
