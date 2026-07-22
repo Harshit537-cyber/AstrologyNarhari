@@ -1,113 +1,8 @@
-const { initializeApp, cert, getApps } = require('firebase-admin/app');
-const { getAuth } = require('firebase-admin/auth');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
-
 const Partner = require('../../models/Partner/Partner');
 const cloudinary = require('../../config/cloudinary');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
-
-// const parseServiceAccount = () => {
-//     const envValue = process.env.FIREBASE_SERVICE_ACCOUNT;
-//     console.log("=========================================");
-//     console.log("🔍 [INIT] Checking FIREBASE_SERVICE_ACCOUNT env...");
-    
-//     if (!envValue) {
-//         console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT environment variable is not defined.");
-//         return null;
-//     }
-//     try {
-//         let cleanValue = envValue.trim();
-//         if ((cleanValue.startsWith("'") && cleanValue.endsWith("'")) || 
-//             (cleanValue.startsWith('"') && cleanValue.endsWith('"'))) {
-//             cleanValue = cleanValue.slice(1, -1);
-//         }
-//         const parsed = JSON.parse(cleanValue);
-//         if (parsed && parsed.private_key) {
-//             parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-//         }
-//         console.log("✅ Successfully parsed service account JSON directly.");
-//         return parsed;
-//     } catch (error) {
-//         console.warn("⚠️ Failed direct JSON parsing. Attempting fallback parse... Error:", error.message);
-//         try {
-//             let fallbackValue = envValue.trim().replace(/\r?\n|\r/g, "\\n");
-//             if (fallbackValue.startsWith("'") && fallbackValue.endsWith("'")) {
-//                 fallbackValue = fallbackValue.slice(1, -1);
-//             } else if (fallbackValue.startsWith('"') && fallbackValue.endsWith('"')) {
-//                 fallbackValue = fallbackValue.slice(1, -1);
-//             }
-//             const parsed = JSON.parse(fallbackValue);
-//             if (parsed && parsed.private_key) {
-//                 parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-//             }
-//             console.log("✅ Successfully parsed service account using fallback.");
-//             return parsed;
-//         } catch (err) {
-//             console.error("❌ All JSON parsing attempts failed. Raw env value length:", envValue.length);
-//             console.error("❌ Ultimate parsing error:", err);
-//             return null;
-//         }
-//     }
-// };
-
-// let serviceAccount = parseServiceAccount();
-
-// if (!serviceAccount) {
-//     try {
-//         console.log("🕒 Attempting to load service account locally...");
-//         serviceAccount = require('./../../config/astro-narhari-firebase-adminsdk-fbsvc-536f643de4.json');
-//         console.log("✅ Successfully loaded service account from local JSON file.");
-//     } catch (error) {
-//         console.warn("⚠️ PartnerAuth: Local Firebase config file also not found. Error:", error.message);
-//     }
-// }
-
-// try {
-//     const activeApps = getApps() || [];
-//     if (activeApps.length > 0) {
-//         console.log("ℹ Firebase Admin SDK is already initialized.");
-//     } else if (serviceAccount) {
-//         initializeApp({
-//             credential: cert(serviceAccount),
-//         });
-//         console.log("=========================================");
-//         console.log("🔥 Firebase Admin SDK Successfully Initialized!");
-//         console.log("=========================================");
-//     } else {
-//         console.error("❌ Firebase Admin Initialization Skipped: No valid credentials found.");
-//     }
-// } catch (error) {
-//     console.error("=========================================");
-//     console.error("❌ Firebase Admin Initialization Failed:", error);
-//     console.error("=========================================");
-// }
-
-// const verifyFirebaseIdToken = async (firebaseToken) => {
-//     try {
-//         console.log("=========================================");
-//         console.log("🕒 Verifying Firebase ID Token...");
-//         console.log("Token sample (first 25 chars):", firebaseToken ? firebaseToken.substring(0, 25) + "..." : "undefined");
-        
-//         const decodedToken = await getAuth().verifyIdToken(firebaseToken);
-        
-//         if (!decodedToken.phone_number) {
-//             console.warn("⚠️ Token is valid, but no phone number associated.");
-//             throw new Error('Phone number not verified on Firebase');
-//         }
-        
-//         console.log(`✅ Firebase Token verified for: ${decodedToken.phone_number}`);
-//         console.log("=========================================");
-//         return decodedToken;
-//     } catch (error) {
-//         console.error("=========================================");
-//         console.error("❌ Firebase Auth Verification Failed!");
-//         console.error("Error Message:", error.message);
-//         console.error("Full Error Object:", error);
-//         console.error("=========================================");
-//         throw new Error(`Firebase Auth Error: ${error.message}`);
-//     }
-// };
 
 const uploadToCloudinary = async (filePath, folder) => {
     try {
@@ -138,171 +33,6 @@ const cleanUploadedFiles = (files) => {
     }
 };
 
-const generateToken = (partner) => {
-    return jwt.sign(
-        { id: partner._id, role: partner.role },
-        process.env.JWT_SECRET || 'secretkey',
-        { expiresIn: '30d' }
-    );
-};
-
-// const sendOtp = async (req, res) => {
-//     try {
-//         const { mobile } = req.body;
-//         if (!mobile) {
-//             return res.status(400).json({ message: 'Mobile number is required' });
-//         }
-
-//         const partner = await Partner.findOne({ mobile });
-//         return res.status(200).json({
-//             success: true,
-//             isRegistered: !!partner,
-//             message: partner ? 'Partner exists. Proceed to OTP verification.' : 'New mobile number.'
-//         });
-//     } catch (error) {
-//         return res.status(500).json({ success: false, error: error.message });
-//     }
-// };
-
-// const verifyOtp = async (req, res) => {
-//     try {
-//         console.log("=========================================");
-//         console.log("📩 [POST] /api/partner/verify-otp hit");
-//         console.log("Request Body:", req.body);
-
-//         const { mobile, firebaseToken } = req.body;
-//         if (!mobile || !firebaseToken) {
-//             console.warn("⚠️ Missing fields in request body.");
-//             return res.status(400).json({ message: 'Mobile and Firebase Token are required' });
-//         }
-
-//         await verifyFirebaseIdToken(firebaseToken);
-
-//         let partner = await Partner.findOne({ mobile });
-//         if (!partner) {
-//             partner = new Partner({ mobile, isVerified: true });
-//             await partner.save();
-//             console.log(`👤 New partner registered with mobile: ${mobile}`);
-//         }
-
-//         const token = generateToken(partner);
-//         console.log("✅ Verification successful. Token generated.");
-//         console.log("=========================================");
-
-//         return res.status(200).json({
-//             success: true,
-//             message: 'OTP verified successfully',
-//             token,
-//             isProfileComplete: partner.isProfileComplete,
-//             profileApprovalStatus: partner.profileApprovalStatus,
-//             partner: {
-//                 id: partner._id,
-//                 mobile: partner.mobile,
-//                 role: partner.role
-//             }
-//         });
-//     } catch (error) {
-//         console.error("❌ verifyOtp Controller Error:", error);
-//         return res.status(401).json({ success: false, message: error.message });
-//     }
-// };
-
-// const sendLoginOtp = async (req, res) => {
-//     try {
-//         const { mobile } = req.body;
-//         if (!mobile) {
-//             return res.status(400).json({ message: 'Mobile number is required' });
-//         }
-
-//         const partner = await Partner.findOne({ mobile });
-//         if (!partner) {
-//             return res.status(404).json({ message: 'Partner not registered. Please register first.' });
-//         }
-
-//         return res.status(200).json({ success: true, message: 'Valid partner account. Trigger OTP on client.' });
-//     } catch (error) {
-//         return res.status(500).json({ success: false, error: error.message });
-//     }
-// };
-
-// const loginWithOtp = async (req, res) => {
-//     try {
-//         console.log("=========================================");
-//         console.log("📩 [POST] /api/partner/login-with-otp hit");
-//         console.log("Request Body:", req.body);
-
-//         const { mobile, firebaseToken } = req.body;
-//         if (!mobile || !firebaseToken) {
-//             console.warn("⚠️ Missing fields in request body.");
-//             return res.status(400).json({ message: 'Mobile and Firebase Token are required' });
-//         }
-
-//         await verifyFirebaseIdToken(firebaseToken);
-
-//         const partner = await Partner.findOne({ mobile });
-//         if (!partner) {
-//             console.warn(`⚠️ Partner profile not found for: ${mobile}`);
-//             return res.status(404).json({ message: 'Partner profile not found.' });
-//         }
-
-//         if (!partner.isActive) {
-//             if (partner.deactivatedBy === 'admin') {
-//                 console.warn(`⚠️ Blocked deactivated login for: ${mobile}`);
-//                 return res.status(403).json({
-//                     success: false,
-//                     message: 'Your account is deactivated by admin. Contact support.'
-//                 });
-//             }
-
-//             if (partner.reactivateAt && new Date() >= partner.reactivateAt) {
-//                 partner.isActive = true;
-//                 partner.deactivatedBy = null;
-//                 partner.deactivatedAt = null;
-//                 partner.reactivateAt = null;
-//                 partner.deactivationReason = null;
-//                 partner.deactivationReasonNote = null;
-//                 partner.deactivationDuration = null;
-//                 await partner.save();
-//                 console.log(`✅ Account auto-reactivated for: ${mobile}`);
-//             }
-//         }
-
-//         const token = generateToken(partner);
-
-//         const response = {
-//             success: true,
-//             message: 'Login successful',
-//             token,
-//             isProfileComplete: partner.isProfileComplete,
-//             profileApprovalStatus: partner.profileApprovalStatus,
-//             partner: {
-//                 id: partner._id,
-//                 mobile: partner.mobile,
-//                 role: partner.role,
-//                 isActive: partner.isActive
-//             }
-//         };
-
-//         if (!partner.isActive) {
-//             response.message = 'Account is deactivated. Reactivate to continue.';
-//             response.deactivationInfo = {
-//                 reason: partner.deactivationReason,
-//                 reasonNote: partner.deactivationReasonNote,
-//                 duration: partner.deactivationDuration,
-//                 deactivatedAt: partner.deactivatedAt,
-//                 reactivateAt: partner.reactivateAt
-//             };
-//         }
-
-//         console.log("✅ Login flow completed successfully.");
-//         console.log("=========================================");
-//         return res.status(200).json(response);
-//     } catch (error) {
-//         console.error("❌ loginWithOtp Controller Error:", error);
-//         return res.status(401).json({ success: false, message: error.message });
-//     }
-// };
-
 const sendOtp = async (req, res) => {
     try {
         const { mobile } = req.body;
@@ -312,7 +42,6 @@ const sendOtp = async (req, res) => {
         }
 
         const otp = "123456"; 
-
         const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
         const otpExpiry = new Date(Date.now() + sevenDaysInMs);
 
@@ -326,14 +55,14 @@ const sendOtp = async (req, res) => {
             { new: true, upsert: true }
         );
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: "OTP sent successfully. Valid for 7 days.",
             dummyOtp: otp 
         });
 
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -370,7 +99,7 @@ const verifyOtp = async (req, res) => {
             { expiresIn: '7d' } 
         );
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: "Login successful",
             token,
@@ -383,7 +112,7 @@ const verifyOtp = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -447,9 +176,69 @@ const register = async (req, res) => {
     }
 };
 
+const updateProfile = async (req, res) => {
+    const filePath = req.file ? req.file.path : null;
+
+    try {
+        const partnerId = req.user.id;
+        const { fullName, specialties, languages, experience, minRate, bio } = req.body;
+
+        let partner = await Partner.findById(partnerId);
+        if (!partner) {
+            if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            return res.status(404).json({ success: false, message: "Partner not found" });
+        }
+
+        if (fullName !== undefined) partner.fullName = fullName;
+        if (experience !== undefined) partner.experience = Number(experience);
+        if (minRate !== undefined) partner.minRate = Number(minRate);
+        if (bio !== undefined) partner.bio = bio;
+
+        if (specialties !== undefined) {
+            partner.specialties = typeof specialties === 'string' ? JSON.parse(specialties) : specialties;
+        }
+
+        if (languages !== undefined) {
+            partner.languages = typeof languages === 'string' ? JSON.parse(languages) : languages;
+        }
+
+        if (filePath) {
+            if (fs.existsSync(filePath)) {
+                const result = await cloudinary.uploader.upload(filePath, {
+                    folder: "partners/profiles",
+                });
+                partner.profilePic = result.secure_url;
+                fs.unlinkSync(filePath);
+            }
+        }
+
+        await partner.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            data: partner
+        });
+
+    } catch (error) {
+        if (filePath && fs.existsSync(filePath)) {
+            try {
+                fs.unlinkSync(filePath);
+            } catch (unlinkError) {
+                console.error(unlinkError);
+            }
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
+        });
+    }
+};
+
 const getProfile = async (req, res) => {
     try {
-        // Partner ka saara data fetch karega (sirf sensitive fields 'otp' aur 'otpExpiry' ko chhod kar)
         const partner = await Partner.findById(req.user.id).select('-otp -otpExpiry');
 
         if (!partner) {
@@ -555,7 +344,6 @@ const activateAccount = async (req, res) => {
     }
 };
 
-
 const getLiveAstrologers = async (req, res) => {
     try {
         let query = {
@@ -608,7 +396,7 @@ const getLiveAstrologers = async (req, res) => {
 
         const total = await Partner.countDocuments(query);
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             count: astrologers.length,
             total,
@@ -618,7 +406,7 @@ const getLiveAstrologers = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: "Error fetching live astrologers",
             error: error.message
@@ -626,15 +414,11 @@ const getLiveAstrologers = async (req, res) => {
     }
 };
 
-
-
-
 module.exports = {
     sendOtp,
     verifyOtp,
-    // sendLoginOtp,
-    // loginWithOtp,
     register,
+    updateProfile,
     getProfile,
     deleteAccount,
     deactivateAccount,

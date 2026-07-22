@@ -3,13 +3,11 @@ const router = express.Router();
 const upload = require('../../middleware/upload');
 const { verifyToken, isPartner } = require('../../middleware/auth');
 
-// Controllers Imports
 const { 
     sendOtp, 
     verifyOtp, 
-    // sendLoginOtp, 
-    // loginWithOtp, 
     register, 
+    updateProfile,
     getProfile, 
     deleteAccount,
     deactivateAccount,
@@ -20,17 +18,9 @@ const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/par
 const { addBankAccount, updateBankAccount, getBankAccount } = require('../../controllers/Patner/partnerBank');
 const { uploadKycDocuments, getKycStatus } = require('../../controllers/Patner/partnerKyc');
 
-// ==========================================
-// 1. AUTHENTICATION ROUTES (Firebase flow)
-// ==========================================
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
-// router.post('/login-send-otp', sendLoginOtp);
-// router.post('/login-verify', loginWithOtp);
-// 
-// ==========================================
-// 2. PROFILE & ACCOUNT MANAGEMENT ROUTES
-// ==========================================
+
 router.get(
     '/profile',
     verifyToken,
@@ -47,6 +37,14 @@ router.post(
         { name: 'additionalPhotos', maxCount: 4 }
     ]),
     register
+);
+
+router.put(
+    '/update-profile',
+    verifyToken,
+    isPartner,
+    upload.single('profilePic'),
+    updateProfile
 );
 
 router.delete(
@@ -70,9 +68,6 @@ router.patch(
     activateAccount
 );
 
-// ==========================================
-// 3. DUTY STATUS ROUTES
-// ==========================================
 router.patch(
     '/duty-on',
     verifyToken,
@@ -94,9 +89,6 @@ router.get(
     getDutyStatus
 );
 
-// ==========================================
-// 4. BANK ACCOUNT ROUTES
-// ==========================================
 router.post(
     '/bank-account',
     verifyToken,
@@ -118,9 +110,6 @@ router.get(
     getBankAccount
 );
 
-// ==========================================
-// 5. KYC ROUTES
-// ==========================================
 router.post(
     '/kyc/upload',
     verifyToken,
