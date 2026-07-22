@@ -34,6 +34,7 @@ app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/admin/product-category",productCategoryRoutes)
 app.use("/api/admin/product",productRoutes)
+//coupon api
 app.use("/api/admin/coupon", require("./routes/AdminRoutes/E-comm/couponRoutes"))
 
 app.get("/", (req, res) => {
