@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const couponController = require("../../../controllers/Admin/E-comm/couponController");
+const couponController = require("../../../controllers/Admin/E-comm/CouponController");// case-Sensitive
 const {verifyToken, isAdmin} = require("../../../middleware/auth")
 
 
