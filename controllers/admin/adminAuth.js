@@ -122,13 +122,29 @@ const deleteUserById = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
 const getAllPartners = async (req, res) => {
     try {
-        const partners = await Partner.find().sort({ createdAt: -1 });
-        res.status(200).json({ success: true, data: partners });
+        const { status } = req.query;
+
+        const filter = {};
+
+        if (status) {
+            filter.profileApprovalStatus = status;
+        }
+
+        const partners = await Partner.find(filter)
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            data: partners
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
 
