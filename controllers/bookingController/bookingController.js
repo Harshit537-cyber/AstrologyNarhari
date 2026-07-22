@@ -231,11 +231,112 @@ const getPartnerRejectedBookings = async (req, res) => {
     }
 };
 
+
+const cancelBooking = async (req, res) => {
+    try {
+        const { bookingId } = req.body;
+        const rawUserId = req.user?.id || req.user?._id;
+        const userId = new mongoose.Types.ObjectId(rawUserId);
+
+        const booking = await Booking.findOne({ _id: bookingId, user: userId });
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found'
+            });
+        }
+
+        if (['cancelled', 'rejected'].includes(booking.status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Booking is already ${booking.status}`
+            });
+        }
+
+        if (booking.status === 'accepted' && booking.paymentStatus === 'completed') {
+            const user = await User.findById(userId);
+            if (user) {
+                user.walletBalance = (user.walletBalance || 0) + booking.totalFee;
+                await user.save();
+            }
+            booking.paymentStatus = 'refunded';
+        }
+
+        booking.status = 'cancelled';
+        await booking.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Booking cancelled successfully',
+            data: booking
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+const rescheduleBooking = async (req, res) => {
+    try {
+        const { bookingId, date, timeSlot } = req.body;
+        const rawUserId = req.user?.id || req.user?._id;
+        const userId = new mongoose.Types.ObjectId(rawUserId);
+
+        if (!bookingId || !date || !timeSlot) {
+            return res.status(400).json({
+                success: false,
+                message: 'Booking ID, date, and timeSlot are required'
+            });
+        }
+
+        const booking = await Booking.findOne({ _id: bookingId, user: userId });
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found'
+            });
+        }
+
+        if (['cancelled', 'rejected'].includes(booking.status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot reschedule a ${booking.status} booking`
+            });
+        }
+
+        booking.date = new Date(date);
+        booking.timeSlot = timeSlot;
+        booking.status = 'pending';
+
+        await booking.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Booking rescheduled successfully. Request sent to partner again.',
+            data: booking
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+
 module.exports = {
     scheduleBooking,
     getPartnerBookingRequests,
     respondToBooking,
     getUserBookings,
     getPartnerAcceptedBookings,
-    getPartnerRejectedBookings
+    getPartnerRejectedBookings,
+    cancelBooking,
+    rescheduleBooking
 };
