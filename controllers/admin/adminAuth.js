@@ -69,43 +69,43 @@ const Partner = require("../../models/Partner/Partner");
 //     }
 // };
 
-// const sendAdminOTP = async (req, res) => {
-//     try {
-//         const { mobile, action } = req.body;
+const sendAdminOTP = async (req, res) => {
+    try {
+        const { mobile, action } = req.body;
 
-//         if (!mobile) {
-//             return res.status(400).json({ success: false, message: 'Mobile number is required' });
-//         }
+        if (!mobile) {
+            return res.status(400).json({ success: false, message: 'Mobile number is required' });
+        }
 
-//         if (action === 'register') {
-//             const existingUser = await User.findOne({ mobile });
-//             if (existingUser) {
-//                 return res.status(400).json({ success: false, message: 'Mobile number already registered' });
-//             }
+        if (action === 'register') {
+            const existingUser = await User.findOne({ mobile });
+            if (existingUser) {
+                return res.status(400).json({ success: false, message: 'Mobile number already registered' });
+            }
 
-//             const adminCount = await User.countDocuments({ role: 'admin' });
-//             if (adminCount >= 2) {
-//                 return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
-//             }
+            const adminCount = await User.countDocuments({ role: 'admin' });
+            if (adminCount >= 2) {
+                return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
+            }
 
-//         } else if (action === 'login') {
-//             const existingAdmin = await User.findOne({ mobile, role: 'admin' });
-//             if (!existingAdmin) {
-//                 return res.status(404).json({ success: false, message: 'Admin not found with this mobile number' });
-//             }
-//         } else {
-//             return res.status(400).json({ success: false, message: 'Invalid action type' });
-//         }
+        } else if (action === 'login') {
+            const existingAdmin = await User.findOne({ mobile, role: 'admin' });
+            if (!existingAdmin) {
+                return res.status(404).json({ success: false, message: 'Admin not found with this mobile number' });
+            }
+        } else {
+            return res.status(400).json({ success: false, message: 'Invalid action type' });
+        }
 
-//         return res.status(200).json({
-//             success: true,
-//             message: 'Validation checks passed. Trigger OTP on client.'
-//         });
+        return res.status(200).json({
+            success: true,
+            message: 'Validation checks passed. Trigger OTP on client.'
+        });
 
-//     } catch (error) {
-//         return res.status(500).json({ success: false, message: error.message });
-//     }
-// };
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
 
  const register = async (req, res) => {
     try {
@@ -875,7 +875,7 @@ const activatePartner = async (req, res) => {
 };
 
 module.exports = {
-    // sendAdminOTP,
+    sendAdminOTP,
     register,
     login,
     getDashboardStats,
