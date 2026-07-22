@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
 
-const couponController = require("../../../controllers/Admin/E-comm/CouponController");// case-Sensitive
-const {verifyToken, isAdmin} = require("../../../middleware/auth")
+const couponController = require("../../../controllers/admin/E-comm/CouponController");// case-Sensitive
+const { verifyToken, isAdmin } = require("../../../middleware/auth")
 
 
 const upload = require("../../../middleware/upload");
@@ -18,7 +18,7 @@ router.post(
 // Get All Coupons
 router.get(
     "/list",
-     verifyToken,
+    verifyToken,
     // isAdmin,
     couponController.getAllCoupons
 );
@@ -26,7 +26,7 @@ router.get(
 // Get Coupon By ID
 router.get(
     "/:id",
-      verifyToken,
+    verifyToken,
     isAdmin,
     couponController.getCouponById
 );
@@ -34,7 +34,7 @@ router.get(
 // Update Coupon
 router.put(
     "/update/:id",
-      verifyToken,
+    verifyToken,
     isAdmin,
     couponController.updateCoupon
 );
@@ -42,7 +42,7 @@ router.put(
 // Delete Coupon
 router.delete(
     "/delete/:id",
-      verifyToken,
+    verifyToken,
     isAdmin,
     couponController.deleteCoupon
 );
