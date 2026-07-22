@@ -222,4 +222,88 @@ const getPartners = async (req, res) => {
     }
 };
 
-module.exports = { sendOTP, verifyOTP, deactivateAccount, activateAccount, getPartners };
+
+const getAllPartnersForUser = async (req, res) => {
+    try {
+        const { specialty, language, gender, search, sortBy, page = 1, limit = 10 } = req.query;
+
+        let query = {};
+
+        if (specialty) {
+            query.specialties = { $in: [specialty] };
+        }
+
+        if (language) {
+            query.languages = { $in: [language] };
+        }
+
+        if (gender) {
+            query.gender = gender;
+        }
+
+        if (search) {
+            query.fullName = { $regex: search, $options: 'i' };
+        }
+
+        let sortOption = {};
+        if (sortBy === 'experience') {
+            sortOption = { experience: -1 };
+        } else if (sortBy === 'rating') {
+            sortOption = { averageRating: -1 };
+        } else if (sortBy === 'price_low') {
+            sortOption = { minRate: 1 };
+        } else if (sortBy === 'price_high') {
+            sortOption = { minRate: -1 };
+        } else {
+            sortOption = { isOnline: -1, isBusy: 1, averageRating: -1 };
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        const partners = await Partner.find(query)
+            .select('fullName profilePic specialties languages experience minRate averageRating totalReviews isOnline isBusy bio qualification gender isVerified isProfileComplete profileApprovalStatus kycStatus')
+            .sort(sortOption)
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await Partner.countDocuments(query);
+
+        const formattedPartners = partners.map(partner => ({
+            _id: partner._id,
+            fullName: partner.fullName || "Partner Name",
+            profilePic: partner.profilePic || "",
+            specialties: partner.specialties || [],
+            languages: partner.languages || [],
+            experience: partner.experience || 0,
+            minRate: partner.minRate || 0,
+            averageRating: partner.averageRating || 0,
+            totalReviews: partner.totalReviews || 0,
+            bio: partner.bio || "",
+            qualification: partner.qualification || "",
+            gender: partner.gender || "",
+            isOnline: partner.isOnline || false,
+            isBusy: partner.isBusy || false,
+            status: partner.isOnline ? (partner.isBusy ? 'BUSY' : 'ONLINE') : 'OFFLINE',
+            profileApprovalStatus: partner.profileApprovalStatus,
+            kycStatus: partner.kycStatus
+        }));
+
+        return res.status(200).json({
+            success: true,
+            count: formattedPartners.length,
+            total,
+            totalPages: Math.ceil(total / parseInt(limit)),
+            currentPage: parseInt(page),
+            data: formattedPartners
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
+        });
+    }
+};
+
+module.exports = { sendOTP, verifyOTP, deactivateAccount, activateAccount, getPartners, getAllPartnersForUser };
