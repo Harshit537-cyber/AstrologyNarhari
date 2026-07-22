@@ -79,7 +79,7 @@ const getPartnerBookingRequests = async (req, res) => {
         const rawPartnerId = req.user?.id || req.user?._id;
         const partnerId = new mongoose.Types.ObjectId(rawPartnerId);
 
-        const bookings = await Booking.find({ partner: partnerId })
+        const bookings = await Booking.find({ partner: partnerId, status: 'pending' })
             .populate('user', 'name email mobile walletBalance')
             .sort({ createdAt: -1 });
 
@@ -231,7 +231,6 @@ const getPartnerRejectedBookings = async (req, res) => {
     }
 };
 
-
 const cancelBooking = async (req, res) => {
     try {
         const { bookingId } = req.body;
@@ -328,7 +327,6 @@ const rescheduleBooking = async (req, res) => {
         });
     }
 };
-
 
 module.exports = {
     scheduleBooking,
