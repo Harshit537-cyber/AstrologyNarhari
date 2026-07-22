@@ -9,7 +9,6 @@ const bookingRoutes = require("./routes/bookingRoutes/bookingRoutes");
 const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes")
 const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes")
 const productRoutes = require("./routes/AdminRoutes/E-comm/productRoutes")
-const couponRoutes = require("./routes/AdminRoutes/E-comm/couponRoutes")
 
 const app = express();
 
@@ -25,7 +24,8 @@ app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
 app.use("/api/review", require("./routes/review/reviewRoutes"));
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/wallet", require("./routes/UserRoutes/walletRoutes"));
-app.use("/api/match", require("./routes/UserRoutes/kundaliMatchMakingRoutes"))
+app.use("/api/match", require("./routes/UserRoutes/kundaliMatchMakingRoutes"));
+app.use("/api/coupon", require("./routes/UserRoutes/couponRoutes"));
 
 
 
@@ -34,8 +34,12 @@ app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/admin/product-category",productCategoryRoutes)
 app.use("/api/admin/product",productRoutes)
+<<<<<<< HEAD
 app.use("/api/admin/coupon",couponRoutes);
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
+=======
+app.use("/api/admin/coupon", require("./routes/AdminRoutes/E-comm/couponRoutes"))
+>>>>>>> 4a631da108c45db9b42e2a08351793461e8db0a4
 
 app.get("/", (req, res) => {
     res.status(200).json({

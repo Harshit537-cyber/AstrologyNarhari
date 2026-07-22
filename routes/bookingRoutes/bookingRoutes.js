@@ -7,11 +7,17 @@ const {
     respondToBooking,
     getUserBookings,
     getPartnerAcceptedBookings,
-    getPartnerRejectedBookings
+    getPartnerRejectedBookings,
+     cancelBooking,
+    rescheduleBooking
 } = require('../../controllers/bookingController/bookingController');
 
 router.post('/schedule', verifyToken, scheduleBooking);
 router.get('/user/my-bookings', verifyToken, getUserBookings);
+
+
+router.post('/user/cancel', verifyToken, cancelBooking);
+router.post('/user/reschedule', verifyToken, rescheduleBooking);
 
 router.get('/partner/requests', verifyToken, isPartner, getPartnerBookingRequests);
 router.get('/partner/accepted', verifyToken, isPartner, getPartnerAcceptedBookings);
