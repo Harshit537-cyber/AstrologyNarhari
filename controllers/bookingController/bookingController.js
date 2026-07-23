@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 const Booking = require('../../models/Booking/Booking');
 const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
+const moment = require('moment');
+
 
 const scheduleBooking = async (req, res) => {
     try {
@@ -15,6 +17,30 @@ const scheduleBooking = async (req, res) => {
             });
         }
 
+const formattedDate = moment(date).format('YYYY-MM-DD');
+        const start = moment(`${formattedDate} ${timeSlot}`, 'YYYY-MM-DD hh:mm A');
+        const end = moment(start).add(duration, 'minutes');
+if (!start.isValid()) {
+            return res.status(400).json({ success: false, message: 'Invalid Time Slot format' });
+        }
+
+
+
+  const overlapping = await Booking.findOne({
+            partner: partnerId,
+            status: 'accepted',
+            $or: [
+                { startTime: { $lt: end.toDate(), $gte: start.toDate() } },
+                { endTime: { $gt: start.toDate(), $lte: end.toDate() } },
+                { startTime: { $lte: start.toDate() }, endTime: { $gte: end.toDate() } }
+            ]
+        });
+
+        if (overlapping) {
+            return res.status(400).json({ success: false, message: 'Astrologer is already booked for this time slot.' });
+        }
+
+
         const partner = await Partner.findById(partnerId);
         if (!partner) {
             return res.status(404).json({
@@ -23,36 +49,28 @@ const scheduleBooking = async (req, res) => {
             });
         }
 
-        const ratePerMinute = partner.minRate || 25;
-        const totalFee = ratePerMinute * duration;
+        const totalFee = (partner.minRate || 25) * duration;
+        const user = await User.findById(rawUserId);
 
-        const userId = new mongoose.Types.ObjectId(rawUserId);
-
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
+        // --- WALLET HOLD LOGIC ---
+        if (user.walletBalance < totalFee) {
+            return res.status(400).json({ success: false, message: 'Insufficient balance. Please recharge.' });
         }
 
-        if ((user.walletBalance || 0) < totalFee) {
-            return res.status(400).json({
-                success: false,
-                message: 'Insufficient balance to schedule this consultation',
-                requiredBalance: totalFee,
-                currentBalance: user.walletBalance || 0
-            });
-        }
+        // Paise turant kato (Hold karo status pending ke liye)
+        user.walletBalance -= totalFee;
+        await user.save();
 
         const newBooking = new Booking({
-            user: userId,
+            user: rawUserId,
             partner: partnerId,
-            date: new Date(date),
+            date: start.toDate(),
+            startTime: start.toDate(),
+            endTime: end.toDate(),
             timeSlot,
             duration,
             mode,
-            ratePerMinute,
+            ratePerMinute: partner.minRate || 25,
             totalFee,
             status: 'pending'
         });
@@ -61,16 +79,12 @@ const scheduleBooking = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: 'Booking request sent to partner successfully',
+            message: 'Booking request sent. Fee held in wallet.',
             data: newBooking
         });
 
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
