@@ -49,15 +49,12 @@ if (!start.isValid()) {
             });
         }
 
-        const totalFee = (partner.minRate || 25) * duration;
+        const totalFee = (partner.minRate ) * duration;
         const user = await User.findById(rawUserId);
 
-        // --- WALLET HOLD LOGIC ---
         if (user.walletBalance < totalFee) {
             return res.status(400).json({ success: false, message: 'Insufficient balance. Please recharge.' });
         }
-
-        // Paise turant kato (Hold karo status pending ke liye)
         user.walletBalance -= totalFee;
         await user.save();
 
@@ -70,7 +67,7 @@ if (!start.isValid()) {
             timeSlot,
             duration,
             mode,
-            ratePerMinute: partner.minRate || 25,
+            ratePerMinute: partner.minRate,
             totalFee,
             status: 'pending'
         });

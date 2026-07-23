@@ -414,6 +414,47 @@ const getLiveAstrologers = async (req, res) => {
     }
 };
 
+const updateFCMToken = async (req, res) => {
+    try {
+        const { fcmToken } = req.body;
+        const userId = req.user.id; 
+        const role = req.user.role; 
+
+        if (!fcmToken) {
+            return res.status(400).json({ success: false, message: 'FCM Token is required' });
+        }
+
+        let updatedUser;
+
+        if (role === 'partner') {
+            updatedUser = await Partner.findByIdAndUpdate(
+                userId, 
+                { fcmToken: fcmToken }, 
+                { new: true }
+            );
+        } else {
+            updatedUser = await User.findByIdAndUpdate(
+                userId, 
+                { fcmToken: fcmToken }, 
+                { new: true }
+            );
+        }
+
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: 'User/Partner not found' });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `FCM Token updated successfully for ${role}`
+        });
+
+    } catch (error) {
+        console.error("FCM Update Error:", error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+};
+
 module.exports = {
     sendOtp,
     verifyOtp,
@@ -423,5 +464,6 @@ module.exports = {
     deleteAccount,
     deactivateAccount,
     activateAccount,
-    getLiveAstrologers
+    getLiveAstrologers,
+    updateFCMToken
 };

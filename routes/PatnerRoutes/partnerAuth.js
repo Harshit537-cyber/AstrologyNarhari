@@ -11,7 +11,8 @@ const {
     getProfile, 
     deleteAccount,
     deactivateAccount,
-    activateAccount
+    activateAccount,
+    updateFCMToken
 } = require('../../controllers/Patner/partnerAuth');
 
 const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/partnerDuty');
@@ -129,5 +130,7 @@ router.get(
     isPartner, 
     getKycStatus
 );
+
+router.patch("/update-fcm",  verifyToken, isPartner,  updateFCMToken);
 
 module.exports = router;
