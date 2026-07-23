@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../../models/User.js');
 const UserProfile = require('../../models/User.js');
 const Partner = require("../../models/Partner/Partner");
+const cloudinary = require("../../config/cloudinary");
+const fs = require("fs");
 
 // const parseServiceAccount = () => {
 //     const envValue = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -592,27 +594,34 @@ const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const existingUser = await User.findOne({
-            email: req.body.email,
-            _id: { $ne: id }
-        });
+        const {
+            name,
+            email,
+            mobile,
+            fullName,
+            gender,
+            zodiac,
+            dateOfBirth,
+            timeOfBirth,
+            placeOfBirth
+        } = req.body || {};
 
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: "Email already exists"
+        // Check duplicate email
+        if (email) {
+            const existingUser = await User.findOne({
+                email,
+                _id: { $ne: id }
             });
+
+            if (existingUser) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email already exists"
+                });
+            }
         }
 
-        const user = await User.findByIdAndUpdate(
-            id,
-            {
-                name: req.body.name,
-                email: req.body.email,
-                mobile: req.body.mobile
-            },
-            { new: true }
-        );
+        const user = await User.findById(id);
 
         if (!user) {
             return res.status(404).json({
@@ -621,23 +630,39 @@ const updateUser = async (req, res) => {
             });
         }
 
-        const profile = await UserProfile.findOneAndUpdate(
-            { user: id },
-            {
-                fullName: req.body.fullName,
-                gender: req.body.gender,
-                zodiac: req.body.zodiac,
-                dateOfBirth: req.body.dateOfBirth,
-                timeOfBirth: req.body.timeOfBirth,
-                placeOfBirth: req.body.placeOfBirth,
-                profilePic: req.body.profilePic
-            },
-            {
-                new: true,
-                runValidators: true,
-                upsert: true
-            }
-        );
+        // Partial Update
+        if (name) user.name = name;
+        if (email) user.email = email;
+        if (mobile) user.mobile = mobile;
+
+        await user.save();
+
+        let profile = await UserProfile.findOne({ user: id });
+
+        if (!profile) {
+            profile = new UserProfile({ user: id });
+        }
+
+        if (fullName) profile.fullName = fullName;
+        if (gender) profile.gender = gender;
+        if (zodiac) profile.zodiac = zodiac;
+        if (dateOfBirth) profile.dateOfBirth = dateOfBirth;
+        if (timeOfBirth) profile.timeOfBirth = timeOfBirth;
+        if (placeOfBirth) profile.placeOfBirth = placeOfBirth;
+
+        // Upload Profile Pic to Cloudinary
+        if (req.file) {
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: "users/profilePic"
+            });
+
+            profile.profilePic = result.secure_url;
+
+            // Delete local file
+            fs.unlinkSync(req.file.path);
+        }
+
+        await profile.save();
 
         return res.status(200).json({
             success: true,
@@ -735,25 +760,8 @@ const getPartnerById = async (req, res) => {
 
 const updatePartner = async (req, res) => {
     try {
-        const { id } = req.params;
 
-        const {
-            fullName,
-            mobile,
-            dateOfBirth,
-            gender,
-            city,
-            specialties,
-            languages,
-            experience,
-            qualification,
-            expectedSalary,
-            bio,
-            profilePic,
-            additionalPhotos,
-            isVerified,
-            isProfileComplete
-        } = req.body;
+        const { id } = req.params;
 
         const partner = await Partner.findById(id);
 
@@ -764,6 +772,24 @@ const updatePartner = async (req, res) => {
             });
         }
 
+
+
+        const {
+            fullName,
+            mobile,
+            dateOfBirth,
+            gender,
+            city,
+            experience,
+            qualification,
+            expectedSalary,
+            bio,
+            isVerified,
+            isProfileComplete
+        } = req.body;
+
+
+        // Mobile Duplicate Check
         if (mobile && mobile !== partner.mobile) {
             const mobileExists = await Partner.findOne({
                 mobile,
@@ -778,27 +804,50 @@ const updatePartner = async (req, res) => {
             }
         }
 
-        partner.fullName = fullName || partner.fullName;
-        partner.mobile = mobile || partner.mobile;
-        partner.dateOfBirth = dateOfBirth || partner.dateOfBirth;
-        partner.gender = gender || partner.gender;
-        partner.city = city || partner.city;
-        partner.specialties = specialties || partner.specialties;
-        partner.languages = languages || partner.languages;
-        partner.experience = experience ?? partner.experience;
-        partner.qualification = qualification || partner.qualification;
-        partner.expectedSalary = expectedSalary ?? partner.expectedSalary;
-        partner.bio = bio || partner.bio;
-        partner.profilePic = profilePic || partner.profilePic;
-        partner.additionalPhotos = additionalPhotos || partner.additionalPhotos;
+        if (fullName) partner.fullName = fullName;
+        if (mobile) partner.mobile = mobile;
+        if (dateOfBirth) partner.dateOfBirth = dateOfBirth;
+        if (gender) partner.gender = gender;
+        if (city) partner.city = city;
+        if (experience) partner.experience = Number(experience);
+        if (qualification) partner.qualification = qualification;
+        if (expectedSalary) partner.expectedSalary = Number(expectedSalary);
+        if (bio) partner.bio = bio;
 
-        if (typeof isVerified === "boolean") {
-            partner.isVerified = isVerified;
+        // Arrays (form-data me string bhejna)
+        if (req.body.specialties) {
+            partner.specialties = JSON.parse(req.body.specialties);
         }
 
-        if (typeof isProfileComplete === "boolean") {
-            partner.isProfileComplete = isProfileComplete;
+        if (req.body.languages) {
+            partner.languages = JSON.parse(req.body.languages);
         }
+
+        if (req.body.additionalPhotos) {
+            partner.additionalPhotos = JSON.parse(req.body.additionalPhotos);
+        }
+
+        // Profile Pic
+        if (req.file) {
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: "partners/profilePic"
+            });
+
+            partner.profilePic = result.secure_url;
+
+            // Local file delete kar do
+            fs.unlinkSync(req.file.path);
+        }
+
+        // Boolean
+        if (isVerified !== undefined) {
+            partner.isVerified = isVerified === "true";
+        }
+
+        if (isProfileComplete !== undefined) {
+            partner.isProfileComplete = isProfileComplete === "true";
+        }
+
 
         await partner.save();
 
