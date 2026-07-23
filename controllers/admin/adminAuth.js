@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../../models/User.js');
 const UserProfile = require('../../models/User.js');
 const Partner = require("../../models/Partner/Partner");
+const cloudinary = require("../../config/cloudinary");
+const fs = require("fs");
 
 // const parseServiceAccount = () => {
 //     const envValue = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -592,27 +594,34 @@ const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const existingUser = await User.findOne({
-            email: req.body.email,
-            _id: { $ne: id }
-        });
+        const {
+            name,
+            email,
+            mobile,
+            fullName,
+            gender,
+            zodiac,
+            dateOfBirth,
+            timeOfBirth,
+            placeOfBirth
+        } = req.body || {};
 
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: "Email already exists"
+        // Check duplicate email
+        if (email) {
+            const existingUser = await User.findOne({
+                email,
+                _id: { $ne: id }
             });
+
+            if (existingUser) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email already exists"
+                });
+            }
         }
 
-        const user = await User.findByIdAndUpdate(
-            id,
-            {
-                name: req.body.name,
-                email: req.body.email,
-                mobile: req.body.mobile
-            },
-            { new: true }
-        );
+        const user = await User.findById(id);
 
         if (!user) {
             return res.status(404).json({
@@ -621,23 +630,39 @@ const updateUser = async (req, res) => {
             });
         }
 
-        const profile = await UserProfile.findOneAndUpdate(
-            { user: id },
-            {
-                fullName: req.body.fullName,
-                gender: req.body.gender,
-                zodiac: req.body.zodiac,
-                dateOfBirth: req.body.dateOfBirth,
-                timeOfBirth: req.body.timeOfBirth,
-                placeOfBirth: req.body.placeOfBirth,
-                profilePic: req.body.profilePic
-            },
-            {
-                new: true,
-                runValidators: true,
-                upsert: true
-            }
-        );
+        // Partial Update
+        if (name) user.name = name;
+        if (email) user.email = email;
+        if (mobile) user.mobile = mobile;
+
+        await user.save();
+
+        let profile = await UserProfile.findOne({ user: id });
+
+        if (!profile) {
+            profile = new UserProfile({ user: id });
+        }
+
+        if (fullName) profile.fullName = fullName;
+        if (gender) profile.gender = gender;
+        if (zodiac) profile.zodiac = zodiac;
+        if (dateOfBirth) profile.dateOfBirth = dateOfBirth;
+        if (timeOfBirth) profile.timeOfBirth = timeOfBirth;
+        if (placeOfBirth) profile.placeOfBirth = placeOfBirth;
+
+        // Upload Profile Pic to Cloudinary
+        if (req.file) {
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: "users/profilePic"
+            });
+
+            profile.profilePic = result.secure_url;
+
+            // Delete local file
+            fs.unlinkSync(req.file.path);
+        }
+
+        await profile.save();
 
         return res.status(200).json({
             success: true,
@@ -735,6 +760,7 @@ const getPartnerById = async (req, res) => {
 
 const updatePartner = async (req, res) => {
     try {
+
         const { id } = req.params;
 
         const partner = await Partner.findById(id);
@@ -745,6 +771,8 @@ const updatePartner = async (req, res) => {
                 message: "Partner not found"
             });
         }
+
+
 
         const {
             fullName,
@@ -759,6 +787,7 @@ const updatePartner = async (req, res) => {
             isVerified,
             isProfileComplete
         } = req.body;
+
 
         // Mobile Duplicate Check
         if (mobile && mobile !== partner.mobile) {
@@ -800,7 +829,14 @@ const updatePartner = async (req, res) => {
 
         // Profile Pic
         if (req.file) {
-            partner.profilePic = req.file.path; // Cloudinary URL agar multer-storage-cloudinary use kar raha hai
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: "partners/profilePic"
+            });
+
+            partner.profilePic = result.secure_url;
+
+            // Local file delete kar do
+            fs.unlinkSync(req.file.path);
         }
 
         // Boolean
@@ -811,6 +847,7 @@ const updatePartner = async (req, res) => {
         if (isProfileComplete !== undefined) {
             partner.isProfileComplete = isProfileComplete === "true";
         }
+
 
         await partner.save();
 
