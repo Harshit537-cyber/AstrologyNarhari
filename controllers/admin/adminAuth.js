@@ -737,24 +737,6 @@ const updatePartner = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const {
-            fullName,
-            mobile,
-            dateOfBirth,
-            gender,
-            city,
-            specialties,
-            languages,
-            experience,
-            qualification,
-            expectedSalary,
-            bio,
-            profilePic,
-            additionalPhotos,
-            isVerified,
-            isProfileComplete
-        } = req.body;
-
         const partner = await Partner.findById(id);
 
         if (!partner) {
@@ -764,6 +746,21 @@ const updatePartner = async (req, res) => {
             });
         }
 
+        const {
+            fullName,
+            mobile,
+            dateOfBirth,
+            gender,
+            city,
+            experience,
+            qualification,
+            expectedSalary,
+            bio,
+            isVerified,
+            isProfileComplete
+        } = req.body;
+
+        // Mobile Duplicate Check
         if (mobile && mobile !== partner.mobile) {
             const mobileExists = await Partner.findOne({
                 mobile,
@@ -778,26 +775,41 @@ const updatePartner = async (req, res) => {
             }
         }
 
-        partner.fullName = fullName || partner.fullName;
-        partner.mobile = mobile || partner.mobile;
-        partner.dateOfBirth = dateOfBirth || partner.dateOfBirth;
-        partner.gender = gender || partner.gender;
-        partner.city = city || partner.city;
-        partner.specialties = specialties || partner.specialties;
-        partner.languages = languages || partner.languages;
-        partner.experience = experience ?? partner.experience;
-        partner.qualification = qualification || partner.qualification;
-        partner.expectedSalary = expectedSalary ?? partner.expectedSalary;
-        partner.bio = bio || partner.bio;
-        partner.profilePic = profilePic || partner.profilePic;
-        partner.additionalPhotos = additionalPhotos || partner.additionalPhotos;
+        if (fullName) partner.fullName = fullName;
+        if (mobile) partner.mobile = mobile;
+        if (dateOfBirth) partner.dateOfBirth = dateOfBirth;
+        if (gender) partner.gender = gender;
+        if (city) partner.city = city;
+        if (experience) partner.experience = Number(experience);
+        if (qualification) partner.qualification = qualification;
+        if (expectedSalary) partner.expectedSalary = Number(expectedSalary);
+        if (bio) partner.bio = bio;
 
-        if (typeof isVerified === "boolean") {
-            partner.isVerified = isVerified;
+        // Arrays (form-data me string bhejna)
+        if (req.body.specialties) {
+            partner.specialties = JSON.parse(req.body.specialties);
         }
 
-        if (typeof isProfileComplete === "boolean") {
-            partner.isProfileComplete = isProfileComplete;
+        if (req.body.languages) {
+            partner.languages = JSON.parse(req.body.languages);
+        }
+
+        if (req.body.additionalPhotos) {
+            partner.additionalPhotos = JSON.parse(req.body.additionalPhotos);
+        }
+
+        // Profile Pic
+        if (req.file) {
+            partner.profilePic = req.file.path; // Cloudinary URL agar multer-storage-cloudinary use kar raha hai
+        }
+
+        // Boolean
+        if (isVerified !== undefined) {
+            partner.isVerified = isVerified === "true";
+        }
+
+        if (isProfileComplete !== undefined) {
+            partner.isProfileComplete = isProfileComplete === "true";
         }
 
         await partner.save();

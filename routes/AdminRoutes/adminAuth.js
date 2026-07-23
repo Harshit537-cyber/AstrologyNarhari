@@ -25,6 +25,8 @@ const {
 
 const { verifyToken, isAdmin } = require('../../middleware/auth');
 
+const upload = require("../../middleware/upload")
+
 router.post('/send-otp', sendAdminOTP);
 router.post('/register', register);
 router.post('/login', login);
@@ -35,7 +37,8 @@ router.get("/dashboard/user-analytics", verifyToken, isAdmin, getUserAnalytics);
 router.get("/dashboard/all-users", verifyToken, isAdmin, getAllUsers);
 router.get("/dashboard/user/:id", verifyToken, isAdmin, getUserById);
 router.delete("/dashboard/user/:id", verifyToken, isAdmin, deleteUserById);
-router.put("/dashboard/users/:id", verifyToken, isAdmin, updateUser);
+// router.put("/dashboard/users/:id", verifyToken, isAdmin, updateUser);
+router.put("/update/:id",verifyToken,isAdmin,upload.single("profilePic"),updatePartner);
 router.put("/dashboard/users/:id/deactivate", verifyToken, isAdmin, deactivateUser);
 router.put("/dashboard/users/:id/activate", verifyToken, isAdmin, activateUser);
 
