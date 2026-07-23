@@ -107,99 +107,323 @@ const Partner = require("../../models/Partner/Partner");
 //     }
 // };
 
- const register = async (req, res) => {
+const sendAdminOTP = async (req, res) => {
     try {
-        // 1. FirebaseToken hata diya, sirf name aur mobile liya
-        const { name, mobile } = req.body;
 
-        if (!name || !mobile) {
-            return res.status(400).json({ success: false, message: 'Name and mobile are required' });
+        const { mobile, action } = req.body;
+
+        if (!mobile || !action) {
+            return res.status(400).json({
+                success: false,
+                message: "Mobile and action are required"
+            });
         }
 
-        // --- EXISTING LOGIC STARTS ---
-        // Firebase verification line remove kar di gayi hai
+        let user = await User.findOne({ mobile });
 
-        const adminCount = await User.countDocuments({ role: 'admin' });
-        if (adminCount >= 2) {
-            return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
+        if (action === "register") {
+
+            if (user && user.role === "admin") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Admin already exists"
+                });
+            }
+
+            if (!user) {
+                user = new User({ mobile });
+            }
+
+        } else if (action === "login") {
+
+            user = await User.findOne({
+                mobile,
+                role: "admin"
+            });
+
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Admin not found"
+                });
+            }
+
+        } else {
+
+            return res.status(400).json({
+                success: false,
+                message: "Invalid action"
+            });
+
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        user.otp = otp;
+
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "OTP sent successfully",
+            otp
+        });
+
+    } catch (error) {
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
+    }
+};
+
+
+
+const register = async (req, res) => {
+    try {
+
+        const { name, mobile, otp } = req.body;
+
+        if (!name || !mobile || !otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Name, mobile and otp are required"
+            });
+        }
+
+        const adminCount = await User.countDocuments({ role: "admin" });
+
+        const existingAdmin = await User.findOne({
+            mobile,
+            role: "admin"
+        });
+
+        if (!existingAdmin && adminCount <= 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Admin registration limit reached. Max 2 admins allowed."
+            });
         }
 
         let admin = await User.findOne({ mobile });
+
         if (!admin) {
-            admin = new User({ mobile });
+            return res.status(404).json({
+                success: false,
+                message: "Please send OTP first."
+            });
+        }
+
+        if (admin.otp !== otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid OTP"
+            });
         }
 
         admin.name = name;
-        admin.role = 'admin';
+        admin.role = "admin";
         admin.isActive = true;
+        admin.otp = null;
+
         await admin.save();
 
         const token = jwt.sign(
-            { id: admin._id, role: admin.role },
-            process.env.JWT_SECRET || 'secretkey',
-            { expiresIn: '1d' }
+            {
+                id: admin._id,
+                role: admin.role
+            },
+            process.env.JWT_SECRET || "secretkey",
+            {
+                expiresIn: "1d"
+            }
         );
 
         return res.status(201).json({
             success: true,
-            message: 'Admin registered successfully',
+            message: "Admin registered successfully",
             token,
-            admin: {
-                id: admin._id,
-                name: admin.name,
-                mobile: admin.mobile,
-                role: admin.role
-            }
+            admin
         });
-        // --- EXISTING LOGIC ENDS ---
 
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
     }
 };
 
+
 const login = async (req, res) => {
     try {
-        const { mobile, firebaseToken } = req.body;
 
-        if (!mobile || !firebaseToken) {
-            return res.status(400).json({ success: false, message: 'Mobile and firebaseToken are required' });
+        const { mobile, otp } = req.body;
+
+        if (!mobile || !otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Mobile and OTP are required"
+            });
         }
 
-        await verifyFirebaseIdToken(firebaseToken);
-
-        const admin = await User.findOne({ mobile, role: 'admin' });
+        const admin = await User.findOne({
+            mobile,
+            role: "admin"
+        });
 
         if (!admin) {
-            return res.status(404).json({ success: false, message: 'Admin not found' });
+            return res.status(404).json({
+                success: false,
+                message: "Admin not found"
+            });
+        }
+
+        if (admin.otp !== otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid OTP"
+            });
         }
 
         if (!admin.isActive) {
-            return res.status(403).json({ success: false, message: 'This admin account is deactivated' });
+            return res.status(403).json({
+                success: false,
+                message: "This admin account is deactivated"
+            });
         }
 
+        admin.otp = null;
+
+        await admin.save();
+
         const token = jwt.sign(
-            { id: admin._id, role: admin.role },
-            process.env.JWT_SECRET || 'secretkey',
-            { expiresIn: '1d' }
+            {
+                id: admin._id,
+                role: admin.role
+            },
+            process.env.JWT_SECRET || "secretkey",
+            {
+                expiresIn: "1d"
+            }
         );
 
         return res.status(200).json({
             success: true,
-            message: 'Admin logged in successfully',
+            message: "Admin logged in successfully",
             token,
-            admin: {
-                id: admin._id,
-                name: admin.name,
-                mobile: admin.mobile,
-                role: admin.role
-            }
+            admin
         });
 
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
     }
 };
+
+
+
+// const register = async (req, res) => {
+//     try {
+//         // 1. FirebaseToken hata diya, sirf name aur mobile liya
+//         const { name, mobile } = req.body;
+
+//         if (!name || !mobile) {
+//             return res.status(400).json({ success: false, message: 'Name and mobile are required' });
+//         }
+
+//         // --- EXISTING LOGIC STARTS ---
+//         // Firebase verification line remove kar di gayi hai
+
+//         const adminCount = await User.countDocuments({ role: 'admin' });
+//         if (adminCount >= 2) {
+//             return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
+//         }
+
+//         let admin = await User.findOne({ mobile });
+//         if (!admin) {
+//             admin = new User({ mobile });
+//         }
+
+//         admin.name = name;
+//         admin.role = 'admin';
+//         admin.isActive = true;
+//         await admin.save();
+
+//         const token = jwt.sign(
+//             { id: admin._id, role: admin.role },
+//             process.env.JWT_SECRET || 'secretkey',
+//             { expiresIn: '1d' }
+//         );
+
+//         return res.status(201).json({
+//             success: true,
+//             message: 'Admin registered successfully',
+//             token,
+//             admin: {
+//                 id: admin._id,
+//                 name: admin.name,
+//                 mobile: admin.mobile,
+//                 role: admin.role
+//             }
+//         });
+//         // --- EXISTING LOGIC ENDS ---
+
+//     } catch (error) {
+//         return res.status(500).json({ success: false, message: error.message });
+//     }
+// };
+
+// const login = async (req, res) => {
+//     try {
+//         const { mobile, firebaseToken } = req.body;
+
+//         if (!mobile || !firebaseToken) {
+//             return res.status(400).json({ success: false, message: 'Mobile and firebaseToken are required' });
+//         }
+
+//         await verifyFirebaseIdToken(firebaseToken);
+
+//         const admin = await User.findOne({ mobile, role: 'admin' });
+
+//         if (!admin) {
+//             return res.status(404).json({ success: false, message: 'Admin not found' });
+//         }
+
+//         if (!admin.isActive) {
+//             return res.status(403).json({ success: false, message: 'This admin account is deactivated' });
+//         }
+
+//         const token = jwt.sign(
+//             { id: admin._id, role: admin.role },
+//             process.env.JWT_SECRET || 'secretkey',
+//             { expiresIn: '1d' }
+//         );
+
+//         return res.status(200).json({
+//             success: true,
+//             message: 'Admin logged in successfully',
+//             token,
+//             admin: {
+//                 id: admin._id,
+//                 name: admin.name,
+//                 mobile: admin.mobile,
+//                 role: admin.role
+//             }
+//         });
+
+//     } catch (error) {
+//         return res.status(500).json({ success: false, message: error.message });
+//     }
+// };
 
 const getDashboardStats = async (req, res) => {
     try {
@@ -875,7 +1099,7 @@ const activatePartner = async (req, res) => {
 };
 
 module.exports = {
-    // sendAdminOTP,
+    sendAdminOTP,
     register,
     login,
     getDashboardStats,
