@@ -29,6 +29,49 @@ exports.getAllCategories = async (req, res) => {
 };
 
 
+ exports.getProducts = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+
+        const skip = (page - 1) * limit;
+
+        const totalProducts = await Product.countDocuments({
+            isActive: true,
+        });
+
+        const products = await Product.find({
+            isActive: true,
+        })
+            .populate("category", "name")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        return res.status(200).json({
+            success: true,
+            message: "Products fetched successfully",
+            data: products,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalProducts / limit),
+                totalProducts,
+                limit,
+                hasNextPage: page < Math.ceil(totalProducts / limit),
+                hasPreviousPage: page > 1,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong",
+            error: error.message,
+        });
+    }
+};
+
+
 
 // =====================================
 // Get Products By Category

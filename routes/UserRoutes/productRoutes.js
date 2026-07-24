@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
 
-const categoryController = require("../../controllers/User/productController");
+const productController = require("../../controllers/User/productController");
 
-router.get("/categories", categoryController.getAllCategories);
+
 router.get("/categories", productController.getAllCategories);
 
 router.get(
@@ -35,5 +35,8 @@ router.get(
     "/related-products/:id",
     productController.getRelatedProducts
 );
+
+
+router.get("/all", productController.getProducts);
 
 module.exports = router;

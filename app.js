@@ -10,6 +10,7 @@ const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes")
 const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes")
 const productRoutes = require("./routes/AdminRoutes/E-comm/productRoutes");
 const couponRoutes = require("./routes/AdminRoutes/E-comm/couponRoutes")
+const cartRoutes= require("./routes/UserRoutes/cartRoutes")
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use("/api/user", userAuthRoutes);
+app.use("/api/user/cart", cartRoutes);
 app.use("/api/partner", partnerAuthRoutes);
 
 app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
@@ -28,6 +30,7 @@ app.use("/api/wallet", require("./routes/UserRoutes/walletRoutes"));
 app.use("/api/match", require("./routes/UserRoutes/kundaliMatchMakingRoutes"));
 app.use("/api/coupon", require("./routes/UserRoutes/couponRoutes"));
 app.use("/api/banner", require("./routes/UserRoutes/bannerRoutes"));
+app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 
 //coupon routes ended
 
