@@ -31,17 +31,18 @@ const cleanUploadedFiles = (files) => {
 
 const verifyOtp = async (req, res) => {
     try {
-        const { idToken } = req.body;
+        const { idToken, mobile: bodyMobile } = req.body;
+        let mobile;
 
-        if (!idToken) {
-            return res.status(400).json({ success: false, message: "Firebase ID Token is required" });
+        if (idToken) {
+            const decodedToken = await admin.auth().verifyIdToken(idToken);
+            mobile = decodedToken.phone_number;
+        } else if (bodyMobile) {
+            mobile = bodyMobile;
         }
 
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
-        const mobile = decodedToken.phone_number;
-
         if (!mobile) {
-            return res.status(400).json({ success: false, message: "Phone number not found in token" });
+            return res.status(400).json({ success: false, message: "Firebase ID Token or Mobile number is required" });
         }
 
         let partner = await Partner.findOne({ mobile });
@@ -71,7 +72,8 @@ const verifyOtp = async (req, res) => {
                 id: partner._id,
                 mobile: partner.mobile,
                 isProfileComplete: partner.isProfileComplete,
-                profileApprovalStatus: partner.profileApprovalStatus
+                profileApprovalStatus: partner.profileApprovalStatus,
+                isActive: partner.isActive
             }
         });
 
