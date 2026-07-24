@@ -772,8 +772,6 @@ const updatePartner = async (req, res) => {
             });
         }
 
-
-
         const {
             fullName,
             mobile,
@@ -1147,6 +1145,43 @@ const activatePartner = async (req, res) => {
     }
 };
 
+
+const getPendingKycPartners = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const filter = {
+            profileApprovalStatus: "Approved",
+            kycStatus: "Pending"
+        };
+
+        const [partners, total] = await Promise.all([
+            Partner.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Partner.countDocuments(filter)
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+            data: partners
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal Server Error"
+        });
+    }
+};
+
 module.exports = {
     sendAdminOTP,
     register,
@@ -1167,5 +1202,6 @@ module.exports = {
     activateUser,
     deactivatePartner,
     activatePartner,
-    approvePartnerProfile
+    approvePartnerProfile,
+    getPendingKycPartners
 };

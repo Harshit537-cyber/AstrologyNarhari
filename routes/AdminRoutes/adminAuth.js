@@ -20,7 +20,8 @@ const {
     getUserById, 
     deleteUserById, 
     deletePartner, 
-    approvePartnerProfile 
+    approvePartnerProfile ,
+    getPendingKycPartners
 } = require('../../controllers/admin/adminAuth');
 
 const { verifyToken, isAdmin } = require('../../middleware/auth');
@@ -64,6 +65,8 @@ router.put("/dashboard/partners/:id/documents", verifyToken, isAdmin, updatePart
 router.put("/dashboard/partners/:id/deactivate", verifyToken, isAdmin, deactivatePartner);
 router.put("/dashboard/partners/:id/activate", verifyToken, isAdmin, activatePartner);
 router.delete("/dashboard/partners/:id", verifyToken, isAdmin, deletePartner);
+router.get("/dashoard/partners/pending-kyc-partners",verifyToken,isAdmin, getPendingKycPartners);
+
 
 router.put("/dashboard/partners/:id/profile-approval", verifyToken, isAdmin, approvePartnerProfile);
 
