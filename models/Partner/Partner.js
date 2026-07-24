@@ -104,6 +104,8 @@ const partnerSchema = new mongoose.Schema({
     },
     isOnline: { type: Boolean, default: false },
     isBusy: { type: Boolean, default: false },
+    fcmToken: { type: String, default: null }
+
 
 
 }, { timestamps: true });

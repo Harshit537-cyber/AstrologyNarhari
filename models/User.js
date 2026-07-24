@@ -21,7 +21,8 @@ const userSchema = new mongoose.Schema({
     dateOfBirth: { type: Date, default: null },
     timeOfBirth: { type: String, default: null },
     placeOfBirth: { type: String, default: null },
-    walletBalance: { type: Number, default: 0 }
+    walletBalance: { type: Number, default: 0 },
+    fcmToken: { type: String, default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);
