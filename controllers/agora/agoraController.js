@@ -54,8 +54,15 @@ exports.joinLive = async (req, res) => {
 
         const { rtcToken, rtmToken } = generateAgoraTokens(session.channelName, uid);
 
-        await LiveSession.findByIdAndUpdate(sessionId, { $inc: { viewerCount: 1 } });
+  await LiveSession.updateOne(
+            { _id: sessionId, viewers: { $ne: userId } }, 
+            { 
+                $addToSet: { viewers: userId }, 
+                $inc: { viewerCount: 1 }        
+            }
+        );
 
+        
         res.status(200).json({
             success: true,
             data: {
