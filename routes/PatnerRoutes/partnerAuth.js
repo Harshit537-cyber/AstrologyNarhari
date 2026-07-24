@@ -4,7 +4,6 @@ const upload = require('../../middleware/upload');
 const { verifyToken, isPartner } = require('../../middleware/auth');
 
 const { 
-    sendOtp, 
     verifyOtp, 
     register, 
     updateProfile,
@@ -19,7 +18,6 @@ const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/par
 const { addBankAccount, updateBankAccount, getBankAccount } = require('../../controllers/Patner/partnerBank');
 const { uploadKycDocuments, getKycStatus } = require('../../controllers/Patner/partnerKyc');
 
-router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 
 router.get(
@@ -131,6 +129,6 @@ router.get(
     getKycStatus
 );
 
-router.patch("/update-fcm",  verifyToken, isPartner,  updateFCMToken);
+router.patch('/update-fcm', verifyToken, isPartner, updateFCMToken);
 
 module.exports = router;

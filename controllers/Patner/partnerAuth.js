@@ -1,20 +1,18 @@
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const Partner = require('../../models/Partner/Partner');
+const User = require('../../models/User');
 const cloudinary = require('../../config/cloudinary');
+const admin = require('../../config/firebase');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
 
 const uploadToCloudinary = async (filePath, folder) => {
     try {
         const result = await cloudinary.uploader.upload(filePath, { folder });
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         return result.secure_url;
     } catch (error) {
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         throw error;
     }
 };
@@ -26,82 +24,48 @@ const cleanUploadedFiles = (files) => {
     }
     if (files.additionalPhotos) {
         files.additionalPhotos.forEach((file) => {
-            if (fs.existsSync(file.path)) {
-                fs.unlinkSync(file.path);
-            }
+            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
         });
-    }
-};
-
-const sendOtp = async (req, res) => {
-    try {
-        const { mobile } = req.body;
-
-        if (!mobile) {
-            return res.status(400).json({ success: false, message: "Mobile number is required" });
-        }
-
-        const otp = "123456"; 
-        const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
-        const otpExpiry = new Date(Date.now() + sevenDaysInMs);
-
-        await Partner.findOneAndUpdate(
-            { mobile },
-            { 
-                otp, 
-                otpExpiry,
-                role: 'partner' 
-            },
-            { new: true, upsert: true }
-        );
-
-        return res.status(200).json({
-            success: true,
-            message: "OTP sent successfully. Valid for 7 days.",
-            dummyOtp: otp 
-        });
-
-    } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
 const verifyOtp = async (req, res) => {
     try {
-        const { mobile, otp } = req.body;
+        const { idToken } = req.body;
 
-        if (!mobile || !otp) {
-            return res.status(400).json({ success: false, message: "Mobile and OTP are required" });
+        if (!idToken) {
+            return res.status(400).json({ success: false, message: "Firebase ID Token is required" });
         }
 
-        const partner = await Partner.findOne({ mobile });
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const mobile = decodedToken.phone_number;
+
+        if (!mobile) {
+            return res.status(400).json({ success: false, message: "Phone number not found in token" });
+        }
+
+        let partner = await Partner.findOne({ mobile });
 
         if (!partner) {
-            return res.status(404).json({ success: false, message: "User not found" });
+            partner = await Partner.create({
+                mobile,
+                role: 'partner',
+                isVerified: true
+            });
+        } else {
+            partner.isVerified = true;
+            await partner.save();
         }
-
-        if (partner.otp !== otp) {
-            return res.status(400).json({ success: false, message: "Invalid OTP" });
-        }
-
-        if (partner.otpExpiry < Date.now()) {
-            return res.status(400).json({ success: false, message: "OTP has expired" });
-        }
-
-        partner.isVerified = true;
-        partner.otp = undefined; 
-        partner.otpExpiry = undefined;
-        await partner.save();
 
         const token = jwt.sign(
             { id: partner._id, role: partner.role },
-            process.env.JWT_SECRET || 'SECRET_KEY_123', 
-            { expiresIn: '7d' } 
+            process.env.JWT_SECRET || 'SECRET_KEY_123',
+            { expiresIn: '7d' }
         );
 
         return res.status(200).json({
             success: true,
-            message: "Login successful",
+            message: "Authentication successful",
             token,
             data: {
                 id: partner._id,
@@ -112,7 +76,7 @@ const verifyOtp = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(401).json({ success: false, message: "Invalid or expired Firebase token", error: error.message });
     }
 };
 
@@ -202,14 +166,10 @@ const updateProfile = async (req, res) => {
             partner.languages = typeof languages === 'string' ? JSON.parse(languages) : languages;
         }
 
-        if (filePath) {
-            if (fs.existsSync(filePath)) {
-                const result = await cloudinary.uploader.upload(filePath, {
-                    folder: "partners/profiles",
-                });
-                partner.profilePic = result.secure_url;
-                fs.unlinkSync(filePath);
-            }
+        if (filePath && fs.existsSync(filePath)) {
+            const result = await cloudinary.uploader.upload(filePath, { folder: "partners/profiles" });
+            partner.profilePic = result.secure_url;
+            fs.unlinkSync(filePath);
         }
 
         await partner.save();
@@ -222,43 +182,28 @@ const updateProfile = async (req, res) => {
 
     } catch (error) {
         if (filePath && fs.existsSync(filePath)) {
-            try {
-                fs.unlinkSync(filePath);
-            } catch (unlinkError) {
-                console.error(unlinkError);
-            }
+            try { fs.unlinkSync(filePath); } catch (e) {}
         }
-
-        return res.status(500).json({
-            success: false,
-            message: "Server Error",
-            error: error.message
-        });
+        return res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
 
 const getProfile = async (req, res) => {
     try {
-        const partner = await Partner.findById(req.user.id).select('-otp -otpExpiry');
+        const partner = await Partner.findById(req.user.id);
 
         if (!partner) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Partner not found' 
-            });
+            return res.status(404).json({ success: false, message: 'Partner not found' });
         }
 
-        return res.status(200).json({ 
-            success: true, 
+        return res.status(200).json({
+            success: true,
             message: 'Partner profile retrieved successfully',
-            partner 
+            partner
         });
 
     } catch (error) {
-        return res.status(500).json({ 
-            success: false, 
-            message: error.message 
-        });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -350,39 +295,22 @@ const getLiveAstrologers = async (req, res) => {
             isVerified: true,
             isProfileComplete: true,
             profileApprovalStatus: 'Approved',
-            kycStatus: 'Approved' 
+            kycStatus: 'Approved'
         };
 
         const { specialty, language, gender, search, sortBy } = req.query;
 
-        if (specialty) {
-            query.specialties = { $in: [specialty] };
-        }
-
-        if (language) {
-            query.languages = { $in: [language] };
-        }
-
-        if (gender) {
-            query.gender = gender;
-        }
-
-        if (search) {
-            query.fullName = { $regex: search, $options: 'i' };
-        }
+        if (specialty) query.specialties = { $in: [specialty] };
+        if (language) query.languages = { $in: [language] };
+        if (gender) query.gender = gender;
+        if (search) query.fullName = { $regex: search, $options: 'i' };
 
         let sortOption = {};
-        if (sortBy === 'experience') {
-            sortOption = { experience: -1 };
-        } else if (sortBy === 'rating') {
-            sortOption = { averageRating: -1 };
-        } else if (sortBy === 'price_low') {
-            sortOption = { minRate: 1 };
-        } else if (sortBy === 'price_high') {
-            sortOption = { minRate: -1 };
-        } else {
-            sortOption = { isOnline: -1, averageRating: -1 }; 
-        }
+        if (sortBy === 'experience') sortOption = { experience: -1 };
+        else if (sortBy === 'rating') sortOption = { averageRating: -1 };
+        else if (sortBy === 'price_low') sortOption = { minRate: 1 };
+        else if (sortBy === 'price_high') sortOption = { minRate: -1 };
+        else sortOption = { isOnline: -1, averageRating: -1 };
 
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
@@ -406,57 +334,39 @@ const getLiveAstrologers = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Error fetching live astrologers",
-            error: error.message
-        });
+        return res.status(500).json({ success: false, message: "Error fetching live astrologers", error: error.message });
     }
 };
 
 const updateFCMToken = async (req, res) => {
     try {
         const { fcmToken } = req.body;
-        const userId = req.user.id; 
-        const role = req.user.role; 
+        const userId = req.user.id;
+        const role = req.user.role;
 
         if (!fcmToken) {
             return res.status(400).json({ success: false, message: 'FCM Token is required' });
         }
 
         let updatedUser;
-
         if (role === 'partner') {
-            updatedUser = await Partner.findByIdAndUpdate(
-                userId, 
-                { fcmToken: fcmToken }, 
-                { new: true }
-            );
+            updatedUser = await Partner.findByIdAndUpdate(userId, { fcmToken }, { new: true });
         } else {
-            updatedUser = await User.findByIdAndUpdate(
-                userId, 
-                { fcmToken: fcmToken }, 
-                { new: true }
-            );
+            updatedUser = await User.findByIdAndUpdate(userId, { fcmToken }, { new: true });
         }
 
         if (!updatedUser) {
             return res.status(404).json({ success: false, message: 'User/Partner not found' });
         }
 
-        res.status(200).json({
-            success: true,
-            message: `FCM Token updated successfully for ${role}`
-        });
+        res.status(200).json({ success: true, message: `FCM Token updated successfully for ${role}` });
 
     } catch (error) {
-        console.error("FCM Update Error:", error);
         res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 };
 
 module.exports = {
-    sendOtp,
     verifyOtp,
     register,
     updateProfile,
