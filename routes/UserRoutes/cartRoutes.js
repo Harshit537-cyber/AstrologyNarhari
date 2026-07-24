@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const cartController = require("../../controllers/User/E-comm/cartController");
+const cartController = require("../../controllers/User/cartController");
 ;
 
 const {verifyToken} = require("../../middleware/auth"); // apna auth middleware
