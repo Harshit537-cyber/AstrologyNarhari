@@ -50,7 +50,19 @@ const bookingSchema = new mongoose.Schema({
     actualDuration: { type: Number, default: 0 },
     startTime: { type: Date }, 
     endTime: { type: Date },
-    cancellationReason: { type: String, default: null }
+    cancellationReason: { type: String, default: null },
+    rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+        default: null
+    },
+    review: {
+        type: String,
+        trim: true,
+        default: null
+    }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Booking', bookingSchema);

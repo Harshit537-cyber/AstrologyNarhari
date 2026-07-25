@@ -6,7 +6,7 @@ const moment = require('moment');
 const Booking = require('../../models/Booking/Booking');
 const admin = require('firebase-admin')
 const sendPushNotification = require('../../utils/notificationService')
-
+const crypto = require('crypto');
 
 // THESE API'S FOR LIVE STREAMING
 
@@ -19,16 +19,19 @@ exports.startLive = async (req, res) => {
             return res.status(403).json({ message: "Partner not approved for live" });
         }
 
-        const channelName = `channel_${partnerId}`;
+        const channelName = `channel_${partnerId}_${Date.now()}`;
         const uid = Math.floor(Math.random() * 1000000);
 
         const { rtcToken, rtmToken } = generateAgoraTokens(channelName, uid);
 
-        const session = await LiveSession.findOneAndUpdate(
-            { partnerId },
-            { channelName, topic, category, startTime: Date.now(), status: 'Active' },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
+       const session = await LiveSession.create({
+            partnerId,
+            channelName,
+            topic,
+            category,
+            startTime: Date.now(),
+            status: 'Active'
+        });
 
         await Partner.findByIdAndUpdate(partnerId, { isBusy: true, isOnline: true });
 
@@ -62,7 +65,7 @@ exports.joinLive = async (req, res) => {
             }
         );
 
-        
+
         res.status(200).json({
             success: true,
             data: {
@@ -102,19 +105,30 @@ exports.getActiveSessions = async (req, res) => {
 
 exports.endLive = async (req, res) => {
     try {
-        const { partnerId } = req.body;
+        const { sessionId, partnerId } = req.body;
 
-        await LiveSession.findOneAndUpdate(
-            { partnerId, status: 'Active' },
-            { status: 'Ended', endTime: Date.now(),
-                 viewers: [],
-                 viewerCount: 0,
-             }
+        const session = await LiveSession.findByIdAndUpdate(
+            sessionId, 
+            { 
+                status: 'Ended', 
+                endTime: Date.now(),
+                viewers: [],
+                viewerCount: 0,
+            },
+            { new: true }
         );
 
-        await Partner.findByIdAndUpdate(partnerId, { isBusy: false, isOnline: false });
+        if (!session) {
+            return res.status(404).json({ message: "Session not found" });
+        }
 
-        res.status(200).json({ success: true, message: "Live ended successfully" });
+        await Partner.findByIdAndUpdate(partnerId, { isBusy: false });
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Live Ended Successfully",
+            data: session 
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -144,6 +158,8 @@ exports.leaveLive = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+
 
 exports.likeSession = async (req, res) => {
     try {
@@ -283,6 +299,77 @@ exports.getLikeStats = async (req, res) => {
     }
 };
 
+exports.submitFeedback = async (req, res) => {
+    try {
+        const { bookingId, rating, review } = req.body; 
+        const userId = req.user.id; n
+
+        if (!rating || rating < 1 || rating > 5) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Rating must be a value between 1 and 5." 
+            });
+        }
+
+        const booking = await Booking.findById(bookingId);
+        if (!booking) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "Booking record not found." 
+            });
+        }
+
+        if (booking.user.toString() !== userId) {
+            return res.status(403).json({ 
+                success: false, 
+                message: "Unauthorized access. You can only rate your own sessions." 
+            });
+        }
+
+        if (booking.status !== 'completed') {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Feedback can only be submitted for completed sessions." 
+            });
+        }
+
+        const partner = await Partner.findById(booking.partner);
+        if (partner) {
+            const currentTotalReviews = partner.totalReviews || 0;
+            const currentAvgRating = partner.averageRating || 0;
+
+            const newTotalReviews = currentTotalReviews + 1;
+            const newAverageRating = ((currentAvgRating * currentTotalReviews) + rating) / newTotalReviews;
+
+            partner.totalReviews = newTotalReviews;
+            partner.averageRating = Number(newAverageRating.toFixed(1)); 
+            await partner.save();
+        }
+
+        booking.rating = rating;
+        booking.review = review || "";
+        await booking.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Feedback submitted successfully. Partner profile has been updated.",
+            data: {
+                partnerName: partner ? partner.fullName : "Expert",
+                updatedRating: partner ? partner.averageRating : rating
+            }
+        });
+
+    } catch (error) {
+        console.error("Feedback API Error:", error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Internal Server Error while submitting feedback." 
+        });
+    }
+};
+
+
+
 // LIVE STREAMING API'S ENDING HERE
 
 
@@ -337,10 +424,10 @@ exports.startConsultation =  async (req, res) => {
         const uid = Math.floor(Math.random() * 1000000); 
         const tokens = generateAgoraTokens(channelName, uid, 'publisher');
         const encryptionKey = crypto.createHash('sha256').update(bookingId).digest('hex').substring(0, 32);
-
-        if (isPartner) {
             await Partner.findByIdAndUpdate(booking.partner._id, { isBusy: true });
 
+        
+            if (isPartner) {
             if (booking.user.fcmToken) {
                 await sendPushNotification(booking.user.fcmToken, {
                     type: 'INCOMING_CALL',
@@ -353,6 +440,23 @@ exports.startConsultation =  async (req, res) => {
                 }, {
                     title: 'Incoming Call',
                     body: `${booking.partner.fullName} is calling you.`
+                });
+            }
+        }
+
+            else if (isUser) {
+            if (booking.partner.fcmToken) {
+                await sendPushNotification(booking.partner.fcmToken, {
+                    type: 'INCOMING_CALL', 
+                    bookingId: booking._id.toString(),
+                    channelName: channelName,
+                    rtcToken: tokens.rtcToken,
+                    encryptionKey: encryptionKey,
+                    userName: booking.user.fullName, 
+                    duration: booking.duration.toString()
+                }, {
+                    title: 'Consultation Started',
+                    body: `${booking.user.fullName} is waiting for you in the call.`
                 });
             }
         }
