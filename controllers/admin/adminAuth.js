@@ -3,7 +3,6 @@ const { getAuth } = require('firebase-admin/auth');
 const jwt = require('jsonwebtoken');
 
 const User = require('../../models/User.js');
-const UserProfile = require('../../models/User.js');
 const Partner = require("../../models/Partner/Partner");
 const cloudinary = require("../../config/cloudinary");
 const fs = require("fs");
@@ -606,6 +605,7 @@ const updateUser = async (req, res) => {
             placeOfBirth
         } = req.body || {};
 
+
         // Check duplicate email
         if (email) {
             const existingUser = await User.findOne({
@@ -621,8 +621,10 @@ const updateUser = async (req, res) => {
             }
         }
 
+
         const user = await User.findById(id);
 
+        
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -630,50 +632,51 @@ const updateUser = async (req, res) => {
             });
         }
 
-        // Partial Update
+
+        // Update basic fields
         if (name) user.name = name;
         if (email) user.email = email;
         if (mobile) user.mobile = mobile;
 
-        await user.save();
 
-        let profile = await UserProfile.findOne({ user: id });
+        // Update profile fields
+        if (fullName) user.fullName = fullName;
+        if (gender) user.gender = gender;
+        if (zodiac) user.zodiac = zodiac;
+        if (dateOfBirth) user.dateOfBirth = dateOfBirth;
+        if (timeOfBirth) user.timeOfBirth = timeOfBirth;
+        if (placeOfBirth) user.placeOfBirth = placeOfBirth;
 
-        if (!profile) {
-            profile = new UserProfile({ user: id });
-        }
-
-        if (fullName) profile.fullName = fullName;
-        if (gender) profile.gender = gender;
-        if (zodiac) profile.zodiac = zodiac;
-        if (dateOfBirth) profile.dateOfBirth = dateOfBirth;
-        if (timeOfBirth) profile.timeOfBirth = timeOfBirth;
-        if (placeOfBirth) profile.placeOfBirth = placeOfBirth;
 
         // Upload Profile Pic to Cloudinary
         if (req.file) {
+
             const result = await cloudinary.uploader.upload(req.file.path, {
                 folder: "users/profilePic"
             });
 
-            profile.profilePic = result.secure_url;
+            user.profilePic = result.secure_url;
+
 
             // Delete local file
             fs.unlinkSync(req.file.path);
         }
 
-        await profile.save();
+
+        await user.save();
+
 
         return res.status(200).json({
             success: true,
-            message: "User and profile updated successfully",
-            data: {
-                user,
-                profile
-            }
+            message: "User updated successfully",
+            data: user
         });
 
+
     } catch (error) {
+
+        console.log("Update User Error =>", error);
+
         return res.status(500).json({
             success: false,
             message: error.message
