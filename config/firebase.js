@@ -1,13 +1,28 @@
-const admin = require("firebase-admin");
+const { initializeApp, getApps, cert } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+if (getApps().length === 0) {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+
+    console.log("✅ Firebase Admin successfully connected!");
+  } catch (error) {
+    console.error("❌ Firebase Init Error:", error.message);
+  }
 }
 
-module.exports = admin;
+
+const authService = getAuth();
+
+module.exports = {
+  auth: () => authService
+};

@@ -54,8 +54,15 @@ exports.joinLive = async (req, res) => {
 
         const { rtcToken, rtmToken } = generateAgoraTokens(session.channelName, uid);
 
-        await LiveSession.findByIdAndUpdate(sessionId, { $inc: { viewerCount: 1 } });
+  await LiveSession.updateOne(
+            { _id: sessionId, viewers: { $ne: userId } }, 
+            { 
+                $addToSet: { viewers: userId }, 
+                $inc: { viewerCount: 1 }        
+            }
+        );
 
+        
         res.status(200).json({
             success: true,
             data: {
@@ -99,7 +106,10 @@ exports.endLive = async (req, res) => {
 
         await LiveSession.findOneAndUpdate(
             { partnerId, status: 'Active' },
-            { status: 'Ended', endTime: Date.now() }
+            { status: 'Ended', endTime: Date.now(),
+                 viewers: [],
+                 viewerCount: 0,
+             }
         );
 
         await Partner.findByIdAndUpdate(partnerId, { isBusy: false, isOnline: false });
@@ -107,6 +117,31 @@ exports.endLive = async (req, res) => {
         res.status(200).json({ success: true, message: "Live ended successfully" });
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+
+exports.leaveLive = async (req, res) => {
+    try {
+        const { sessionId, userId } = req.body;
+
+        const updatedSession = await LiveSession.findByIdAndUpdate(
+            sessionId,
+            { 
+                $pull: { viewers: userId }, 
+                $inc: { viewerCount: -1 }    
+            },
+            { new: true }
+        );
+
+        if (updatedSession && updatedSession.viewerCount < 0) {
+            updatedSession.viewerCount = 0;
+            await updatedSession.save();
+        }
+
+        res.status(200).json({ success: true, message: "User left successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -172,7 +207,7 @@ exports.likeSession = async (req, res) => {
                 const currentSession = await LiveSession.findById(sessionId).select('likeCount');
                 return res.status(200).json({
                     success: true,
-                    message: "You dost not liked so You dont unlike it until you liked !",
+                    message: "Like First! so You dont unlike it until you liked !",
                     totalLikes: currentSession.likeCount,
                     likedBy: nameOfLiker,
                     isNewLike: false
@@ -418,5 +453,49 @@ exports.endConsultation =  async (req, res) => {
     } catch (error) {
         console.error("End Consultation Error:", error);
         res.status(500).json({ success: false, message: 'Error ending session' });
+    }
+};
+
+
+exports.handleMissedCall = async (req, res) => {
+    try {
+        const { bookingId } = req.body;
+        const currentUserId = req.user.id; 
+
+        const booking = await Booking.findById(bookingId).populate('user partner');
+        if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+        if (booking.partner._id.toString() !== currentUserId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized access' });
+        }
+
+        if (booking.paymentStatus === 'refunded') {
+            return res.status(400).json({ success: false, message: 'Already refunded' });
+        }
+
+        await Partner.findByIdAndUpdate(booking.partner._id, { isBusy: false });
+        const user = await User.findById(booking.user._id);
+        if (user) {
+            user.walletBalance = (user.walletBalance || 0) + booking.totalFee;
+            await user.save();
+        }
+
+        booking.status = 'completed'; 
+        booking.paymentStatus = 'refunded'; 
+        await booking.save();
+
+        if (booking.user.fcmToken) {
+            await sendPushNotification(booking.user.fcmToken, {
+                type: 'MISSED_CALL',
+                bookingId: bookingId.toString()
+            }, {
+                title: 'Missed Call',
+                body: 'You missed your consultation. Money refunded.'
+            });
+        }
+
+        res.status(200).json({ success: true, message: 'Refunded successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };

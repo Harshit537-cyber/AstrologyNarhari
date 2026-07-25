@@ -39,7 +39,7 @@ const bookingSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'accepted', 'rejected', 'cancelled', 'completed'],
+        enum: ['pending', 'accepted', 'rejected', 'cancelled', 'completed', "missed"],
         default: 'pending'
     },
     paymentStatus: {
@@ -47,7 +47,10 @@ const bookingSchema = new mongoose.Schema({
         enum: ['pending', 'completed', 'refunded'],
         default: 'pending'
     },
-    actualDuration: { type: Number, default: 0 }
+    actualDuration: { type: Number, default: 0 },
+    startTime: { type: Date }, 
+    endTime: { type: Date },
+    cancellationReason: { type: String, default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Booking', bookingSchema);
