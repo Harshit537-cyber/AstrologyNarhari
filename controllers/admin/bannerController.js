@@ -24,6 +24,7 @@ const addBanner = async (req, res) => {
             title: req.body.title,
             image: imageUrl,
             type: req.body.type,
+            bannerFor: req.body.bannerFor, // 👈 Added
             redirectType: req.body.redirectType,
             redirectId: req.body.redirectId || null,
             redirectUrl: req.body.redirectUrl || null,
@@ -44,7 +45,6 @@ const addBanner = async (req, res) => {
         });
     }
 };
-
 
 const getAllBanners = async (req, res) => {
     try {
@@ -100,6 +100,7 @@ const updateBanner = async (req, res) => {
         const updateData = {
             title: req.body.title,
             type: req.body.type,
+            bannerFor: req.body.bannerFor, // 👈 Added
             redirectType: req.body.redirectType,
             redirectId: req.body.redirectId || null,
             redirectUrl: req.body.redirectUrl || null,

@@ -18,6 +18,12 @@ const bannerSchema = new mongoose.Schema(
       default: "home"
     },
 
+    bannerFor:{
+      type:String,
+      enum:["user", "partner"],
+      default:"user"
+    },
+
     redirectType: {
       type: String,
       enum: ["none", "product", "category", "url"],

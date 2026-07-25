@@ -9,7 +9,8 @@ const { isAdmin } = require("../../middleware/auth");
 // =======================
 
 // Get Active Banners
-router.get("/", bannerController.getBanners);
+router.get("/user-banners",bannerController.getUserBanners);
+router.get("/partner-banners", bannerController.getPartnerBanners);
 
 
 
