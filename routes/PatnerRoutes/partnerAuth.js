@@ -96,7 +96,7 @@ router.post(
     addBankAccount
 );
 
-router.get("/top-astrologers",verifyToken, isPartner, getTopAstrologers)
+router.get("/top-astrologers",verifyToken, getTopAstrologers)
 router.put(
     '/bank-account',
     verifyToken,
