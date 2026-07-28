@@ -109,7 +109,17 @@ const partnerSchema = new mongoose.Schema({
         type: Number, 
         default: 0 
     },
-
+ categories: [{
+        type: String,
+        uppercase: true, 
+        enum: [
+            'LOVE & RELATIONSHIPS',
+            'CAREER & FINANCE',
+            'MARRIAGE & FAMILY',
+            'HEALTH & WELLNESS',
+            'BUSINESS & WEALTH'
+        ]
+    }],
 
 
 }, { timestamps: true });

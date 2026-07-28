@@ -223,11 +223,18 @@ const getPartners = async (req, res) => {
 };
 
 
-const getAllPartnersForUser = async (req, res) => {
+const getAllPartnersForUser =  async (req, res) => {
     try {
-        const { specialty, language, gender, search, sortBy, page = 1, limit = 10 } = req.query;
+        const { category, specialty, language, gender, search, sortBy, page = 1, limit = 10 } = req.query;
 
-        let query = {};
+        let query = { 
+            profileApprovalStatus: 'Approved',   
+        
+        };
+
+        if (category && category !== 'All Experts') {
+            query.categories = category; 
+        }
 
         if (specialty) {
             query.specialties = { $in: [specialty] };
@@ -261,10 +268,11 @@ const getAllPartnersForUser = async (req, res) => {
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
         const partners = await Partner.find(query)
-            .select('fullName profilePic specialties languages experience minRate averageRating totalReviews isOnline isBusy bio qualification gender isVerified isProfileComplete profileApprovalStatus kycStatus')
+            .select('fullName profilePic specialties languages categories experience minRate averageRating totalReviews isOnline isBusy bio qualification gender isVerified isProfileComplete profileApprovalStatus kycStatus')
             .sort(sortOption)
             .skip(skip)
-            .limit(parseInt(limit));
+            .limit(parseInt(limit))
+            .lean(); 
 
         const total = await Partner.countDocuments(query);
 
@@ -274,6 +282,7 @@ const getAllPartnersForUser = async (req, res) => {
             profilePic: partner.profilePic || "",
             specialties: partner.specialties || [],
             languages: partner.languages || [],
+            categories: partner.categories || [], 
             experience: partner.experience || 0,
             minRate: partner.minRate || 0,
             averageRating: partner.averageRating || 0,
@@ -305,7 +314,6 @@ const getAllPartnersForUser = async (req, res) => {
         });
     }
 };
-
 const updateFCMToken = async (req, res) => {
     try {
         const { fcmToken } = req.body;
@@ -346,4 +354,64 @@ const updateFCMToken = async (req, res) => {
         res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 };
-module.exports = { sendOTP, verifyOTP,updateFCMToken , deactivateAccount, activateAccount, getPartners, getAllPartnersForUser };
+
+const searchExperts = async (req, res) => {
+    try {
+        const { 
+            search,      
+            category,    
+            specialty,  
+            language,    
+            page = 1, 
+            limit = 10 
+        } = req.query;
+
+        let query = {
+            profileApprovalStatus: 'Approved',
+        };
+
+        if (search) {
+            query.fullName = { $regex: search, $options: 'i' };
+        }
+
+        if (category && category.toUpperCase() !== 'ALL EXPERTS') {
+            query.categories = category.toUpperCase();
+        }
+
+        if (specialty) {
+            query.specialties = { $in: [new RegExp(specialty, 'i')] };
+        }
+
+        if (language) {
+            query.languages = { $in: [new RegExp(language, 'i')] };
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        const experts = await Partner.find(query)
+            .select('fullName profilePic specialties categories experience averageRating totalReviews minRate isOnline isBusy languages bio')
+            .sort({ 
+                isOnline: -1,     
+                isBusy: 1,        
+                averageRating: -1 
+            })
+            .skip(skip)
+            .limit(parseInt(limit))
+            .lean();
+
+        const total = await Partner.countDocuments(query);
+
+        res.status(200).json({
+            success: true,
+            meta: {
+                totalExperts: total,
+                totalPages: Math.ceil(total / limit),
+                currentPage: parseInt(page)
+            },
+            data: experts
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
+    }
+};
+module.exports = { sendOTP, verifyOTP,updateFCMToken , deactivateAccount, activateAccount, getPartners, getAllPartnersForUser, searchExperts };

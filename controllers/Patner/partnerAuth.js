@@ -96,7 +96,7 @@ const register = async (req, res) => {
 
         const {
             fullName, dateOfBirth, gender, city, specialties,
-            languages, experience, qualification, expectedSalary, minRate, bio
+            languages, experience, qualification, expectedSalary, minRate, bio, categories
         } = req.body;
 
         let profilePicUrl = partner.profilePic;
@@ -120,6 +120,7 @@ const register = async (req, res) => {
         partner.city = city;
         partner.specialties = typeof specialties === 'string' ? JSON.parse(specialties) : specialties;
         partner.languages = typeof languages === 'string' ? JSON.parse(languages) : languages;
+        partner.categories = typeof categories === 'string' ? JSON.parse(categories) : categories;
         partner.experience = experience;
         partner.qualification = qualification;
         partner.expectedSalary = expectedSalary;
@@ -395,6 +396,8 @@ const getTopAstrologers = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+
 
 
 module.exports = {
