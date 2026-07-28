@@ -184,7 +184,7 @@ const updateProfile = async (req, res) => {
 
     } catch (error) {
         if (filePath && fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+            try { fs.unlinkSync(filePath); } catch (e) { }
         }
         return res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
@@ -368,6 +368,35 @@ const updateFCMToken = async (req, res) => {
     }
 };
 
+const getTopAstrologers = async (req, res) => {
+    try {
+        let query = {
+            profileApprovalStatus: 'Approved',
+            isVerified: true,
+            isProfileComplete: true
+        };
+
+        const topAstrologers = await Partner.find(query)
+            .select('fullName profilePic specialties experience averageRating totalReviews minRate isOnline languages')
+            .sort({
+                isTopAstrologer: -1,
+                averageRating: -1,
+                totalReviews: -1
+            })
+            .limit(10)
+            .lean();
+
+        res.status(200).json({
+            success: true,
+            count: topAstrologers.length,
+            data: topAstrologers
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
 module.exports = {
     verifyOtp,
     register,
@@ -377,5 +406,6 @@ module.exports = {
     deactivateAccount,
     activateAccount,
     getLiveAstrologers,
-    updateFCMToken
+    updateFCMToken,
+    getTopAstrologers
 };

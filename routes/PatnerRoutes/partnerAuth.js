@@ -11,7 +11,8 @@ const {
     deleteAccount,
     deactivateAccount,
     activateAccount,
-    updateFCMToken
+    updateFCMToken,
+    getTopAstrologers
 } = require('../../controllers/Patner/partnerAuth');
 
 const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/partnerDuty');
@@ -95,6 +96,7 @@ router.post(
     addBankAccount
 );
 
+router.get("/top-astrologers",verifyToken, isPartner, getTopAstrologers)
 router.put(
     '/bank-account',
     verifyToken,
@@ -128,6 +130,7 @@ router.get(
     isPartner, 
     getKycStatus
 );
+
 
 router.patch('/update-fcm', verifyToken, isPartner, updateFCMToken);
 
