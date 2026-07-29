@@ -98,7 +98,7 @@ router.post(
 );
 
 router.get("/top-astrologers",verifyToken, getTopAstrologers);
-router.get("/astrologerById/:id", verifyToken, isPartner,getAstrologerById )
+router.get("/astrologerById/:id", verifyToken,getAstrologerById )
 router.put(
     '/bank-account',
     verifyToken,
