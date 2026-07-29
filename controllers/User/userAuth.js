@@ -49,8 +49,8 @@ const verifyOTP = async (req, res) => {
             data: {
                 id: user._id,
                 mobile: user.mobile,
-                isProfileComplete: !!user.fullName,
-                isActive: user.isActive
+                isProfileComplete: Boolean(user.fullName),
+                isActive: user.isActive !== false
             }
         });
 
@@ -75,10 +75,7 @@ const deactivateAccount = async (req, res) => {
         }
 
         if (duration && !ALLOWED_DURATIONS.includes(Number(duration))) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Invalid deactivation duration' 
-            });
+            return res.status(400).json({ success: false, message: 'Invalid deactivation duration' });
         }
 
         const user = await User.findById(req.user.id);
@@ -97,11 +94,7 @@ const deactivateAccount = async (req, res) => {
 
         await user.save();
 
-        return res.status(200).json({ 
-            success: true, 
-            message: 'Account deactivated successfully', 
-            data: user 
-        });
+        return res.status(200).json({ success: true, message: 'Account deactivated successfully', data: user });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
@@ -115,10 +108,7 @@ const activateAccount = async (req, res) => {
         }
 
         if (user.deactivatedBy === 'admin') {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Account deactivated by admin. Contact support.' 
-            });
+            return res.status(403).json({ success: false, message: 'Account deactivated by admin. Contact support.' });
         }
 
         user.isActive = true;
@@ -131,10 +121,7 @@ const activateAccount = async (req, res) => {
 
         await user.save();
 
-        return res.status(200).json({ 
-            success: true, 
-            message: 'Account reactivated successfully' 
-        });
+        return res.status(200).json({ success: true, message: 'Account reactivated successfully' });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
