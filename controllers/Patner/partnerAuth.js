@@ -5,6 +5,7 @@ const User = require('../../models/User');
 const cloudinary = require('../../config/cloudinary');
 const admin = require('../../config/firebase');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
+const mongoose = require("mongoose");
 
 const uploadToCloudinary = async (filePath, folder) => {
     try {
@@ -397,7 +398,38 @@ const getTopAstrologers = async (req, res) => {
     }
 };
 
+const getAstrologerById = async (req, res) => {
+    try {
+        const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Astrologer ID format"
+            });
+        }
+        const astrologer = await Partner.findById(id);
+        if (!astrologer) {
+            return res.status(404).json({
+                success: false,
+                message: "Astrologer not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: astrologer
+        });
+
+    } catch (error) {
+        console.error("Error fetching astrologer:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal Server Error",
+            error: error.message
+        });
+    }
+};
 
 
 module.exports = {
@@ -410,5 +442,6 @@ module.exports = {
     activateAccount,
     getLiveAstrologers,
     updateFCMToken,
-    getTopAstrologers
+    getTopAstrologers,
+    getAstrologerById 
 };

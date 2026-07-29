@@ -10,7 +10,8 @@ const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes")
 const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes")
 const productRoutes = require("./routes/AdminRoutes/E-comm/productRoutes");
 const couponRoutes = require("./routes/AdminRoutes/E-comm/couponRoutes")
-const cartRoutes= require("./routes/UserRoutes/cartRoutes")
+const cartRoutes= require("./routes/UserRoutes/cartRoutes");
+const razorpayInstance = require('./config/razorpay');
 
 const app = express();
 
