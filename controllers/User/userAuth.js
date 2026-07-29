@@ -1,114 +1,65 @@
+const jwt = require('jsonwebtoken');
 const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
-const jwt = require('jsonwebtoken');
+const admin = require('../../config/firebase');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
 
-const sendOTP = async (req, res) => {
+const verifyOTP = async (req, res) => {
     try {
-        const { mobile } = req.body;
+        const { idToken, mobile: bodyMobile } = req.body;
+        let mobile;
+
+        if (idToken) {
+            const decodedToken = await admin.auth().verifyIdToken(idToken);
+            mobile = decodedToken.phone_number;
+        } else if (bodyMobile) {
+            mobile = bodyMobile;
+        }
 
         if (!mobile) {
-            return res.status(400).json({ success: false, message: 'Mobile number is required' });
+            return res.status(400).json({ 
+                success: false, 
+                message: "Firebase ID Token or Mobile number is required" 
+            });
         }
 
         let user = await User.findOne({ mobile });
 
         if (!user) {
-            user = new User({
+            user = await User.create({
                 mobile,
-                otp: '123456'
+                role: 'user',
+                isVerified: true
             });
         } else {
-            user.otp = '123456';
+            user.isVerified = true;
+            await user.save();
         }
-
-        await user.save();
-
-        res.status(200).json({
-            success: true,
-            message: 'OTP sent successfully'
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-const verifyOTP = async (req, res) => {
-    try {
-        const { mobile, otp } = req.body;
-
-        if (!mobile || !otp) {
-            return res.status(400).json({ success: false, message: 'Mobile and OTP are required' });
-        }
-
-        const user = await User.findOne({ mobile });
-
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        if (otp !== '123456') {
-            return res.status(400).json({ success: false, message: 'Invalid OTP' });
-        }
-
-        if (!user.isActive) {
-            if (user.deactivatedBy === 'admin') {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Your account has been deactivated by admin. Please contact admin for assistance.'
-                });
-            }
-
-            if (user.reactivateAt && new Date() >= user.reactivateAt) {
-                user.isActive = true;
-                user.deactivatedBy = null;
-                user.deactivatedAt = null;
-                user.reactivateAt = null;
-                user.deactivationReason = null;
-                user.deactivationReasonNote = null;
-                user.deactivationDuration = null;
-            }
-        }
-
-        user.otp = null;
-        await user.save();
 
         const token = jwt.sign(
-            { id: user._id, role: user.role },
-            process.env.JWT_SECRET || 'secretkey',
-            { expiresIn: '30d' }
+            { id: user._id, role: user.role || 'user' },
+            process.env.JWT_SECRET || 'SECRET_KEY_123',
+            { expiresIn: '7d' }
         );
 
-        const isProfileComplete = !!user.fullName;
-
-        const response = {
+        return res.status(200).json({
             success: true,
-            message: 'OTP verified successfully',
+            message: "Authentication successful",
             token,
-            isProfileComplete,
-            user: {
+            data: {
                 id: user._id,
                 mobile: user.mobile,
-                role: user.role,
-                fullName: user.fullName,
+                isProfileComplete: !!user.fullName,
                 isActive: user.isActive
             }
-        };
+        });
 
-        if (!user.isActive) {
-            response.message = 'Your account is deactivated. Reactivate to continue.';
-            response.deactivationInfo = {
-                reason: user.deactivationReason,
-                reasonNote: user.deactivationReasonNote,
-                duration: user.deactivationDuration,
-                deactivatedAt: user.deactivatedAt,
-                reactivateAt: user.reactivateAt
-            };
-        }
-
-        res.status(200).json(response);
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(401).json({ 
+            success: false, 
+            message: "Invalid or expired Firebase token", 
+            error: error.message 
+        });
     }
 };
 
@@ -119,24 +70,20 @@ const deactivateAccount = async (req, res) => {
         if (!reason || !DEACTIVATION_REASONS.includes(reason)) {
             return res.status(400).json({
                 success: false,
-                message: `Reason is required and must be one of: ${DEACTIVATION_REASONS.join(', ')}`
+                message: `Reason must be one of: ${DEACTIVATION_REASONS.join(', ')}`
             });
         }
 
-        if (duration !== undefined && duration !== null && !ALLOWED_DURATIONS.includes(Number(duration))) {
-            return res.status(400).json({
-                success: false,
-                message: 'Duration must be 7, 15, 30, or omitted for indefinite deactivation'
+        if (duration && !ALLOWED_DURATIONS.includes(Number(duration))) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid deactivation duration' 
             });
         }
 
         const user = await User.findById(req.user.id);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        if (!user.isActive) {
-            return res.status(400).json({ success: false, message: 'Account is already deactivated' });
         }
 
         const now = new Date();
@@ -150,17 +97,13 @@ const deactivateAccount = async (req, res) => {
 
         await user.save();
 
-        res.status(200).json({
-            success: true,
-            message: 'Account deactivated successfully',
-            data: {
-                deactivatedAt: user.deactivatedAt,
-                reactivateAt: user.reactivateAt,
-                reason: user.deactivationReason
-            }
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Account deactivated successfully', 
+            data: user 
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -171,14 +114,10 @@ const activateAccount = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        if (user.isActive) {
-            return res.status(400).json({ success: false, message: 'Account is already active' });
-        }
-
         if (user.deactivatedBy === 'admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'This account was deactivated by admin. Please contact admin to reactivate.'
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Account deactivated by admin. Contact support.' 
             });
         }
 
@@ -192,226 +131,99 @@ const activateAccount = async (req, res) => {
 
         await user.save();
 
-        res.status(200).json({ success: true, message: 'Account activated successfully' });
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Account reactivated successfully' 
+        });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const searchExperts = async (req, res) => {
+    try {
+        const { search } = req.query;
+        let query = {
+            isVerified: true,
+            isProfileComplete: true,
+            profileApprovalStatus: 'Approved'
+        };
+
+        if (search) {
+            query.fullName = { $regex: search, $options: 'i' };
+        }
+
+        const experts = await Partner.find(query)
+            .select('fullName profilePic specialties languages experience minRate averageRating totalReviews isOnline')
+            .lean();
+
+        return res.status(200).json({ success: true, data: experts });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
 const getPartners = async (req, res) => {
     try {
         const partners = await Partner.find({
-            isProfileComplete: true,
             isVerified: true,
-            isActive: { $ne: false }
+            isProfileComplete: true,
+            profileApprovalStatus: 'Approved'
         })
-        .select(
-            'fullName profilePic specialties languages experience qualification expectedSalary averageRating totalReviews bio'
-        )
-        .sort({ averageRating: -1 });
+        .select('fullName profilePic specialties languages experience minRate averageRating totalReviews isOnline')
+        .limit(20)
+        .lean();
 
-        res.status(200).json({
-            success: true,
-            data: partners
-        });
+        return res.status(200).json({ success: true, data: partners });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
-
-const getAllPartnersForUser =  async (req, res) => {
+const getAllPartnersForUser = async (req, res) => {
     try {
-        const { category, specialty, language, gender, search, sortBy, page = 1, limit = 10 } = req.query;
+        const partners = await Partner.find({
+            isVerified: true,
+            isProfileComplete: true,
+            profileApprovalStatus: 'Approved'
+        })
+        .select('fullName profilePic specialties languages experience minRate averageRating totalReviews isOnline')
+        .lean();
 
-        let query = { 
-            profileApprovalStatus: 'Approved',   
-        
-        };
-
-        if (category && category !== 'All Experts') {
-            query.categories = category; 
-        }
-
-        if (specialty) {
-            query.specialties = { $in: [specialty] };
-        }
-
-        if (language) {
-            query.languages = { $in: [language] };
-        }
-
-        if (gender) {
-            query.gender = gender;
-        }
-
-        if (search) {
-            query.fullName = { $regex: search, $options: 'i' };
-        }
-
-        let sortOption = {};
-        if (sortBy === 'experience') {
-            sortOption = { experience: -1 };
-        } else if (sortBy === 'rating') {
-            sortOption = { averageRating: -1 };
-        } else if (sortBy === 'price_low') {
-            sortOption = { minRate: 1 };
-        } else if (sortBy === 'price_high') {
-            sortOption = { minRate: -1 };
-        } else {
-            sortOption = { isOnline: -1, isBusy: 1, averageRating: -1 };
-        }
-
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-
-        const partners = await Partner.find(query)
-            .select('fullName profilePic specialties languages categories experience minRate averageRating totalReviews isOnline isBusy bio qualification gender isVerified isProfileComplete profileApprovalStatus kycStatus')
-            .sort(sortOption)
-            .skip(skip)
-            .limit(parseInt(limit))
-            .lean(); 
-
-        const total = await Partner.countDocuments(query);
-
-        const formattedPartners = partners.map(partner => ({
-            _id: partner._id,
-            fullName: partner.fullName || "Partner Name",
-            profilePic: partner.profilePic || "",
-            specialties: partner.specialties || [],
-            languages: partner.languages || [],
-            categories: partner.categories || [], 
-            experience: partner.experience || 0,
-            minRate: partner.minRate || 0,
-            averageRating: partner.averageRating || 0,
-            totalReviews: partner.totalReviews || 0,
-            bio: partner.bio || "",
-            qualification: partner.qualification || "",
-            gender: partner.gender || "",
-            isOnline: partner.isOnline || false,
-            isBusy: partner.isBusy || false,
-            status: partner.isOnline ? (partner.isBusy ? 'BUSY' : 'ONLINE') : 'OFFLINE',
-            profileApprovalStatus: partner.profileApprovalStatus,
-            kycStatus: partner.kycStatus
-        }));
-
-        return res.status(200).json({
-            success: true,
-            count: formattedPartners.length,
-            total,
-            totalPages: Math.ceil(total / parseInt(limit)),
-            currentPage: parseInt(page),
-            data: formattedPartners
-        });
-
+        return res.status(200).json({ success: true, data: partners });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Server Error",
-            error: error.message
-        });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
+
 const updateFCMToken = async (req, res) => {
     try {
         const { fcmToken } = req.body;
-        const userId = req.user.id; 
-        const role = req.user.role; 
+        const userId = req.user.id;
 
         if (!fcmToken) {
             return res.status(400).json({ success: false, message: 'FCM Token is required' });
         }
 
-        let updatedUser;
-
-        if (role === 'partner') {
-            updatedUser = await Partner.findByIdAndUpdate(
-                userId, 
-                { fcmToken: fcmToken }, 
-                { new: true }
-            );
-        } else {
-            updatedUser = await User.findByIdAndUpdate(
-                userId, 
-                { fcmToken: fcmToken }, 
-                { new: true }
-            );
-        }
+        const updatedUser = await User.findByIdAndUpdate(userId, { fcmToken }, { new: true });
 
         if (!updatedUser) {
-            return res.status(404).json({ success: false, message: 'User/Partner not found' });
+            return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        res.status(200).json({
-            success: true,
-            message: `FCM Token updated successfully for ${role}`
-        });
+        res.status(200).json({ success: true, message: 'FCM Token updated successfully' });
 
     } catch (error) {
-        console.error("FCM Update Error:", error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
+        res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
     }
 };
 
-const searchExperts = async (req, res) => {
-    try {
-        const { 
-            search,      
-            category,    
-            specialty,  
-            language,    
-            page = 1, 
-            limit = 10 
-        } = req.query;
-
-        let query = {
-            profileApprovalStatus: 'Approved',
-        };
-
-        if (search) {
-            query.fullName = { $regex: search, $options: 'i' };
-        }
-
-        if (category && category.toUpperCase() !== 'ALL EXPERTS') {
-            query.categories = category.toUpperCase();
-        }
-
-        if (specialty) {
-            query.specialties = { $in: [new RegExp(specialty, 'i')] };
-        }
-
-        if (language) {
-            query.languages = { $in: [new RegExp(language, 'i')] };
-        }
-
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-
-        const experts = await Partner.find(query)
-            .select('fullName profilePic specialties categories experience averageRating totalReviews minRate isOnline isBusy languages bio')
-            .sort({ 
-                isOnline: -1,     
-                isBusy: 1,        
-                averageRating: -1 
-            })
-            .skip(skip)
-            .limit(parseInt(limit))
-            .lean();
-
-        const total = await Partner.countDocuments(query);
-
-        res.status(200).json({
-            success: true,
-            meta: {
-                totalExperts: total,
-                totalPages: Math.ceil(total / limit),
-                currentPage: parseInt(page)
-            },
-            data: experts
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
-    }
+module.exports = {
+    verifyOTP,
+    deactivateAccount,
+    activateAccount,
+    searchExperts,
+    getPartners,
+    getAllPartnersForUser,
+    updateFCMToken
 };
-module.exports = { sendOTP, verifyOTP,updateFCMToken , deactivateAccount, activateAccount, getPartners, getAllPartnersForUser, searchExperts };

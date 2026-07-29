@@ -1,240 +1,65 @@
-const { initializeApp, cert, getApps } = require('firebase-admin/app');
-const { getAuth } = require('firebase-admin/auth');
 const jwt = require('jsonwebtoken');
-
+const fs = require('fs');
 const User = require('../../models/User.js');
 const Partner = require("../../models/Partner/Partner");
 const cloudinary = require("../../config/cloudinary");
-const fs = require("fs");
+const admin = require('../../config/firebase');
 
-// const parseServiceAccount = () => {
-//     const envValue = process.env.FIREBASE_SERVICE_ACCOUNT;
-//     if (!envValue) {
-//         console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT environment variable is not defined.");
-//         return null;
-//     }
-//     try {
-//         let cleanValue = envValue.trim();
-//         cleanValue = cleanValue.replace(/\r?\n|\r/g, "");
-//         if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
-//             cleanValue = cleanValue.slice(1, -1);
-//         } else if (cleanValue.startsWith('"') && cleanValue.endsWith('"')) {
-//             cleanValue = cleanValue.slice(1, -1);
-//         }
-//         const parsed = JSON.parse(cleanValue);
-//         if (parsed && parsed.private_key) {
-//             parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-//         }
-//         return parsed;
-//     } catch (error) {
-//         console.warn("⚠️ AdminAuth: Failed to parse FIREBASE_SERVICE_ACCOUNT env variable. Error:", error.message);
-//         return null;
-//     }
-// };
-
-// let serviceAccount = parseServiceAccount();
-
-// if (!serviceAccount) {
-//     try {
-//         serviceAccount = require('./../../config/astro-narhari-firebase-adminsdk-fbsvc-536f643de4.json');
-//     } catch (error) {
-//         console.warn(" AdminAuth: Local Firebase config file also not found.");
-//     }
-// }
-
-// try {
-//     const activeApps = getApps() || [];
-//     if (activeApps.length > 0) {
-//         console.log("ℹ Firebase Admin SDK is already initialized.");
-//     } else if (serviceAccount) {
-//         initializeApp({
-//             credential: cert(serviceAccount)
-//         });
-//         console.log(" Firebase Admin SDK successfully initialized via Admin Auth!");
-//     } else {
-//         console.error(" Firebase Admin Initialization Skipped: No valid credentials found.");
-//     }
-// } catch (error) {
-//     console.error(" Firebase Admin Initialization Failed (Admin):", error.message);
-// }
-
-// const verifyFirebaseIdToken = async (firebaseToken) => {
-//     try {
-//         const decodedToken = await getAuth().verifyIdToken(firebaseToken);
-//         if (!decodedToken.phone_number) {
-//             throw new Error('Phone number not verified on Firebase');
-//         }
-//         return decodedToken;
-//     } catch (error) {
-//         throw new Error(`Firebase Auth Error: ${error.message}`);
-//     }
-// };
-
-// const sendAdminOTP = async (req, res) => {
-//     try {
-//         const { mobile, action } = req.body;
-
-//         if (!mobile) {
-//             return res.status(400).json({ success: false, message: 'Mobile number is required' });
-//         }
-
-//         if (action === 'register') {
-//             const existingUser = await User.findOne({ mobile });
-//             if (existingUser) {
-//                 return res.status(400).json({ success: false, message: 'Mobile number already registered' });
-//             }
-
-//             const adminCount = await User.countDocuments({ role: 'admin' });
-//             if (adminCount >= 2) {
-//                 return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
-//             }
-
-//         } else if (action === 'login') {
-//             const existingAdmin = await User.findOne({ mobile, role: 'admin' });
-//             if (!existingAdmin) {
-//                 return res.status(404).json({ success: false, message: 'Admin not found with this mobile number' });
-//             }
-//         } else {
-//             return res.status(400).json({ success: false, message: 'Invalid action type' });
-//         }
-
-//         return res.status(200).json({
-//             success: true,
-//             message: 'Validation checks passed. Trigger OTP on client.'
-//         });
-
-//     } catch (error) {
-//         return res.status(500).json({ success: false, message: error.message });
-//     }
-// };
-
-const sendAdminOTP = async (req, res) => {
+const verifyOtp = async (req, res) => {
     try {
+        const { idToken, mobile: bodyMobile } = req.body;
+        let mobile;
 
-        const { mobile, action } = req.body;
+        if (idToken) {
+            const decodedToken = await admin.auth().verifyIdToken(idToken);
+            mobile = decodedToken.phone_number;
+        } else if (bodyMobile) {
+            mobile = bodyMobile;
+        }
 
-        if (!mobile || !action) {
+        if (!mobile) {
             return res.status(400).json({
                 success: false,
-                message: "Mobile and action are required"
+                message: "Firebase ID Token or Mobile number is required"
             });
         }
 
-        let user = await User.findOne({ mobile });
+        let adminUser = await User.findOne({ mobile });
 
-        if (action === "register") {
-
-            if (user && user.role === "admin") {
+        if (!adminUser) {
+            const adminCount = await User.countDocuments({ role: "admin" });
+            if (adminCount >= 2) {
                 return res.status(400).json({
                     success: false,
-                    message: "Admin already exists"
+                    message: "Admin registration limit reached. Max 2 admins allowed."
                 });
             }
 
-            if (!user) {
-                user = new User({ mobile });
-            }
-
-        } else if (action === "login") {
-
-            user = await User.findOne({
+            adminUser = await User.create({
                 mobile,
-                role: "admin"
+                role: "admin",
+                isActive: true
             });
-
-            if (!user) {
-                return res.status(404).json({
+        } else {
+            if (adminUser.role !== "admin") {
+                return res.status(400).json({
                     success: false,
-                    message: "Admin not found"
+                    message: "User is not registered as an admin"
                 });
             }
 
-        } else {
-
-            return res.status(400).json({
-                success: false,
-                message: "Invalid action"
-            });
-
+            if (!adminUser.isActive) {
+                return res.status(403).json({
+                    success: false,
+                    message: "This admin account is deactivated"
+                });
+            }
         }
-
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        user.otp = otp;
-
-        await user.save();
-
-        return res.status(200).json({
-            success: true,
-            message: "OTP sent successfully",
-            otp
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-
-    }
-};
-
-
-
-const register = async (req, res) => {
-    try {
-
-        const { name, mobile, otp } = req.body;
-
-        if (!name || !mobile || !otp) {
-            return res.status(400).json({
-                success: false,
-                message: "Name, mobile and otp are required"
-            });
-        }
-
-        const adminCount = await User.countDocuments({ role: "admin" });
-
-        const existingAdmin = await User.findOne({
-            mobile,
-            role: "admin"
-        });
-
-        if (!existingAdmin && adminCount <= 6) {
-            return res.status(400).json({
-                success: false,
-                message: "Admin registration limit reached. Max 2 admins allowed."
-            });
-        }
-
-        let admin = await User.findOne({ mobile });
-
-        if (!admin) {
-            return res.status(404).json({
-                success: false,
-                message: "Please send OTP first."
-            });
-        }
-
-        if (admin.otp !== otp) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid OTP"
-            });
-        }
-
-        admin.name = name;
-        admin.role = "admin";
-        admin.isActive = true;
-        admin.otp = null;
-
-        await admin.save();
 
         const token = jwt.sign(
             {
-                id: admin._id,
-                role: admin.role
+                id: adminUser._id,
+                role: adminUser.role
             },
             process.env.JWT_SECRET || "secretkey",
             {
@@ -242,189 +67,67 @@ const register = async (req, res) => {
             }
         );
 
-        return res.status(201).json({
+        return res.status(200).json({
             success: true,
-            message: "Admin registered successfully",
+            message: "Authentication successful",
             token,
-            admin
+            admin: {
+                id: adminUser._id,
+                mobile: adminUser.mobile,
+                name: adminUser.name,
+                role: adminUser.role,
+                isProfileComplete: !!adminUser.name,
+                isActive: adminUser.isActive
+            }
         });
 
     } catch (error) {
-
-        return res.status(500).json({
+        return res.status(401).json({
             success: false,
-            message: error.message
+            message: "Invalid or expired Firebase token",
+            error: error.message
         });
-
     }
 };
 
-
-const login = async (req, res) => {
+const register = async (req, res) => {
     try {
+        const { name } = req.body;
 
-        const { mobile, otp } = req.body;
-
-        if (!mobile || !otp) {
+        if (!name) {
             return res.status(400).json({
                 success: false,
-                message: "Mobile and OTP are required"
+                message: "Name is required"
             });
         }
 
-        const admin = await User.findOne({
-            mobile,
-            role: "admin"
-        });
-
-        if (!admin) {
+        const adminUser = await User.findById(req.user.id);
+        if (!adminUser) {
             return res.status(404).json({
                 success: false,
                 message: "Admin not found"
             });
         }
 
-        if (admin.otp !== otp) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid OTP"
-            });
-        }
+        adminUser.name = name;
+        adminUser.role = "admin";
+        adminUser.isActive = true;
 
-        if (!admin.isActive) {
-            return res.status(403).json({
-                success: false,
-                message: "This admin account is deactivated"
-            });
-        }
-
-        admin.otp = null;
-
-        await admin.save();
-
-        const token = jwt.sign(
-            {
-                id: admin._id,
-                role: admin.role
-            },
-            process.env.JWT_SECRET || "secretkey",
-            {
-                expiresIn: "1d"
-            }
-        );
+        await adminUser.save();
 
         return res.status(200).json({
             success: true,
-            message: "Admin logged in successfully",
-            token,
-            admin
+            message: "Admin profile updated successfully",
+            admin: adminUser
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
-
-
-
-// const register = async (req, res) => {
-//     try {
-//         // 1. FirebaseToken hata diya, sirf name aur mobile liya
-//         const { name, mobile } = req.body;
-
-//         if (!name || !mobile) {
-//             return res.status(400).json({ success: false, message: 'Name and mobile are required' });
-//         }
-
-//         // --- EXISTING LOGIC STARTS ---
-//         // Firebase verification line remove kar di gayi hai
-
-//         const adminCount = await User.countDocuments({ role: 'admin' });
-//         if (adminCount >= 2) {
-//             return res.status(400).json({ success: false, message: 'Admin registration limit reached. Max 2 admins allowed.' });
-//         }
-
-//         let admin = await User.findOne({ mobile });
-//         if (!admin) {
-//             admin = new User({ mobile });
-//         }
-
-//         admin.name = name;
-//         admin.role = 'admin';
-//         admin.isActive = true;
-//         await admin.save();
-
-//         const token = jwt.sign(
-//             { id: admin._id, role: admin.role },
-//             process.env.JWT_SECRET || 'secretkey',
-//             { expiresIn: '1d' }
-//         );
-
-//         return res.status(201).json({
-//             success: true,
-//             message: 'Admin registered successfully',
-//             token,
-//             admin: {
-//                 id: admin._id,
-//                 name: admin.name,
-//                 mobile: admin.mobile,
-//                 role: admin.role
-//             }
-//         });
-//         // --- EXISTING LOGIC ENDS ---
-
-//     } catch (error) {
-//         return res.status(500).json({ success: false, message: error.message });
-//     }
-// };
-
-// const login = async (req, res) => {
-//     try {
-//         const { mobile, firebaseToken } = req.body;
-
-//         if (!mobile || !firebaseToken) {
-//             return res.status(400).json({ success: false, message: 'Mobile and firebaseToken are required' });
-//         }
-
-//         await verifyFirebaseIdToken(firebaseToken);
-
-//         const admin = await User.findOne({ mobile, role: 'admin' });
-
-//         if (!admin) {
-//             return res.status(404).json({ success: false, message: 'Admin not found' });
-//         }
-
-//         if (!admin.isActive) {
-//             return res.status(403).json({ success: false, message: 'This admin account is deactivated' });
-//         }
-
-//         const token = jwt.sign(
-//             { id: admin._id, role: admin.role },
-//             process.env.JWT_SECRET || 'secretkey',
-//             { expiresIn: '1d' }
-//         );
-
-//         return res.status(200).json({
-//             success: true,
-//             message: 'Admin logged in successfully',
-//             token,
-//             admin: {
-//                 id: admin._id,
-//                 name: admin.name,
-//                 mobile: admin.mobile,
-//                 role: admin.role
-//             }
-//         });
-
-//     } catch (error) {
-//         return res.status(500).json({ success: false, message: error.message });
-//     }
-// };
 
 const getDashboardStats = async (req, res) => {
     try {
@@ -605,8 +308,6 @@ const updateUser = async (req, res) => {
             placeOfBirth
         } = req.body || {};
 
-
-        // Check duplicate email
         if (email) {
             const existingUser = await User.findOne({
                 email,
@@ -621,10 +322,8 @@ const updateUser = async (req, res) => {
             }
         }
 
-
         const user = await User.findById(id);
 
-        
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -632,14 +331,10 @@ const updateUser = async (req, res) => {
             });
         }
 
-
-        // Update basic fields
         if (name) user.name = name;
         if (email) user.email = email;
         if (mobile) user.mobile = mobile;
 
-
-        // Update profile fields
         if (fullName) user.fullName = fullName;
         if (gender) user.gender = gender;
         if (zodiac) user.zodiac = zodiac;
@@ -647,24 +342,15 @@ const updateUser = async (req, res) => {
         if (timeOfBirth) user.timeOfBirth = timeOfBirth;
         if (placeOfBirth) user.placeOfBirth = placeOfBirth;
 
-
-        // Upload Profile Pic to Cloudinary
         if (req.file) {
-
             const result = await cloudinary.uploader.upload(req.file.path, {
                 folder: "users/profilePic"
             });
-
             user.profilePic = result.secure_url;
-
-
-            // Delete local file
             fs.unlinkSync(req.file.path);
         }
 
-
         await user.save();
-
 
         return res.status(200).json({
             success: true,
@@ -672,11 +358,7 @@ const updateUser = async (req, res) => {
             data: user
         });
 
-
     } catch (error) {
-
-        console.log("Update User Error =>", error);
-
         return res.status(500).json({
             success: false,
             message: error.message
@@ -711,6 +393,7 @@ const deleteUserById = async (req, res) => {
         });
     }
 };
+
 const getAllPartners = async (req, res) => {
     try {
         const { status } = req.query;
@@ -763,7 +446,6 @@ const getPartnerById = async (req, res) => {
 
 const updatePartner = async (req, res) => {
     try {
-
         const { id } = req.params;
 
         const partner = await Partner.findById(id);
@@ -789,8 +471,6 @@ const updatePartner = async (req, res) => {
             isProfileComplete
         } = req.body;
 
-
-        // Mobile Duplicate Check
         if (mobile && mobile !== partner.mobile) {
             const mobileExists = await Partner.findOne({
                 mobile,
@@ -815,7 +495,6 @@ const updatePartner = async (req, res) => {
         if (expectedSalary) partner.expectedSalary = Number(expectedSalary);
         if (bio) partner.bio = bio;
 
-        // Arrays (form-data me string bhejna)
         if (req.body.specialties) {
             partner.specialties = JSON.parse(req.body.specialties);
         }
@@ -828,19 +507,14 @@ const updatePartner = async (req, res) => {
             partner.additionalPhotos = JSON.parse(req.body.additionalPhotos);
         }
 
-        // Profile Pic
         if (req.file) {
             const result = await cloudinary.uploader.upload(req.file.path, {
                 folder: "partners/profilePic"
             });
-
             partner.profilePic = result.secure_url;
-
-            // Local file delete kar do
             fs.unlinkSync(req.file.path);
         }
 
-        // Boolean
         if (isVerified !== undefined) {
             partner.isVerified = isVerified === "true";
         }
@@ -848,7 +522,6 @@ const updatePartner = async (req, res) => {
         if (isProfileComplete !== undefined) {
             partner.isProfileComplete = isProfileComplete === "true";
         }
-
 
         await partner.save();
 
@@ -1148,7 +821,6 @@ const activatePartner = async (req, res) => {
     }
 };
 
-
 const getPendingKycPartners = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -1177,18 +849,16 @@ const getPendingKycPartners = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
         return res.status(500).json({
             success: false,
-            message: "Internal Server Error"
+            message: error.message
         });
     }
 };
 
 module.exports = {
-    sendAdminOTP,
+    verifyOtp,
     register,
-    login,
     getDashboardStats,
     getRecentUsers,
     getUserAnalytics,
