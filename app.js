@@ -10,7 +10,8 @@ const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes")
 const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes")
 const productRoutes = require("./routes/AdminRoutes/E-comm/productRoutes");
 const couponRoutes = require("./routes/AdminRoutes/E-comm/couponRoutes")
-const cartRoutes= require("./routes/UserRoutes/cartRoutes")
+const cartRoutes= require("./routes/UserRoutes/cartRoutes");
+const razorpayInstance = require('./config/razorpay');
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use("/api/match", require("./routes/UserRoutes/kundaliMatchMakingRoutes"));
 app.use("/api/coupon", require("./routes/UserRoutes/couponRoutes"));
 app.use("/api/banner", require("./routes/UserRoutes/bannerRoutes"));
 app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
+app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
 
 //coupon routes ended

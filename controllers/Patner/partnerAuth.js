@@ -5,6 +5,7 @@ const User = require('../../models/User');
 const cloudinary = require('../../config/cloudinary');
 const admin = require('../../config/firebase');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
+const mongoose = require("mongoose");
 
 const uploadToCloudinary = async (filePath, folder) => {
     try {
@@ -96,7 +97,7 @@ const register = async (req, res) => {
 
         const {
             fullName, dateOfBirth, gender, city, specialties,
-            languages, experience, qualification, expectedSalary, minRate, bio
+            languages, experience, qualification, expectedSalary, minRate, bio, categories
         } = req.body;
 
         let profilePicUrl = partner.profilePic;
@@ -120,6 +121,7 @@ const register = async (req, res) => {
         partner.city = city;
         partner.specialties = typeof specialties === 'string' ? JSON.parse(specialties) : specialties;
         partner.languages = typeof languages === 'string' ? JSON.parse(languages) : languages;
+        partner.categories = typeof categories === 'string' ? JSON.parse(categories) : categories;
         partner.experience = experience;
         partner.qualification = qualification;
         partner.expectedSalary = expectedSalary;
@@ -368,6 +370,68 @@ const updateFCMToken = async (req, res) => {
     }
 };
 
+const getTopAstrologers = async (req, res) => {
+    try {
+        let query = {
+            profileApprovalStatus: 'Approved',
+            isVerified: true,
+            isProfileComplete: true
+        };
+
+        const topAstrologers = await Partner.find(query)
+            .select('fullName profilePic specialties experience averageRating totalReviews minRate isOnline languages')
+            .sort({
+                isTopAstrologer: -1,
+                averageRating: -1,
+                totalReviews: -1
+            })
+            .limit(10)
+            .lean();
+
+        res.status(200).json({
+            success: true,
+            count: topAstrologers.length,
+            data: topAstrologers
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getAstrologerById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Astrologer ID format"
+            });
+        }
+        const astrologer = await Partner.findById(id);
+        if (!astrologer) {
+            return res.status(404).json({
+                success: false,
+                message: "Astrologer not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: astrologer
+        });
+
+    } catch (error) {
+        console.error("Error fetching astrologer:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal Server Error",
+            error: error.message
+        });
+    }
+};
+
+
 module.exports = {
     verifyOtp,
     register,
@@ -377,5 +441,7 @@ module.exports = {
     deactivateAccount,
     activateAccount,
     getLiveAstrologers,
-    updateFCMToken
+    updateFCMToken,
+    getTopAstrologers,
+    getAstrologerById 
 };
