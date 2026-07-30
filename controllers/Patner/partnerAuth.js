@@ -184,7 +184,7 @@ const updateProfile = async (req, res) => {
 
     } catch (error) {
         if (filePath && fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+            try { fs.unlinkSync(filePath); } catch (e) { }
         }
         return res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }

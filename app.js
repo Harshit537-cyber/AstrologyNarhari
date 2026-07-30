@@ -31,6 +31,7 @@ app.use("/api/match", require("./routes/UserRoutes/kundaliMatchMakingRoutes"));
 app.use("/api/coupon", require("./routes/UserRoutes/couponRoutes"));
 app.use("/api/banner", require("./routes/UserRoutes/bannerRoutes"));
 app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
+app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
 
 //coupon routes ended
 
