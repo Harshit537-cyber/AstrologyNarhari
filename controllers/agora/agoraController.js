@@ -406,21 +406,12 @@ exports.startConsultation = async (req, res) => {
             });
         }
 
-        // ---------- TIMEZONE FIX ----------
+        // ---------- TIME CHECK ----------
         const nowMs = Date.now();
-        const startTimeMs = new Date(booking.startTime).getTime();
         const endTimeMs = new Date(booking.endTime).getTime();
         
-        // 5 Minutes in milliseconds (5 * 60 * 1000 = 300000 ms)
-        const earliestStartTimeMs = startTimeMs - 300000; 
-
-        if (nowMs < earliestStartTimeMs) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Scheduled at ${booking.timeSlot}. Please wait.` 
-            });
-        }
-
+        // "Time se pehle call na hone" wala check hata diya gaya hai.
+        // Bas ye check rakha hai ki End Time nikal chuka ho to call expired ho jaye.
         if (nowMs > endTimeMs) {
             return res.status(400).json({ success: false, message: 'Session expired.' });
         }
