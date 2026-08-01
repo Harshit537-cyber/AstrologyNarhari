@@ -46,6 +46,7 @@ app.use("/api/admin/product-category",productCategoryRoutes)
 app.use("/api/admin/product",productRoutes)
 app.use("/api/admin/coupon",couponRoutes);
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
+app.use("/api/admin/card", require("./routes/AdminRoutes/cardRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({
