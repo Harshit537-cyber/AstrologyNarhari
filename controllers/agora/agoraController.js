@@ -44,6 +44,8 @@ exports.startLive = async (req, res) => {
     }
 };
 
+
+
 exports.joinLive = async (req, res) => {
     try {
         const { sessionId, userId } = req.body;

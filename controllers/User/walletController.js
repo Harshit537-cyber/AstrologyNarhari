@@ -48,7 +48,30 @@ const getBalance = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+exports.getWalletBalance = async (req, res) => {
+    try {
+        const userId = req.user.id;
 
+        const user = await User.findById(userId).select("walletBalance");
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            walletBalance: user.walletBalance || 0,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
 
 const createOrder = async (req, res) => {
     try {
@@ -156,4 +179,52 @@ const verifyPayment = async (req, res) => {
         res.status(500).json({ success: false, message: "An error occurred during verification" });
     }
 };
+
+exports.requestWithdrawal = async (req, res) => {
+    try {
+        const { partnerId, amount } = req.body;
+
+        const partner = await Partner.findById(partnerId);
+
+        if (partner.walletBalance < amount) {
+            return res.status(400).json({ message: "Insuifficient balance!" });
+        }
+
+        const request = await Withdrawal.create({
+            partnerId,
+            amount,
+            bankDetails: {}
+        });
+
+        partner.walletBalance -= amount;
+        await partner.save();
+
+        res.status(200).json({ success: true, message: "Request sent to Admin." });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+
+exports.approveWithdrawal = async (req, res) => {
+    try {
+        const { withdrawalId, adminTransactionId } = req.body; 
+
+        const request = await Withdrawal.findById(withdrawalId);
+        if (!request || request.status !== 'Pending') {
+            return res.status(400).json({ message: "Invalid request" });
+        }
+
+        request.status = 'Approved';
+        request.adminTransactionId = adminTransactionId;
+        await request.save();
+
+        res.status(200).json({ success: true, message: "Withdrawal marked as Success." });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+
+
 module.exports = { addMoney, getBalance,createOrder,verifyPayment };
