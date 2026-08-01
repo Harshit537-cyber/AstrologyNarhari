@@ -33,6 +33,7 @@ app.use("/api/coupon", require("./routes/UserRoutes/couponRoutes"));
 app.use("/api/banner", require("./routes/UserRoutes/bannerRoutes"));
 app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
+app.use("/api/call", require("./routes/callRoutes/callRoutes"));
 
 //coupon routes ended
 

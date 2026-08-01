@@ -201,4 +201,20 @@ const getKycStatus = async (req, res) => {
     }
 };
 
+exports.getAllPendingKYC = async (req, res) => {
+    try {
+        const pendingKYCs = await Partner.find({ kycStatus: 'Pending' })
+            .select('name email mobileNumber kycStatus selfie nationalId astrologyCertificate addressProof createdAt')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: pendingKYCs.length,
+            data: pendingKYCs
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = { uploadKycDocuments, getKycStatus };
