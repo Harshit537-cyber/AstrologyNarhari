@@ -31,7 +31,7 @@ const verifyOtp = async (req, res) => {
             if (adminCount >= 2) {
                 return res.status(400).json({
                     success: false,
-                    message: "Admin registration limit reached. Max 2 admins allowed."
+                    message: "Admin registration limit reached. Max 2 admin allowed."
                 });
             }
 

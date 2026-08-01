@@ -4,11 +4,17 @@ const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
 const moment = require('moment');
 
-
 const scheduleBooking = async (req, res) => {
     try {
         const { partnerId, date, timeSlot, duration, mode } = req.body;
         const rawUserId = req.user?.id || req.user?._id;
+
+        if (!rawUserId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized. User ID not found.'
+            });
+        }
 
         if (!partnerId || !date || !timeSlot || !duration || !mode) {
             return res.status(400).json({
@@ -17,16 +23,15 @@ const scheduleBooking = async (req, res) => {
             });
         }
 
-const formattedDate = moment(date).format('YYYY-MM-DD');
+        const formattedDate = moment(date).format('YYYY-MM-DD');
         const start = moment(`${formattedDate} ${timeSlot}`, 'YYYY-MM-DD hh:mm A');
         const end = moment(start).add(duration, 'minutes');
-if (!start.isValid()) {
+
+        if (!start.isValid()) {
             return res.status(400).json({ success: false, message: 'Invalid Time Slot format' });
         }
 
-
-
-  const overlapping = await Booking.findOne({
+        const overlapping = await Booking.findOne({
             partner: partnerId,
             status: 'accepted',
             $or: [
@@ -40,7 +45,6 @@ if (!start.isValid()) {
             return res.status(400).json({ success: false, message: 'Astrologer is already booked for this time slot.' });
         }
 
-
         const partner = await Partner.findById(partnerId);
         if (!partner) {
             return res.status(404).json({
@@ -49,13 +53,22 @@ if (!start.isValid()) {
             });
         }
 
-        const totalFee = (partner.minRate ) * duration;
         const user = await User.findById(rawUserId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User account not found'
+            });
+        }
 
-        if (user.walletBalance < totalFee) {
+        const totalFee = partner.minRate * duration;
+        const currentBalance = user.walletBalance || 0;
+
+        if (currentBalance < totalFee) {
             return res.status(400).json({ success: false, message: 'Insufficient balance. Please recharge.' });
         }
-        user.walletBalance -= totalFee;
+
+        user.walletBalance = currentBalance - totalFee;
         await user.save();
 
         const newBooking = new Booking({

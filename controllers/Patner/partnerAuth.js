@@ -4,6 +4,7 @@ const Partner = require('../../models/Partner/Partner');
 const User = require('../../models/User');
 const cloudinary = require('../../config/cloudinary');
 const admin = require('../../config/firebase');
+const Booking = require('../../models/Booking/Booking');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
 const mongoose = require("mongoose");
 
@@ -398,6 +399,104 @@ const getTopAstrologers = async (req, res) => {
     }
 };
 
+
+const getDashboardStats = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+
+        const partner = await Partner.findById(partnerId).select('averageRating');
+        if (!partner) {
+            return res.status(404).json({ success: false, message: 'Partner not found' });
+        }
+
+        const totalConsults = await Booking.countDocuments({
+            partner: partnerId,
+            status: 'completed'
+        });
+
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const todayRevenueAggregate = await Booking.aggregate([
+            {
+                $match: {
+                    partner: new mongoose.Types.ObjectId(partnerId),
+                    status: 'completed',
+                    updatedAt: { $gte: startOfDay, $lte: endOfDay }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: '$totalFee' }
+                }
+            }
+        ]);
+
+        const todayRevenue = todayRevenueAggregate.length > 0 ? todayRevenueAggregate[0].totalRevenue : 0;
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalConsults,
+                todayRevenue,
+                rating: partner.averageRating || 0
+            }
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Error fetching dashboard stats",
+            error: error.message
+        });
+    }
+};
+
+
+const getRecentConsultations = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const consultations = await Booking.find({
+            partner: partnerId,
+            status: 'completed'
+        })
+        .populate('user', 'fullName profilePic mobile gender')
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+        const total = await Booking.countDocuments({
+            partner: partnerId,
+            status: 'completed'
+        });
+
+        return res.status(200).json({
+            success: true,
+            count: consultations.length,
+            total,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            data: consultations
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Error fetching recent consultations",
+            error: error.message
+        });
+    }
+};
+
 const getAstrologerById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -432,6 +531,72 @@ const getAstrologerById = async (req, res) => {
 };
 
 
+const getUpcomingBookings = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+
+        const bookings = await Booking.find({
+            partner: partnerId,
+            status: { $in: ['pending', 'accepted'] }
+        })
+        .populate('user', 'fullName profilePic mobile gender')
+        .sort({ date: 1 })
+        .lean();
+
+        return res.status(200).json({
+            success: true,
+            count: bookings.length,
+            data: bookings
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Error fetching upcoming bookings",
+            error: error.message
+        });
+    }
+};
+
+const getPartnerReviews = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const reviews = await Booking.find({
+            partner: partnerId,
+            rating: { $ne: null }
+        })
+        .select('user rating review updatedAt mode duration')
+        .populate('user', 'fullName profilePic')
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+        const total = await Booking.countDocuments({
+            partner: partnerId,
+            rating: { $ne: null }
+        });
+
+        return res.status(200).json({
+            success: true,
+            count: reviews.length,
+            total,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            data: reviews
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Error fetching reviews",
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     verifyOtp,
     register,
@@ -443,5 +608,9 @@ module.exports = {
     getLiveAstrologers,
     updateFCMToken,
     getTopAstrologers,
-    getAstrologerById 
+    getAstrologerById ,
+    getDashboardStats,
+    getRecentConsultations,
+    getUpcomingBookings,
+    getPartnerReviews
 };

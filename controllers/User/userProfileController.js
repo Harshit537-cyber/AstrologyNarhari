@@ -2,7 +2,6 @@ const User = require('../../models/User');
 const cloudinary = require('../../config/cloudinary');
 const getZodiacSign = require('../../utils/zodiacHelper');
 const fs = require('fs');
-const path = require('path');
 
 exports.createProfile = async (req, res) => {
     const filePath = req.file ? req.file.path : null;
@@ -14,25 +13,23 @@ exports.createProfile = async (req, res) => {
         let user = await User.findById(userId);
         if (!user) {
             if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-            return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({ success: false, message: "User not found" });
         }
 
         if (user.fullName) {
             if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-            return res.status(400).json({ message: "Profile already exists" });
+            return res.status(400).json({ success: false, message: "Profile already exists" });
         }
 
-        const zodiacSign = getZodiacSign(dateOfBirth);
+        const zodiacSign = dateOfBirth ? getZodiacSign(dateOfBirth) : null;
 
         let profilePicUrl = "";
-        if (filePath) {
-            if (fs.existsSync(filePath)) {
-                const result = await cloudinary.uploader.upload(filePath, {
-                    folder: "user_profiles",
-                });
-                profilePicUrl = result.secure_url;
-                fs.unlinkSync(filePath);
-            }
+        if (filePath && fs.existsSync(filePath)) {
+            const result = await cloudinary.uploader.upload(filePath, {
+                folder: "user_profiles",
+            });
+            profilePicUrl = result.secure_url;
+            fs.unlinkSync(filePath);
         }
 
         user.fullName = fullName;
@@ -42,31 +39,28 @@ exports.createProfile = async (req, res) => {
         user.timeOfBirth = timeOfBirth;
         user.placeOfBirth = placeOfBirth;
         user.profilePic = profilePicUrl;
-        user.zodiac = zodiacSign;
+        if (zodiacSign) user.zodiac = zodiacSign;
 
         await user.save();
-        res.status(201).json({ success: true, data: user });
+
+        return res.status(201).json({ 
+            success: true, 
+            message: "Profile created successfully",
+            data: user 
+        });
 
     } catch (error) {
-        console.error("Error in createProfile:", error);
-        
         if (filePath && fs.existsSync(filePath)) {
-            try {
-                fs.unlinkSync(filePath);
-            } catch (unlinkError) {
-                console.error(unlinkError);
-            }
+            try { fs.unlinkSync(filePath); } catch (e) {}
         }
 
-        res.status(500).json({ 
+        return res.status(500).json({ 
             success: false, 
             message: "Server Error", 
             error: error.message 
         });
     }
 };
-
-
 
 exports.getProfileForKundli = async (req, res) => {
     try {
@@ -83,7 +77,7 @@ exports.getProfileForKundli = async (req, res) => {
             });
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: {
                 fullName: profile.fullName,
@@ -96,8 +90,7 @@ exports.getProfileForKundli = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error fetching pre-fill details:", error);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: "Server Error",
             error: error.message
@@ -117,13 +110,12 @@ exports.getProfile = async (req, res) => {
             });
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data: user
         });
     } catch (error) {
-        console.error("Error in getProfile:", error);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: "Server Error",
             error: error.message
@@ -157,36 +149,28 @@ exports.editProfile = async (req, res) => {
             user.zodiac = getZodiacSign(dateOfBirth);
         }
 
-        if (filePath) {
-            if (fs.existsSync(filePath)) {
-                const result = await cloudinary.uploader.upload(filePath, {
-                    folder: "user_profiles",
-                });
-                user.profilePic = result.secure_url;
-                fs.unlinkSync(filePath);
-            }
+        if (filePath && fs.existsSync(filePath)) {
+            const result = await cloudinary.uploader.upload(filePath, {
+                folder: "user_profiles",
+            });
+            user.profilePic = result.secure_url;
+            fs.unlinkSync(filePath);
         }
 
         await user.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: "Profile updated successfully",
             data: user
         });
 
     } catch (error) {
-        console.error("Error in editProfile:", error);
-        
         if (filePath && fs.existsSync(filePath)) {
-            try {
-                fs.unlinkSync(filePath);
-            } catch (unlinkError) {
-                console.error("Error deleting temp file:", unlinkError);
-            }
+            try { fs.unlinkSync(filePath); } catch (e) {}
         }
 
-        res.status(500).json({ 
+        return res.status(500).json({ 
             success: false, 
             message: "Server Error", 
             error: error.message 

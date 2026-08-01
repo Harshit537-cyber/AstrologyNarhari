@@ -379,7 +379,7 @@ exports.submitFeedback = async (req, res) => {
 
 // AUDIO CALL API'S STARTING HERE 
 
-exports.startConsultation =  async (req, res) => {
+exports.startConsultation = async (req, res) => {
     try {
         const { bookingId } = req.body;
         const currentUserId = req.user.id;
@@ -387,6 +387,7 @@ exports.startConsultation =  async (req, res) => {
         if (!bookingId) {
             return res.status(400).json({ success: false, message: 'Booking ID is required' });
         }
+        
         const booking = await Booking.findById(bookingId).populate('user partner');
         
         if (!booking) {
@@ -407,29 +408,25 @@ exports.startConsultation =  async (req, res) => {
             });
         }
 
-        const now = moment();
-        const startTime = moment(booking.startTime);
-        const endTime = moment(booking.endTime);
-
-        if (now.isBefore(startTime.clone().subtract(5, 'minutes'))) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Scheduled at ${booking.timeSlot}. Please wait.` 
-            });
-        }
-
-        if (now.isAfter(endTime)) {
+        // ---------- TIME CHECK ----------
+        const nowMs = Date.now();
+        const endTimeMs = new Date(booking.endTime).getTime();
+        
+        // "Time se pehle call na hone" wala check hata diya gaya hai.
+        // Bas ye check rakha hai ki End Time nikal chuka ho to call expired ho jaye.
+        if (nowMs > endTimeMs) {
             return res.status(400).json({ success: false, message: 'Session expired.' });
         }
+        // ----------------------------------
 
         const channelName = `consultation_${bookingId}`;
         const uid = Math.floor(Math.random() * 1000000); 
         const tokens = generateAgoraTokens(channelName, uid, 'publisher');
         const encryptionKey = crypto.createHash('sha256').update(bookingId).digest('hex').substring(0, 32);
-            await Partner.findByIdAndUpdate(booking.partner._id, { isBusy: true });
-
         
-            if (isPartner) {
+        await Partner.findByIdAndUpdate(booking.partner._id, { isBusy: true });
+
+        if (isPartner) {
             if (booking.user.fcmToken) {
                 await sendPushNotification(booking.user.fcmToken, {
                     type: 'INCOMING_CALL',
@@ -444,9 +441,7 @@ exports.startConsultation =  async (req, res) => {
                     body: `${booking.partner.fullName} is calling you.`
                 });
             }
-        }
-
-            else if (isUser) {
+        } else if (isUser) {
             if (booking.partner.fcmToken) {
                 await sendPushNotification(booking.partner.fcmToken, {
                     type: 'INCOMING_CALL', 

@@ -13,7 +13,11 @@ const {
     activateAccount,
     updateFCMToken,
     getTopAstrologers,
-    getAstrologerById
+    getAstrologerById,
+    getDashboardStats,
+    getRecentConsultations,
+     getUpcomingBookings,
+    getPartnerReviews
 } = require('../../controllers/Patner/partnerAuth');
 
 const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/partnerDuty');
@@ -27,6 +31,35 @@ router.get(
     verifyToken,
     isPartner,
     getProfile
+);
+
+router.get(
+    '/upcoming-bookings',
+    verifyToken,
+    isPartner,
+    getUpcomingBookings
+);
+
+router.get(
+    '/reviews',
+    verifyToken,
+    isPartner,
+    getPartnerReviews
+);
+
+router.get(
+    '/recent-consultations',
+    verifyToken,
+    isPartner,
+    getRecentConsultations
+);
+
+
+router.get(
+    '/dashboard-stats',
+    verifyToken,
+    isPartner,
+    getDashboardStats
 );
 
 router.post(
