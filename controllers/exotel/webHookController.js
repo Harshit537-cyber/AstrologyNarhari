@@ -76,6 +76,9 @@ exports.exotelWebhook =async (req, res) => {
 
         booking.status = Status === 'completed' ? 'completed' : 'missed';
         booking.actualDuration = parseInt(Duration || 0);
+        if (Status === 'completed') {
+    booking.paymentStatus = 'completed'; 
+}
         await booking.save({ session });
 
         await session.commitTransaction();
