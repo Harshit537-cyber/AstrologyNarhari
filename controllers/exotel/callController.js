@@ -19,9 +19,10 @@ exports.initiateCall = async (req, res) => {
             return res.status(400).json({ message: "User or Partner details missing in DB" });
         }
 
-        if (booking.user._id.toString() !== userId.toString()) {
-            return res.status(403).json({ message: "Access Denied: You are not the owner of this booking" });
-        }
+        if (booking.user._id.toString() !== userId.toString() && 
+    booking.partner._id.toString() !== userId.toString()) {
+    return res.status(403).json({ message: "Access Denied: You are not authorized for this booking" });
+}
 
         if (booking.status !== 'accepted' || booking.mode !== 'Voice Call') {
             return res.status(400).json({ message: "Invalid booking status or mode" });
@@ -74,7 +75,8 @@ exports.endCallManually = async (req, res) => {
             return res.status(404).json({ message: "No active call found for this booking" });
         }
 
-        if (booking.user.toString() !== userId.toString()) {
+         if (booking.user.toString() !== userId.toString() && 
+            booking.partner.toString() !== userId.toString()) {
             return res.status(403).json({ message: "You are not authorized to end this call" });
         }
 
