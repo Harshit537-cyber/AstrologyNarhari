@@ -9,7 +9,9 @@ const {
     getPartnerAcceptedBookings,
     getPartnerRejectedBookings,
      cancelBooking,
-    rescheduleBooking
+    rescheduleBooking,
+    getPartnerClientLogs,
+    searchPartnerClientLogs
 } = require('../../controllers/bookingController/bookingController');
 
 router.post('/schedule', verifyToken, scheduleBooking);
@@ -23,5 +25,15 @@ router.get('/partner/requests', verifyToken, isPartner, getPartnerBookingRequest
 router.get('/partner/accepted', verifyToken, isPartner, getPartnerAcceptedBookings);
 router.get('/partner/rejected', verifyToken, isPartner, getPartnerRejectedBookings);
 router.post('/partner/respond', verifyToken, isPartner, respondToBooking);
+
+router.get('/client-logs', verifyToken, isPartner, getPartnerClientLogs);
+router.get('/client-logs/search', verifyToken, isPartner, searchPartnerClientLogs);
+
+router.get(
+    '/client-logs',
+    verifyToken,
+    isPartner,
+    getPartnerClientLogs
+);
 
 module.exports = router;
