@@ -2,6 +2,7 @@ const Booking = require('../../models/Booking/Booking');
 const Partner = require('../../models/Partner/Partner');
 const User = require('../../models/User');
 const { triggerExotelCall } = require('../../services/exotelService');
+const mongoose = require("mongoose")
 
 exports.initiateCall = async (req, res) => {
     const { bookingId } = req.body;
@@ -70,7 +71,7 @@ exports.endCallManually = async (req, res) => {
     const userId = req.user.id; 
 
     try {
-        const booking = await Booking.findById(bookingId);
+        const booking = await Booking.findById(bookingId).populate('partner');
         if (!booking || !booking.callSid) {
             return res.status(404).json({ message: "No active call found for this booking" });
         }
@@ -78,6 +79,14 @@ exports.endCallManually = async (req, res) => {
          if (booking.user.toString() !== userId.toString() && 
             booking.partner.toString() !== userId.toString()) {
             return res.status(403).json({ message: "You are not authorized to end this call" });
+        }
+
+if (booking.partner) {
+            const partner = await mongoose.model('Partner').findById(booking.partner._id);
+            if (partner) {
+                partner.isBusy = false;
+                await partner.save();
+            }
         }
 
         const result = await require('../../services/exotelService').terminateExotelCall(booking.callSid);
