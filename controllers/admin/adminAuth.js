@@ -172,6 +172,7 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
+
 const getRecentUsers = async (req, res) => {
     try {
         const users = await User.find()

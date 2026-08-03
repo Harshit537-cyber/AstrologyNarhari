@@ -8,8 +8,8 @@ exports.initiateCall = async (req, res) => {
     if (!req.user || !req.user.id) {
         return res.status(401).json({ message: "User not authenticated - Payload mismatch" });
     }
-    
-    const userId = req.user.id; 
+
+    const userId = req.user.id;
 
     try {
         const booking = await Booking.findById(bookingId).populate('partner user');
@@ -48,6 +48,8 @@ exports.initiateCall = async (req, res) => {
         const result = await triggerExotelCall(partner.mobile, user.mobile, finalTimeLimit, bookingId);
 
         if (result.success) {
+            booking.callSid = result.callSid;
+            await booking.save();
             res.status(200).json({ message: "Connecting your call...", callSid: result.callSid });
         } else {
             partner.isBusy = false;

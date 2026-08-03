@@ -15,12 +15,9 @@ const triggerExotelCall = async (partnerMobile, userMobile, timeLimitSec, bookin
 
         const from = cleanNumber(partnerMobile);
         const to = cleanNumber(userMobile);
-        
-        // CallerId fix (Comma/Hyphen safety)
-        let rawExophone = String(exotelConfig.EXOPHONE).split(',')[0].split('-').join('').trim();
+      let rawExophone = String(exotelConfig.EXOPHONE).split(',')[0].split('-').join('').trim();
         const callerId = cleanNumber(rawExophone);
 
-        // Security: Agar BACKEND_URL nahi hai toh khali string bhejenge (ya fallback URL)
         const baseUrl = process.env.BACKEND_URL || 'http://localhost:5000'; 
         const callbackUrl = `${baseUrl}/api/v1/calls/webhook?bookingId=${bookingId}&auth=${exotelConfig.INTERNAL_KEY}`;
 
@@ -38,7 +35,7 @@ const triggerExotelCall = async (partnerMobile, userMobile, timeLimitSec, bookin
         params.append('TimeLimit', Math.floor(timeLimitSec));
         params.append('Record', 'true');
         
-        // URL validation: Sirf tabhi bhejo jab URL sahi ho (http se shuru ho)
+  
         if (callbackUrl.startsWith('http')) {
             params.append('StatusCallback', callbackUrl);
         }
@@ -58,4 +55,25 @@ const triggerExotelCall = async (partnerMobile, userMobile, timeLimitSec, bookin
 };
 
 
-module.exports = { triggerExotelCall };
+const terminateExotelCall = async (callSid) => {
+    try {
+        const url = `https://${exotelConfig.SID}/v1/Accounts/${exotelConfig.SID}/Calls/${callSid}.json`;
+
+        const params = new URLSearchParams();
+        params.append('Status', 'completed');
+
+        await axios.post(url, params, {
+            headers: {
+                'Authorization': exotelConfig.getAuthHeader(),
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        return { success: true };
+    } catch (error) {
+        console.error("Exotel Termination Error:", error.response?.data || error.message);
+        return { success: false, error: error.message };
+    }
+};
+
+module.exports = { triggerExotelCall,terminateExotelCall };

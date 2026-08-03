@@ -51,6 +51,7 @@ const bookingSchema = new mongoose.Schema({
     startTime: { type: Date }, 
     endTime: { type: Date },
     cancellationReason: { type: String, default: null },
+    callSid: { type: String, default: null },
     rating: {
         type: Number,
         min: 1,
