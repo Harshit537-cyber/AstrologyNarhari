@@ -55,14 +55,14 @@ const triggerExotelCall = async (partnerMobile, userMobile, timeLimitSec, bookin
 };
 
 
-const terminateExotelCall = async (callSid) => {
+const terminateExotelCall =  async (callSid) => {
     try {
-        const url = `https://${exotelConfig.SID}/v1/Accounts/${exotelConfig.SID}/Calls/${callSid}.json`;
+        const url = `https://api.exotel.com/v1/Accounts/${exotelConfig.SID}/Calls/${callSid}.json`;
 
         const params = new URLSearchParams();
         params.append('Status', 'completed');
 
-        await axios.post(url, params, {
+        const response = await axios.post(url, params, {
             headers: {
                 'Authorization': exotelConfig.getAuthHeader(),
                 'Content-Type': 'application/x-www-form-urlencoded'
@@ -71,9 +71,9 @@ const terminateExotelCall = async (callSid) => {
 
         return { success: true };
     } catch (error) {
-        console.error("Exotel Termination Error:", error.response?.data || error.message);
-        return { success: false, error: error.message };
+        const errorData = error.response ? error.response.data : error.message;
+        console.error("DEBUG ERROR:", errorData);
+        return { success: false, error: errorData };
     }
 };
-
 module.exports = { triggerExotelCall,terminateExotelCall };

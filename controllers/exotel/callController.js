@@ -72,29 +72,33 @@ exports.endCallManually = async (req, res) => {
 
     try {
         const booking = await Booking.findById(bookingId).populate('partner');
+        
         if (!booking || !booking.callSid) {
             return res.status(404).json({ message: "No active call found for this booking" });
         }
 
-         if (booking.user.toString() !== userId.toString() && 
-            booking.partner.toString() !== userId.toString()) {
+        const bookingUserId = booking.user.toString();
+        const bookingPartnerId = booking.partner._id.toString();
+
+        const isAuthorized = userId === bookingUserId || userId === bookingPartnerId;
+
+        if (!isAuthorized) {
             return res.status(403).json({ message: "You are not authorized to end this call" });
         }
 
-if (booking.partner) {
-            const partner = await mongoose.model('Partner').findById(booking.partner._id);
-            if (partner) {
-                partner.isBusy = false;
-                await partner.save();
-            }
+        if (booking.partner) {
+            booking.partner.isBusy = false;
+            await booking.partner.save();
+            console.log("Partner marked as free (isBusy: false)");
         }
 
-        const result = await require('../../services/exotelService').terminateExotelCall(booking.callSid);
+        const { terminateExotelCall } = require('../../services/exotelService');
+        const result = await terminateExotelCall(booking.callSid);
 
         if (result.success) {
-            res.status(200).json({ message: "Call termination initiated successfully" });
+            res.status(200).json({ message: "Call termination initiated. Partner is now free." });
         } else {
-            res.status(500).json({ message: "Could not end call via telephony server" });
+            res.status(500).json({ message: "Exotel Error", error: result.error });
         }
     } catch (error) {
         console.error("End Call Error:", error);
