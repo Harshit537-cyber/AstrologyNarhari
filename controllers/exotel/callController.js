@@ -62,3 +62,31 @@ exports.initiateCall = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+
+
+exports.endCallManually = async (req, res) => {
+    const { bookingId } = req.body;
+    const userId = req.user.id; 
+
+    try {
+        const booking = await Booking.findById(bookingId);
+        if (!booking || !booking.callSid) {
+            return res.status(404).json({ message: "No active call found for this booking" });
+        }
+
+        if (booking.user.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "You are not authorized to end this call" });
+        }
+
+        const result = await require('../../services/exotelService').terminateExotelCall(booking.callSid);
+
+        if (result.success) {
+            res.status(200).json({ message: "Call termination initiated successfully" });
+        } else {
+            res.status(500).json({ message: "Could not end call via telephony server" });
+        }
+    } catch (error) {
+        console.error("End Call Error:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+};

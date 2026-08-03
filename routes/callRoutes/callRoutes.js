@@ -10,4 +10,5 @@ router.post('/initiate-call', verifyToken, callController.initiateCall);
 
 router.post('/webhook', webhookController.exotelWebhook);
 
+router.post("/terminateCall", verifyToken, callController.endCallManually)
 module.exports = router;
