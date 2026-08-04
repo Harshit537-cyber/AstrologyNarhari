@@ -17,7 +17,8 @@ const {
     getDashboardStats,
     getRecentConsultations,
      getUpcomingBookings,
-    getPartnerReviews
+    getPartnerReviews,
+    updateMinRate
 } = require('../../controllers/Patner/partnerAuth');
 
 const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/partnerDuty');
@@ -93,6 +94,14 @@ router.patch(
     verifyToken,
     isPartner,
     deactivateAccount
+);
+
+
+router.patch(
+    '/update-min-rate',
+    verifyToken,
+    isPartner,
+    updateMinRate
 );
 
 router.patch(
