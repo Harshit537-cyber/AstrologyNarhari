@@ -36,6 +36,7 @@ app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
 app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
+app.use("/api/shipping/", require("./routes/UserRoutes/addressRoutes"));
 app.use("/api/tickets", ticketRoutes);
 
 app.use("/api/admin", adminAuthRoutes);
@@ -45,6 +46,7 @@ app.use("/api/admin/product", productRoutes);
 app.use("/api/admin/coupon", couponRoutes);
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
 app.use("/api/admin/card", require("./routes/AdminRoutes/cardRoutes"));
+app.use("/api/admin/shop/banner", require("./routes/AdminRoutes/E-comm/topBannerRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({

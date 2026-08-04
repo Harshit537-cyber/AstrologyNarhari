@@ -1,5 +1,6 @@
 const Category = require("../../models/E-comm/productCategory");
 const Product = require("../../models/E-comm/Product");
+const TopBanner = require("../../models/E-comm/TopBanner")
 
 
 // =========================
@@ -261,4 +262,29 @@ exports.getRelatedProducts = async (req, res) => {
             message: error.message,
         });
     }
+};
+
+
+
+
+exports.getActiveTopBanners = async (req, res) => {
+  try {
+    const banners = await TopBanner.find({ isActive: true })
+      .select(
+        "title subtitle image buttonText redirectType redirectValue displayOrder"
+      )
+      .sort({ displayOrder: 1, createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: banners.length,
+      data: banners,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };

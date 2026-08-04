@@ -36,6 +36,8 @@ router.get(
     productController.getRelatedProducts
 );
 
+router.get("/shop-banners", productController.getActiveTopBanners);
+
 
 router.get("/all", productController.getProducts);
 
