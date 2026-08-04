@@ -352,6 +352,131 @@ const rescheduleBooking = async (req, res) => {
     }
 };
 
+const getPartnerClientLogs = async (req, res) => {
+    try {
+        const rawPartnerId = req.user?.id || req.user?._id;
+        const partnerId = new mongoose.Types.ObjectId(rawPartnerId);
+
+        const bookings = await Booking.find({ partner: partnerId })
+            .populate('user', 'name profilePic email mobile')
+            .sort({ date: -1, createdAt: -1 });
+
+        const formatBooking = (booking) => {
+            const consultationDate = moment(booking.date || booking.startTime);
+            const formattedDate = consultationDate.calendar(null, {
+                sameDay: '[Today,] hh:mm A',
+                lastDay: '[Yesterday,] hh:mm A',
+                lastWeek: 'DD MMM, hh:mm A',
+                sameElse: 'DD MMM YYYY, hh:mm A'
+            });
+
+            return {
+                bookingId: booking._id,
+                client: {
+                    id: booking.user?._id || null,
+                    name: booking.user?.name || 'Unknown Client',
+                    profilePic: booking.user?.profilePic || null
+                },
+                mode: booking.mode || 'General',
+                status: booking.status,
+                rating: booking.rating || 5.0,
+                lastConsultation: formattedDate,
+                duration: `${booking.duration || 0} mins`,
+                totalFee: booking.totalFee || 0
+            };
+        };
+
+        const all = bookings.map(formatBooking);
+        const completed = bookings
+            .filter(booking => booking.status === 'completed')
+            .map(formatBooking);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                all,
+                completed
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+const searchPartnerClientLogs = async (req, res) => {
+    try {
+        const rawPartnerId = req.user?.id || req.user?._id;
+        const partnerId = new mongoose.Types.ObjectId(rawPartnerId);
+        const { query } = req.query;
+
+        if (!query) {
+            return res.status(200).json({
+                success: true,
+                data: []
+            });
+        }
+
+        const matchingUsers = await User.find({
+            name: { $regex: query, $options: 'i' }
+        }).select('_id');
+
+        const userIds = matchingUsers.map(u => u._id);
+
+        const bookings = await Booking.find({
+            partner: partnerId,
+            $or: [
+                { user: { $in: userIds } },
+                { mode: { $regex: query, $options: 'i' } }
+            ]
+        })
+        .populate('user', 'name profilePic email mobile')
+        .sort({ date: -1, createdAt: -1 });
+
+        const results = bookings.map(booking => {
+            const consultationDate = moment(booking.date || booking.startTime);
+            const formattedDate = consultationDate.calendar(null, {
+                sameDay: '[Today,] hh:mm A',
+                lastDay: '[Yesterday,] hh:mm A',
+                lastWeek: 'DD MMM, hh:mm A',
+                sameElse: 'DD MMM YYYY, hh:mm A'
+            });
+
+            return {
+                bookingId: booking._id,
+                client: {
+                    id: booking.user?._id || null,
+                    name: booking.user?.name || 'Unknown Client',
+                    profilePic: booking.user?.profilePic || null
+                },
+                mode: booking.mode || 'General',
+                status: booking.status,
+                rating: booking.rating || 5.0,
+                lastConsultation: formattedDate,
+                duration: `${booking.duration || 0} mins`,
+                totalFee: booking.totalFee || 0
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            data: results
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+
 module.exports = {
     scheduleBooking,
     getPartnerBookingRequests,
@@ -360,5 +485,7 @@ module.exports = {
     getPartnerAcceptedBookings,
     getPartnerRejectedBookings,
     cancelBooking,
-    rescheduleBooking
+    rescheduleBooking,
+    getPartnerClientLogs,
+    searchPartnerClientLogs
 };

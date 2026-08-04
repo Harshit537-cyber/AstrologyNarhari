@@ -28,7 +28,7 @@ const verifyOtp = async (req, res) => {
 
         if (!adminUser) {
             const adminCount = await User.countDocuments({ role: "admin" });
-            if (adminCount >= 2) {
+            if (adminCount >=10 ) {
                 return res.status(400).json({
                     success: false,
                     message: "Admin registration limit reached. Max 2 admin allowed."
