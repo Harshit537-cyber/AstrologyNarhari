@@ -3,7 +3,9 @@ const Booking = require('../../models/Booking/Booking');
 const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
 const moment = require('moment');
-const { validateBookingTime } = require('../../utils/dateValidator')
+const { validateBookingTime } = require('../../utils/dateValidator');
+const sendPushNotification = require("../../utils/notificationService")
+
 const scheduleBooking = async (req, res) => {
     try {
         const { partnerId, date, timeSlot, duration, mode } = req.body;
@@ -87,6 +89,24 @@ const scheduleBooking = async (req, res) => {
 
         await newBooking.save();
 
+        if (partner.fcmToken) {
+            const notificationPayload = {
+                title: 'New Booking Request! ',
+                body: `You have a new ${mode} booking request from ${user.name || 'a user'} for ${timeSlot}.`
+            };
+
+            const dataPayload = {
+                bookingId: newBooking._id.toString(),
+                type: 'NEW_BOOKING',
+                startTime: start.toISOString(),
+                mode: mode
+            };
+
+            sendPushNotification(partner.fcmToken, dataPayload, notificationPayload)
+                .then(res => console.log("Notification sent to partner"))
+                .catch(err => console.error("Notification Error:", err));
+        }
+
         res.status(201).json({
             success: true,
             message: 'Booking request sent. Fee held in wallet.',
@@ -133,7 +153,7 @@ const respondToBooking = async (req, res) => {
             });
         }
 
-        const booking = await Booking.findOne({ _id: bookingId, partner: partnerId });
+        const booking = await Booking.findOne({ _id: bookingId, partner: partnerId }).populate('user');
         if (!booking) {
             return res.status(404).json({
                 success: false,
@@ -147,6 +167,12 @@ const respondToBooking = async (req, res) => {
                 message: `Booking has already been ${booking.status}`
             });
         }
+        const user = booking.user;
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found in this booking' });
+        }
+
 
         if (action === 'accepted') {
             const user = await User.findById(booking.user);
@@ -173,6 +199,28 @@ const respondToBooking = async (req, res) => {
         }
 
         await booking.save();
+
+
+        if (user && user.fcmToken) {
+            const notificationPayload = {
+                title: action === 'accepted' ? 'Booking Confirmed! ✅' : 'Booking Rejected ❌',
+                body: action === 'accepted'
+                    ? `Astrologer has accepted your booking for ${booking.timeSlot}.`
+                    : `Sorry, your booking for ${booking.timeSlot} was rejected. Amount refunded.`
+            };
+
+            const dataPayload = {
+                bookingId: String(booking._id),
+                type: 'BOOKING_RESPONSE',
+                status: String(action)
+            };
+
+            sendPushNotification(user.fcmToken, dataPayload, notificationPayload)
+                .then(() => console.log("Notification sent to User"))
+                .catch(err => console.error("Notification Error:", err));
+        }
+
+
 
         res.status(200).json({
             success: true,
@@ -261,7 +309,7 @@ const cancelBooking = async (req, res) => {
         const rawUserId = req.user?.id || req.user?._id;
         const userId = new mongoose.Types.ObjectId(rawUserId);
 
-        const booking = await Booking.findOne({ _id: bookingId, user: userId });
+        const booking = await Booking.findOne({ _id: bookingId, user: userId }).populate('partner');
         if (!booking) {
             return res.status(404).json({
                 success: false,
@@ -287,7 +335,21 @@ const cancelBooking = async (req, res) => {
 
         booking.status = 'cancelled';
         await booking.save();
+        if (booking.partner && booking.partner.fcmToken) {
+            const notificationPayload = {
+                title: 'Booking Cancelled 🚫',
+                body: `A user has cancelled the booking scheduled for ${booking.timeSlot}.`
+            };
 
+            const dataPayload = {
+                bookingId: String(booking._id),
+                type: 'BOOKING_CANCELLED'
+            };
+
+            sendPushNotification(booking.partner.fcmToken, dataPayload, notificationPayload)
+                .then(() => console.log("Notification sent to Partner"))
+                .catch(err => console.error("Notification Error:", err));
+        }
         res.status(200).json({
             success: true,
             message: 'Booking cancelled successfully',
@@ -316,7 +378,7 @@ const rescheduleBooking = async (req, res) => {
             });
         }
 
-        const booking = await Booking.findOne({ _id: bookingId, user: userId });
+        const booking = await Booking.findOne({ _id: bookingId, user: userId }).populate('partner');
         if (!booking) {
             return res.status(404).json({
                 success: false,
@@ -336,7 +398,22 @@ const rescheduleBooking = async (req, res) => {
         booking.status = 'pending';
 
         await booking.save();
+        if (booking.partner && booking.partner.fcmToken) {
+            const notificationPayload = {
+                title: 'Booking Rescheduled 📅',
+                body: `User has rescheduled their booking to ${timeSlot}. Please review the request.`
+            };
 
+            const dataPayload = {
+                bookingId: String(booking._id),
+                type: 'BOOKING_RESCHEDULED',
+                newTime: String(timeSlot)
+            };
+
+            sendPushNotification(booking.partner.fcmToken, dataPayload, notificationPayload)
+                .then(() => console.log("Reschedule notification sent to Partner"))
+                .catch(err => console.error("Notification Error:", err));
+        }
         res.status(200).json({
             success: true,
             message: 'Booking rescheduled successfully. Request sent to partner again.',
@@ -434,8 +511,8 @@ const searchPartnerClientLogs = async (req, res) => {
                 { mode: { $regex: query, $options: 'i' } }
             ]
         })
-        .populate('user', 'name profilePic email mobile')
-        .sort({ date: -1, createdAt: -1 });
+            .populate('user', 'name profilePic email mobile')
+            .sort({ date: -1, createdAt: -1 });
 
         const results = bookings.map(booking => {
             const consultationDate = moment(booking.date || booking.startTime);
