@@ -105,3 +105,64 @@ exports.endCallManually = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+
+
+exports.getCallHistory = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const role = req.user.role;
+
+        let query = {};
+        if (role === 'user') {
+            query = { "user.id": userId };
+        } else if (role === 'partner') {
+            query = { "partner.id": userId };
+        } else {
+            return res.status(403).json({ success: false, message: "Unauthorized role" });
+        }
+
+        const logs = await CallLog.find(query)
+            .sort({ createdAt: -1 })
+            .limit(50);
+
+        return res.status(200).json({
+            success: true,
+            totalCalls: logs.length,
+            data: logs
+        });
+    } catch (error) {
+        console.error("GET_CALL_LOGS_ERROR:", error);
+        return res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+
+
+exports.getCallHistoryByUid = async (req, res) => {
+    try {
+        const { uid } = req.params; 
+
+        const logs = await CallLog.find({ "user.id": uid })
+            .sort({ createdAt: -1 }) 
+            .populate('bookingId');  
+
+        if (!logs || logs.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No call history found for this user."
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            totalCalls: logs.length,
+            data: logs
+        });
+    } catch (error) {
+        console.error("GET_HISTORY_BY_UID_ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal Server Error"
+        });
+    }
+};

@@ -3,7 +3,7 @@ const Booking = require('../../models/Booking/Booking');
 const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
 const moment = require('moment');
-
+const { validateBookingTime } = require('../../utils/dateValidator')
 const scheduleBooking = async (req, res) => {
     try {
         const { partnerId, date, timeSlot, duration, mode } = req.body;
