@@ -9,4 +9,10 @@ router.post("/festivals", verifyToken, isUser, matchController.getFestivalCalend
 router.get("/get-daily-horoscope", verifyToken, isUser, matchController.getDailyBasisDashboardHoroscope);
 router.get("/get-detailed-horoscope", verifyToken, isUser, matchController.getDetailedHoroscope);
 
+router.get(
+  "/get-kundli/:userId",
+  
+  matchController.getUserKundli
+);
+
 module.exports = router;

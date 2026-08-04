@@ -597,6 +597,53 @@ const getPartnerReviews = async (req, res) => {
     }
 };
 
+
+const updateMinRate = async (req, res) => {
+    try {
+        const { minRate } = req.body;
+
+        if (minRate === undefined || minRate === null || isNaN(minRate) || Number(minRate) < 0) {
+            return res.status(400).json({ success: false, message: 'Please provide a valid minRate' });
+        }
+
+        const partner = await Partner.findById(req.user.id);
+        if (!partner) {
+            return res.status(404).json({ success: false, message: 'Partner not found' });
+        }
+
+        partner.minRate = Number(minRate);
+        await partner.save();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Minimum rate updated successfully',
+            data: {
+                minRate: partner.minRate
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getMinRate = async (req, res) => {
+    try {
+        const partner = await Partner.findById(req.user.id).select('minRate');
+        if (!partner) {
+            return res.status(404).json({ success: false, message: 'Partner not found' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                minRate: partner.minRate || 0
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     verifyOtp,
     register,
@@ -612,5 +659,7 @@ module.exports = {
     getDashboardStats,
     getRecentConsultations,
     getUpcomingBookings,
-    getPartnerReviews
+    getPartnerReviews,
+    updateMinRate,
+    getMinRate
 };
