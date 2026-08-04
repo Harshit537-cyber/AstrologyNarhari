@@ -32,7 +32,24 @@ const verifyOTP = async (req, res) => {
                 isVerified: true
             });
         } else {
+          
+            if (user.isActive === false && user.deactivatedBy === 'admin') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Account deactivated by admin. Please contact support.'
+                });
+            }
+
+          
             user.isVerified = true;
+            user.isActive = true;
+            user.deactivatedBy = null;
+            user.deactivatedAt = null;
+            user.reactivateAt = null;
+            user.deactivationReason = null;
+            user.deactivationReasonNote = null;
+            user.deactivationDuration = null;
+
             await user.save();
         }
 
@@ -50,7 +67,7 @@ const verifyOTP = async (req, res) => {
                 id: user._id,
                 mobile: user.mobile,
                 isProfileComplete: Boolean(user.fullName),
-                isActive: user.isActive !== false
+                isActive: true
             }
         });
 
@@ -205,6 +222,33 @@ const updateFCMToken = async (req, res) => {
     }
 };
 
+
+const deleteAccount = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const user = await User.findByIdAndDelete(userId);
+
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'User not found' 
+            });
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Account permanently deleted successfully' 
+        });
+    } catch (error) {
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Error deleting account', 
+            error: error.message 
+        });
+    }
+};
+
 module.exports = {
     verifyOTP,
     deactivateAccount,
@@ -212,5 +256,6 @@ module.exports = {
     searchExperts,
     getPartners,
     getAllPartnersForUser,
-    updateFCMToken
+    updateFCMToken,
+    deleteAccount
 };

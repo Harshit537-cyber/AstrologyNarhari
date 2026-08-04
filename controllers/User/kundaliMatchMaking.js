@@ -296,3 +296,51 @@ console.log("Endpoint:", endpoint);
         });
     }
 };
+
+
+exports.getUserKundli = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const user = await User.findById(userId).select(
+            "fullName gender profileImage dateOfBirth timeOfBirth birthPlace zodiac kundli"
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        if (!user.kundli) {
+            return res.status(404).json({
+                success: false,
+                message: "Kundli not generated yet."
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                profile: {
+                    id: user._id,
+                    fullName: user.fullName,
+                    gender: user.gender,
+                    profileImage: user.profileImage,
+                    dateOfBirth: user.dateOfBirth,
+                    timeOfBirth: user.timeOfBirth,
+                    birthPlace: user.birthPlace,
+                    zodiac: user.zodiac
+                },
+                kundli: user.kundli
+            }
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
