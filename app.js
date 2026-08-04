@@ -6,12 +6,13 @@ const userAuthRoutes = require("./routes/UserRoutes/userAuth");
 const partnerAuthRoutes = require("./routes/PatnerRoutes/partnerAuth");
 const adminAuthRoutes = require("./routes/AdminRoutes/adminAuth");
 const bookingRoutes = require("./routes/bookingRoutes/bookingRoutes");
-const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes")
-const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes")
+const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes");
+const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes");
 const productRoutes = require("./routes/AdminRoutes/E-comm/productRoutes");
-const couponRoutes = require("./routes/AdminRoutes/E-comm/couponRoutes")
-const cartRoutes= require("./routes/UserRoutes/cartRoutes");
-const razorpayInstance = require('./config/razorpay');
+const couponRoutes = require("./routes/AdminRoutes/E-comm/couponRoutes");
+const cartRoutes = require("./routes/UserRoutes/cartRoutes");
+const ticketRoutes = require("./routes/ticketRoutes/ticketRoutes");
+const razorpayInstance = require("./config/razorpay");
 
 const app = express();
 
@@ -35,17 +36,13 @@ app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
 app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
+app.use("/api/tickets", ticketRoutes);
 
-//coupon routes ended
-
-
-
-// admin routes
 app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/banner", bannerRoutes);
-app.use("/api/admin/product-category",productCategoryRoutes)
-app.use("/api/admin/product",productRoutes)
-app.use("/api/admin/coupon",couponRoutes);
+app.use("/api/admin/product-category", productCategoryRoutes);
+app.use("/api/admin/product", productRoutes);
+app.use("/api/admin/coupon", couponRoutes);
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
 app.use("/api/admin/card", require("./routes/AdminRoutes/cardRoutes"));
 
