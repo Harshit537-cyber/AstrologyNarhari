@@ -10,8 +10,7 @@ const ritualSchema = new mongoose.Schema({
     duration: String, 
     format: { type: String }, 
     about: String,
-    benefits: [{
-        icon: String, 
+    benefits: [{ 
         title: String,
         description: String
     }],

@@ -1,13 +1,12 @@
 const Ritual = require('../../models/Ritual/Ritual');
 const cloudinary = require('../../config/cloudinary');
 const fs = require('fs');
-const RitualSlot = require('../../models/Ritual/RitualSlot');
 
-exports.addRitual = async (req, res) => {
+exports.addRitual =  async (req, res) => {
     try {
         const { 
             title, tagline, price, originalPrice, discount, 
-            duration, format, about, category, label, 
+            duration, format, about, category, 
             benefits, whatsIncluded, formConfig 
         } = req.body;
 
@@ -27,17 +26,16 @@ exports.addRitual = async (req, res) => {
         const newRitual = new Ritual({
             title,
             tagline,
+            image: imageUrl, 
             price,
             originalPrice,
             discount,
             duration,
             format,
             about,
-            category,
-            label: label || 'Certified Acharya', 
-            image: imageUrl,
-            benefits: parsedBenefits,
+            benefits: parsedBenefits, 
             whatsIncluded: parsedIncluded,
+            category, 
             formConfig: parsedFormConfig 
         });
 
@@ -45,7 +43,7 @@ exports.addRitual = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: "Ritual added successfully by Admin with Category!",
+            message: "Ritual added successfully according to Model Schema!",
             data: newRitual
         });
 
@@ -61,36 +59,3 @@ exports.addRitual = async (req, res) => {
         });
     }
 };
-
-
-exports.addRitualSlots = async (req, res) => {
-    try {
-        const { ritualId, date, slotsArray } = req.body;
-        if (!slotsArray || slotsArray.length === 0) {
-            return res.status(400).json({ message: "Fill at least one slot" });
-        }
-
-        const slotsToCreate = slotsArray.map(slot => ({
-            ritualId,
-            date: new Date(date),
-            startTime: slot.startTime,
-            slotName: slot.slotName,
-            isBooked: false
-        }));
-
-        const createdSlots = await RitualSlot.insertMany(slotsToCreate, { ordered: false });
-
-        res.status(201).json({
-            success: true,
-            message: `${createdSlots.length} Slots added by Admin successfully!`,
-            data: createdSlots
-        });
-
-    } catch (error) {
-        if (error.code === 11000) {
-            return res.status(400).json({ message: "Some slots already exist (Duplicate Time)." });
-        }
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-

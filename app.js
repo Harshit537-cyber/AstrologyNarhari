@@ -35,6 +35,7 @@ app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
 app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
+app.use("/api/rituals", require("./routes/Rituals/RitualsRoutes"))
 
 //coupon routes ended
 

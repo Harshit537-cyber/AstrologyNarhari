@@ -1,7 +1,10 @@
 const Ritual = require('../../models/Ritual/Ritual');
 const mongoose = require('mongoose');
-const RitualSlot = require('../../models/Ritual/RitualSlot');
 const RitualBooking = require('../../models/Ritual/RitualBooking');
+const Partner = require('../../models/Partner/Partner'); 
+
+
+// user side api's
 
 exports.getRituals = async (req, res) => {
     try {
@@ -93,72 +96,28 @@ exports.getRitualById = async (req, res) => {
     }
 };
 
-exports.getSlotsByPartner = async (req, res) => {
-    try {
-        const { partnerId, ritualId } = req.params;
-        const { date } = req.query; 
-        let query = {
-            partnerId: partnerId,
-            ritualId: ritualId,
-            status: 'Claimed' 
-        };
-
-        if (date) {
-            query.date = new Date(date);
-        }
-
-        const slots = await RitualSlot.find(query)
-            .sort({ date: 1, startTime: 1 }); 
-
-        res.status(200).json({
-            success: true,
-            partnerId: partnerId,
-            ritualId: ritualId,
-            count: slots.length,
-            data: slots
-        });
-    } catch (error) {
-        res.status(500).json({ 
-            success: false, 
-            message: "Error fetching slots", 
-            error: error.message 
-        });
-    }
-};
 
 exports.createRitualBooking = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
+   
     try {
         const {
             ritualId,
-            partnerId,
-            slotId,
+            partnerId,      
             sankalp,
             personalDetails,
             shippingDetails,
             paymentDetails,
-            schedule
+            schedule        
         } = req.body;
 
         const userId = req.user._id;
 
-        const slot = await RitualSlot.findById(slotId).session(session);
-
-        if (!slot) {
-            await session.abortTransaction();
-            return res.status(404).json({ success: false, message: "Slot not found" });
-        }
-
-        if (slot.status === 'Booked') {
-            await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "This slot is already booked" });
-        }
-
-        if (slot.status === 'Open') {
-            await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "This slot is not yet claimed by a partner" });
+        const partner = await Partner.findById(partnerId);
+        if (!partner || !partner.isOnline || partner.isBusy) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Selected partner is not available." 
+            });
         }
 
         const bookingId = `RIT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -168,39 +127,186 @@ exports.createRitualBooking = async (req, res) => {
             userId,
             ritualId,
             partnerId,
-            slotId,
+            status: 'Pending',
             sankalp,
             personalDetails,
             schedule,
             shippingDetails,
-            paymentDetails,
+            paymentDetails: {
+                ...paymentDetails,
+                status: 'Success' 
+            },
             zoomLink: "Pending"
         });
 
-        const savedBooking = await newBooking.save({ session });
+        const savedBooking = await newBooking.save();
 
-        await RitualSlot.findByIdAndUpdate(
-            slotId,
-            { status: 'Booked', isBooked: true },
-            { session }
-        );
-
-        await session.commitTransaction();
-        session.endSession();
 
         res.status(201).json({
             success: true,
-            message: "Booking confirmed successfully",
+            message: "Booking requested send to Partner!",
             data: savedBooking
         });
 
     } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
+        console.error("Booking Error:", error);
         res.status(500).json({
             success: false,
-            message: "Booking failed",
+            message: "error creating ritual booking",
             error: error.message
         });
     }
 };
+
+exports.getAvailablePartners =  async (req, res) => {
+    try {
+        let query = {
+            isOnline: true,
+            isBusy: false,
+            profileApprovalStatus: 'Approved',
+        };
+
+
+        const partners = await Partner.find(query)
+            .select('fullName profilePic averageRating totalReviews experience specialties languages bio city')
+            .sort({ averageRating: -1 }); 
+
+        res.status(200).json({
+            success: true,
+            count: partners.length,
+            data: partners
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error fetching available partners",
+            error: error.message
+        });
+    }
+};
+
+// partner side api's
+
+exports.getPartnerRitualRequests = async (req, res) => {
+    try {
+        const partnerId = req.user._id; 
+        const { status } = req.query; 
+
+        let query = { partnerId: partnerId };
+
+        if (status) {
+            query.status = status;
+        }
+
+        const requests = await RitualBooking.find(query)
+            .populate('userId', 'fullName profilePic mobile') 
+            .populate('ritualId', 'title image price duration') 
+            .sort({ createdAt: -1 }); 
+
+        res.status(200).json({
+            success: true,
+            count: requests.length,
+            data: requests
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
+        });
+    }
+};
+
+exports.getPartnerRitualRequestById = async (req, res) => {
+    try {
+        const { id } = req.params; 
+        const partnerId = req.user._id; 
+
+        const booking = await RitualBooking.findOne({ _id: id, partnerId: partnerId })
+            .populate('userId', 'fullName profilePic mobile dateOfBirth timeOfBirth placeOfBirth gender zodiac')
+            .populate('ritualId', 'title tagline image price duration about benefits whatsIncluded');
+
+        if (!booking) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "Request not found or you are not the owner." 
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: booking
+        });
+
+    } catch (error) {
+        console.error("Fetch Detail Error:", error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Server Error", 
+            error: error.message 
+        });
+    }
+};
+
+
+exports.acceptRitualRequest = async (req, res) => {
+    try {
+        const { id } = req.params; 
+        const partnerId = req.user._id;
+
+        const partner = await Partner.findById(partnerId);
+        
+        if (partner.isBusy) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "You cannot accept this ritual while you are busy on a call or chat." 
+            });
+        }
+
+        const booking = await RitualBooking.findOne({ _id: id, partnerId: partnerId });
+
+        if (!booking) {
+            return res.status(404).json({ success: false, message: "Booking request not found." });
+        }
+
+        if (booking.status !== 'Pending') {
+            return res.status(400).json({ success: false, message: "This request is no longer pending." });
+        }
+
+        booking.status = 'Accepted';
+        await booking.save();
+res.status(200).json({
+            success: true,
+            message: "Ritual request accepted successfully.",
+            data: booking
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.rejectRitualRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const partnerId = req.user._id;
+
+        const booking = await RitualBooking.findOne({ _id: id, partnerId: partnerId });
+
+        if (!booking) {
+            return res.status(404).json({ success: false, message: "Booking request not found." });
+        }
+
+        booking.status = 'Rejected';
+        await booking.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Ritual request has been rejected."
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }};
