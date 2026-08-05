@@ -110,7 +110,7 @@ exports.createRitualBooking = async (req, res) => {
             schedule        
         } = req.body;
 
-        const userId = req.user._id;
+        const userId = req.user._id || req.user.id;
 
         const partner = await Partner.findById(partnerId);
         if (!partner || !partner.isOnline || partner.isBusy) {
@@ -190,15 +190,16 @@ exports.getAvailablePartners =  async (req, res) => {
 
 exports.getPartnerRitualRequests = async (req, res) => {
     try {
-        const partnerId = req.user._id; 
+        const partnerIdFromToken = req.user._id || req.user.id;
         const { status } = req.query; 
 
-        let query = { partnerId: partnerId };
+        let query = { 
+            partnerId: new mongoose.Types.ObjectId(partnerIdFromToken) 
+        };
 
         if (status) {
             query.status = status;
         }
-
         const requests = await RitualBooking.find(query)
             .populate('userId', 'fullName profilePic mobile') 
             .populate('ritualId', 'title image price duration') 
@@ -206,14 +207,16 @@ exports.getPartnerRitualRequests = async (req, res) => {
 
         res.status(200).json({
             success: true,
+            partnerLoggedIn: partnerIdFromToken, 
             count: requests.length,
             data: requests
         });
 
     } catch (error) {
+        console.error("Match Error:", error);
         res.status(500).json({
             success: false,
-            message: "Server Error",
+            message: "Error fetching matched requests",
             error: error.message
         });
     }
@@ -222,7 +225,7 @@ exports.getPartnerRitualRequests = async (req, res) => {
 exports.getPartnerRitualRequestById = async (req, res) => {
     try {
         const { id } = req.params; 
-        const partnerId = req.user._id; 
+        const partnerId = req.user._id || req.user.id; 
 
         const booking = await RitualBooking.findOne({ _id: id, partnerId: partnerId })
             .populate('userId', 'fullName profilePic mobile dateOfBirth timeOfBirth placeOfBirth gender zodiac')
@@ -254,16 +257,27 @@ exports.getPartnerRitualRequestById = async (req, res) => {
 exports.acceptRitualRequest = async (req, res) => {
     try {
         const { id } = req.params; 
-        const partnerId = req.user._id;
+        const partnerId = req.user._id || req.user.id;
 
+        // 1. Partner ko dhundho
         const partner = await Partner.findById(partnerId);
         
+        // Safety Check: Agar partner null hai toh yahi se error bhej do
+        if (!partner) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "Partner record not found in database. Please check your token." 
+            });
+        }
+
+        // 2. Ab isBusy check karo (Ab crash nahi hoga)
         if (partner.isBusy) {
             return res.status(400).json({ 
                 success: false, 
                 message: "You cannot accept this ritual while you are busy on a call or chat." 
             });
         }
+
 
         const booking = await RitualBooking.findOne({ _id: id, partnerId: partnerId });
 
@@ -291,7 +305,7 @@ res.status(200).json({
 exports.rejectRitualRequest = async (req, res) => {
     try {
         const { id } = req.params;
-        const partnerId = req.user._id;
+        const partnerId = req.user._id || req.user.id;
 
         const booking = await RitualBooking.findOne({ _id: id, partnerId: partnerId });
 

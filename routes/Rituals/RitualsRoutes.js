@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const ritualController = require('../../controllers/User/userRitualController');
-const { verifyToken, isAdmin } = require('../../middleware/auth');
+const { verifyToken, isAdmin ,isPartner} = require('../../middleware/auth');
 const adminRitualController = require("../../controllers/admin/adminRitualController")
 const upload = require("../../middleware/upload");
 
@@ -23,7 +23,7 @@ router.get('/rituals/available-partners', verifyToken,ritualController.getAvaila
 
 router.post('/rituals/book', verifyToken,ritualController.createRitualBooking);
 
-router.get('/partner/requests',  verifyToken,ritualController.getPartnerRitualRequests);
+router.get('/partner/requests',  verifyToken,isPartner,ritualController.getPartnerRitualRequests);
 
 router.get('/partner/request/:id', verifyToken,ritualController.getPartnerRitualRequestById);
 
