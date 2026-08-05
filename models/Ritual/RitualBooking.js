@@ -11,7 +11,7 @@ partnerId: {
     },    
      status: { 
         type: String, 
-        enum: ['Pending', 'Accepted', 'Completed', 'Cancelled', "Rejected"], 
+        enum: ['Pending', 'Accepted', 'Completed', 'Cancelled', "Rejected", "Confirmed"], 
         default: 'Pending' 
     },
     sankalp: String,

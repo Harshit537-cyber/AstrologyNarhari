@@ -31,6 +31,9 @@ router.patch('/partner/request/accept/:id',  verifyToken,ritualController.accept
 
 router.patch('/partner/request/reject/:id',  verifyToken,ritualController.rejectRitualRequest);
 
+router.post('/rituals/payment/create-order', verifyToken, ritualController.createRitualOrder);
+
+router.post('/rituals/payment/verify', verifyToken, ritualController.verifyRitualPayment);
 
 
 module.exports = router;

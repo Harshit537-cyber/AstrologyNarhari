@@ -121,7 +121,14 @@ const partnerSchema = new mongoose.Schema({
         ]
     }],
 
-
+ritualEarningsHistory: [{
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        userName: String,      
+        bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'RitualBooking' },
+        amount: Number,      
+        ritualName: String,
+        paymentDate: { type: Date, default: Date.now }
+    }],
 }, { timestamps: true });
 
 

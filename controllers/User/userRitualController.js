@@ -2,8 +2,9 @@ const Ritual = require('../../models/Ritual/Ritual');
 const mongoose = require('mongoose');
 const RitualBooking = require('../../models/Ritual/RitualBooking');
 const Partner = require('../../models/Partner/Partner'); 
-
-
+const RitualTransaction = require('../../models/Ritual/RitualTransaction');
+const razorpayInstance = require('../../config/razorpay');
+const crypto = require('crypto')
 // user side api's
 
 exports.getRituals = async (req, res) => {
@@ -186,6 +187,132 @@ exports.getAvailablePartners =  async (req, res) => {
     }
 };
 
+
+exports.createRitualOrder = async (req, res) => {
+    try {
+        const { bookingId } = req.body;
+        const booking = await RitualBooking.findById(bookingId);
+        
+        if (!booking) return res.status(404).json({ success: false, message: "Booking not found." });
+
+        if (booking.status !== 'Accepted') {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Payment can only be made once the Partner accepts your request." 
+            });
+        }
+
+        const options = {
+            amount: Math.round(booking.paymentDetails.totalAmount * 100), 
+            currency: "INR",
+            receipt: booking.bookingId,
+        };
+
+        const order = await razorpayInstance.orders.create(options);
+
+        res.status(200).json({
+            success: true,
+            order_id: order.id,
+            amount: order.amount,
+            currency: order.currency,
+            key_id: process.env.RAZORPAY_KEY_ID 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
+
+exports.verifyRitualPayment = async (req, res) => {
+    const session = await mongoose.startSession(); 
+    session.startTransaction();
+
+    try {
+        const { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+        const body = razorpay_order_id + "|" + razorpay_payment_id;
+        const expectedSignature = crypto
+            .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+            .update(body.toString())
+            .digest("hex");
+
+        if (expectedSignature !== razorpay_signature) {
+            await session.abortTransaction();
+            return res.status(400).json({ success: false, message: "Invalid payment signature." });
+        }
+
+        
+// if (false) { // <--- expectedSignature !== razorpay_signature ki jagah false likh do
+//     await session.abortTransaction();
+//     return res.status(400).json({ success: false, message: "Invalid payment signature." });
+// }
+        const booking = await RitualBooking.findById(bookingId)
+            .populate('userId', 'fullName')
+            .populate('ritualId', 'title')
+            .session(session);
+
+        if (!booking) {
+            await session.abortTransaction();
+            return res.status(404).json({ success: false, message: "Booking not found." });
+        }
+
+        booking.paymentDetails.status = 'Success';
+        booking.paymentDetails.transactionId = razorpay_payment_id;
+        booking.status = 'Confirmed'; 
+        await booking.save({ session });
+
+        const totalPaid = booking.paymentDetails.totalAmount;
+        const transactionRecord = new RitualTransaction({
+            bookingId: booking._id,
+            userId: booking.userId._id,
+            userName: booking.userId.fullName, 
+            partnerId: booking.partnerId,
+            orderId: razorpay_order_id,
+            transactionId: razorpay_payment_id,
+            ritualName: booking.ritualId.title,
+            ritualPrice: booking.paymentDetails.ritualPrice,
+            logisticsFee: booking.paymentDetails.logisticsFee || 0,
+            taxAmount: booking.paymentDetails.tax || 0,
+            totalAmountPaid: totalPaid,
+            partnerEarning: totalPaid,
+            adminCommission: 0,
+            status: 'Success'
+        });
+        await transactionRecord.save({ session });
+
+        await Partner.findByIdAndUpdate(booking.partnerId, {
+            $inc: { walletBalance: totalPaid },
+            $push: {
+                ritualEarningsHistory: {
+                    userId: booking.userId._id ,
+                    userName: booking.userId.fullName,
+                    bookingId: booking._id,
+                    amount: totalPaid,
+                    ritualName: booking.ritualId.title,
+                    paymentDate: new Date()
+                }
+            }
+        }, { session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json({
+            success: true,
+            message: "Payment verified, Records updated & Partner wallet credited.",
+            transactionId: razorpay_payment_id
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error("Verification Error:", error);
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
+
 // partner side api's
 
 exports.getPartnerRitualRequests = async (req, res) => {
@@ -259,10 +386,7 @@ exports.acceptRitualRequest = async (req, res) => {
         const { id } = req.params; 
         const partnerId = req.user._id || req.user.id;
 
-        // 1. Partner ko dhundho
         const partner = await Partner.findById(partnerId);
-        
-        // Safety Check: Agar partner null hai toh yahi se error bhej do
         if (!partner) {
             return res.status(404).json({ 
                 success: false, 
@@ -270,7 +394,6 @@ exports.acceptRitualRequest = async (req, res) => {
             });
         }
 
-        // 2. Ab isBusy check karo (Ab crash nahi hoga)
         if (partner.isBusy) {
             return res.status(400).json({ 
                 success: false, 
