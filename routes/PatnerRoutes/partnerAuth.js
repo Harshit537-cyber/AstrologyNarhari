@@ -19,7 +19,8 @@ const {
      getUpcomingBookings,
     getPartnerReviews,
     updateMinRate,
-    getMinRate
+    getMinRate,
+    logoutPartner
 } = require('../../controllers/Patner/partnerAuth');
 
 const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/partnerDuty');
@@ -185,5 +186,7 @@ router.get(
 
 
 router.patch('/update-fcm', verifyToken, isPartner, updateFCMToken);
+router.post("/logout", verifyToken, isPartner, logoutPartner)
+
 
 module.exports = router;

@@ -371,6 +371,24 @@ const updateFCMToken = async (req, res) => {
     }
 };
 
+
+const logoutPartner = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const role = req.user.role;
+
+        if (role === 'partner') {
+            await Partner.findByIdAndUpdate(userId, { fcmToken: null });
+        } else {
+            await User.findByIdAndUpdate(userId, { fcmToken: null });
+        }
+
+        res.status(200).json({ success: true, message: 'Logged out and FCM token removed' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Logout failed' });
+    }
+};
+
 const getTopAstrologers = async (req, res) => {
     try {
         let query = {
@@ -661,5 +679,6 @@ module.exports = {
     getUpcomingBookings,
     getPartnerReviews,
     updateMinRate,
-    getMinRate
+    getMinRate,
+    logoutPartner
 };

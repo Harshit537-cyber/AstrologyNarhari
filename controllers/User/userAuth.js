@@ -223,6 +223,34 @@ const updateFCMToken = async (req, res) => {
 };
 
 
+const logoutUser = async (req, res) => {
+    try {
+        const userId = req.user.id; 
+
+        const user = await User.findByIdAndUpdate(
+            userId, 
+            { fcmToken: null }, 
+            { new: true }
+        );
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Logged out successfully and FCM token removed' 
+        });
+
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            message: 'Internal Server Error', 
+            error: error.message 
+        });
+    }
+};
+
 const deleteAccount = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -257,5 +285,6 @@ module.exports = {
     getPartners,
     getAllPartnersForUser,
     updateFCMToken,
-    deleteAccount
+    deleteAccount,
+    logoutUser
 };
