@@ -73,7 +73,7 @@ exports.addAddress = async (req, res) => {
 exports.getMyAddresses = async (req, res) => {
     try {
         const addresses = await Address.find({
-            user: req.user._id,
+            user: req.user.id,
         })
             .sort({ isDefault: -1, createdAt: -1 })
             .lean();
@@ -97,7 +97,7 @@ exports.getAddressById = async (req, res) => {
     try {
         const address = await Address.findOne({
             _id: req.params.id,
-            user: req.user._id,
+            user: req.user.id,
         }).lean();
 
         if (!address) {
@@ -125,7 +125,7 @@ exports.updateAddress = async (req, res) => {
     try {
         const address = await Address.findOne({
             _id: req.params.id,
-            user: req.user._id,
+            user: req.user.id,
         });
 
         if (!address) {
@@ -165,7 +165,7 @@ exports.deleteAddress = async (req, res) => {
     try {
         const address = await Address.findOne({
             _id: req.params.id,
-            user: req.user._id,
+            user: req.user.id,
         });
 
         if (!address) {
@@ -195,7 +195,7 @@ exports.setDefaultAddress = async (req, res) => {
     try {
         const address = await Address.findOne({
             _id: req.params.id,
-            user: req.user._id,
+            user: req.user.id,
         });
 
         if (!address) {
