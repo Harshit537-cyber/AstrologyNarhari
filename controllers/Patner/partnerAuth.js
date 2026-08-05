@@ -626,6 +626,24 @@ const updateMinRate = async (req, res) => {
     }
 };
 
+const getMinRate = async (req, res) => {
+    try {
+        const partner = await Partner.findById(req.user.id).select('minRate');
+        if (!partner) {
+            return res.status(404).json({ success: false, message: 'Partner not found' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                minRate: partner.minRate || 0
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     verifyOtp,
     register,
@@ -642,5 +660,6 @@ module.exports = {
     getRecentConsultations,
     getUpcomingBookings,
     getPartnerReviews,
-    updateMinRate
+    updateMinRate,
+    getMinRate
 };
