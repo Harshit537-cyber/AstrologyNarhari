@@ -31,14 +31,15 @@ exports.initiateCall = async (req, res) => {
 
         const user = booking.user;
         const partner = booking.partner;
-
-        const maxTalkTimeFromWallet = Math.floor(user.walletBalance / booking.ratePerMinute) * 60;
-        const bookingDurationSec = booking.duration * 60;
-        const finalTimeLimit = Math.min(maxTalkTimeFromWallet, bookingDurationSec);
-
-        if (finalTimeLimit <= 0) {
-            return res.status(400).json({ message: "Insufficient balance" });
+  if (user.walletBalance < booking.totalFee) {
+            return res.status(400).json({ 
+                message: `Insufficient balance. You need ₹${booking.totalFee} for this ${booking.duration} min session.` 
+            });
         }
+
+        const finalTimeLimit = booking.duration * 60; 
+
+
 
         if (partner.isBusy) {
             return res.status(400).json({ message: "Partner is busy" });

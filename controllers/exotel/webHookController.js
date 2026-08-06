@@ -20,6 +20,7 @@ exports.exotelWebhook =async (req, res) => {
         const booking = await Booking.findById(bookingId).populate('user partner').session(session);
         if (!booking || booking.status === 'completed') {
             await session.abortTransaction();
+            session.endSession(); 
             return res.status(200).send("Already Processed");
         }
 
@@ -31,19 +32,28 @@ exports.exotelWebhook =async (req, res) => {
             await partner.save({ session });
         }
 
-        const billedMins = Status === 'completed' ? Math.ceil(parseInt(Duration || 0) / 60) : 0;
-        const finalCost = parseFloat((billedMins * booking.ratePerMinute).toFixed(2));
+       const durationSeconds = parseInt(Duration || 0);
+        let finalCost = 0;
+        let billedMins = 0;
+
+       if (Status === 'completed' && durationSeconds >= 30) {
+            finalCost = booking.totalFee; 
+            billedMins = booking.duration; 
+        }
 
         const userBalBefore = user?.walletBalance || 0;
         const partnerBalBefore = partner?.walletBalance || 0;
 
-        if (Status === 'completed' && finalCost > 0) {
+
+
+   if (finalCost > 0) {
             if (user) user.walletBalance = parseFloat((user.walletBalance - finalCost).toFixed(2));
             if (partner) partner.walletBalance = parseFloat((partner.walletBalance + finalCost).toFixed(2));
             
             if (user) await user.save({ session });
             if (partner) await partner.save({ session });
         }
+
 
         const newCallLog = new CallLog({
             bookingId: booking._id,
@@ -63,7 +73,7 @@ exports.exotelWebhook =async (req, res) => {
             },
             callSid: CallSid,
             status: Status === 'completed' ? 'completed' : (Status || 'failed'),
-            durationSeconds: parseInt(Duration || 0),
+            durationSeconds:  durationSeconds,
             billedMinutes: billedMins,
             ratePerMinute: booking.ratePerMinute,
             totalCost: finalCost,
@@ -74,22 +84,27 @@ exports.exotelWebhook =async (req, res) => {
 
         await newCallLog.save({ session });
 
-        booking.status = Status === 'completed' ? 'completed' : 'missed';
-        booking.actualDuration = parseInt(Duration || 0);
-        if (Status === 'completed') {
-    booking.paymentStatus = 'completed'; 
-}
+       if (finalCost > 0) {
+            booking.status = 'completed';
+            booking.paymentStatus = 'completed';
+        } else {
+            booking.status = 'missed';
+            booking.paymentStatus = 'pending'; 
+        }
+
+                booking.actualDuration = durationSeconds;
+
         await booking.save({ session });
 
         await session.commitTransaction();
         session.endSession();
 
-        if (Status === 'completed') {
+       if (booking.status === 'completed') {
             await sendPushNotification(user?.fcmToken, { type: 'CALL_SUCCESS' }, {
                 title: "Consultation Done",
-                body: `Charged ₹${finalCost} for ${billedMins} mins.`
+                body: `Charged ₹${finalCost} for ${booking.duration} mins session.`
             });
-        } else {
+        } else if (Status !== 'completed') {
             await sendPushNotification(partner?.fcmToken, { type: 'MISSED_CALL' }, {
                 title: "Missed Call",
                 body: `You missed a consultation with ${user?.fullName}`
