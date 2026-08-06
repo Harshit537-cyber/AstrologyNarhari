@@ -57,3 +57,43 @@ exports.getRatingStats = async (req, res) => {
         res.status(500).json({ message: "Server Error", error: error.message });
     }
 };
+
+
+exports.checkRatingStatus = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+
+        const existingRating = await PartnerRating.findOne({ partnerId });
+
+        res.status(200).json({
+            success: true,
+            isRated: !!existingRating, 
+            message: existingRating ? "Already rated" : "Not rated yet"
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
+
+exports.getMyRating = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+
+        const ratingData = await PartnerRating.findOne({ partnerId });
+
+        if (!ratingData) {
+            return res.status(404).json({
+                success: false,
+                message: "No rating found for this partner"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: ratingData
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
