@@ -3,6 +3,9 @@ const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
 const admin = require('../../config/firebase');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
+const Transaction = require('../../models/Transaction/Transaction'); 
+const RitualTransaction = require('../../models/Ritual/RitualTransaction');
+
 
 const verifyOTP = async (req, res) => {
     try {
@@ -277,6 +280,52 @@ const deleteAccount = async (req, res) => {
     }
 };
 
+const getUserTransactionHistory =  async (req, res) => {
+    try {
+        const userId = req.user.id || req.user._id; 
+        const { type } = req.query;
+
+        if (!type) {
+            return res.status(400).json({ success: false, message: "Query type (wallet or ritual) is required" });
+        }
+
+        let data = [];
+
+        if (type === 'wallet') {
+            data = await Transaction.find({ user: userId })
+                .sort({ createdAt: -1 })
+                .select('amount status type razorpay_order_id razorpay_payment_id createdAt');
+
+            return res.status(200).json({
+                success: true,
+                message: "Wallet history fetched successfully",
+                data
+            });
+        } 
+
+        else if (type === 'ritual') {
+            data = await RitualTransaction.find({ userId: userId })
+                .sort({ createdAt: -1 })
+                .populate('partnerId', 'name') 
+                .select('ritualName totalAmountPaid status ritualPrice orderId logisticsFee taxAmount createdAt');
+
+            return res.status(200).json({
+                success: true,
+                message: "Ritual transaction history fetched successfully",
+                data
+            });
+        } 
+
+        else {
+            return res.status(400).json({ success: false, message: "Invalid type. Use 'wallet' or 'ritual'" });
+        }
+
+    } catch (error) {
+        console.error("History Fetch Error:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
 module.exports = {
     verifyOTP,
     deactivateAccount,
@@ -286,5 +335,6 @@ module.exports = {
     getAllPartnersForUser,
     updateFCMToken,
     deleteAccount,
-    logoutUser
+    logoutUser,
+    getUserTransactionHistory
 };

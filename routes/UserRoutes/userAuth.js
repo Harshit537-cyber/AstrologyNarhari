@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { verifyOTP, deactivateAccount, deleteAccount ,searchExperts, logoutUser,activateAccount, getPartners, getAllPartnersForUser, updateFCMToken } = require('../../controllers/User/userAuth');
+const { verifyOTP, deactivateAccount, deleteAccount ,searchExperts, getUserTransactionHistory, logoutUser,activateAccount, getPartners, getAllPartnersForUser, updateFCMToken } = require('../../controllers/User/userAuth');
 const { verifyToken, isUser } = require('../../middleware/auth');
 
 router.post('/verify-otp', verifyOTP);
@@ -12,7 +12,9 @@ router.get('/all-partners', verifyToken, isUser, getAllPartnersForUser);
 router.get("/search-experts", verifyToken, isUser, searchExperts);
 
 router.patch("/update-fcm", verifyToken, isUser, updateFCMToken);
-router.post("/logout", verifyToken, isUser, logoutUser)
+router.post("/logout", verifyToken, isUser, logoutUser);
+
+router.get("/transaction/history", verifyToken, isUser, getUserTransactionHistory);
 
 router.delete('/delete-account', verifyToken, isUser, deleteAccount);
 
