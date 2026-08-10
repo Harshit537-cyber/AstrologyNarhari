@@ -21,7 +21,7 @@ const panditSchema = new mongoose.Schema({
     profileApprovalStatus: {
         type: String,
         enum: ['Pending', 'Approved', 'Rejected'],
-        default: 'Pending'
+        default: 'Approved' // <-- 'Pending' से बदलकर 'Approved' कर दिया है
     },
     fullName: {
         type: String,

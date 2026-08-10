@@ -49,7 +49,8 @@ const verifyOtp = async (req, res) => {
             pandit = await Pandit.create({
                 mobile,
                 role: 'pandit',
-                isVerified: true
+                isVerified: true,
+                profileApprovalStatus: 'Approved' // Auto-approve on create
             });
         } else {
             pandit.isVerified = true;
@@ -140,7 +141,9 @@ const register = async (req, res) => {
         pandit.certificatePhotos = certificatePhotosUrls;
         pandit.bio = bio;
         pandit.isProfileComplete = true;
-        pandit.profileApprovalStatus = 'Pending';
+        
+        // <-- यहाँ 'Pending' से बदलकर 'Approved' कर दिया है
+        pandit.profileApprovalStatus = 'Approved'; 
 
         await pandit.save();
 

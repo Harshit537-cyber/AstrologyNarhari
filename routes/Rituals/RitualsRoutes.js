@@ -2,38 +2,38 @@ const express = require('express');
 const router = express.Router();
 
 const ritualController = require('../../controllers/User/userRitualController');
-const { verifyToken, isAdmin ,isPartner} = require('../../middleware/auth');
-const adminRitualController = require("../../controllers/admin/adminRitualController")
+const { verifyToken, isAdmin, isPandit } = require('../../middleware/auth');
+const adminRitualController = require("../../controllers/admin/adminRitualController");
 const upload = require("../../middleware/upload");
 
 router.post(
     '/admin/ritual/add', 
-    verifyToken, isAdmin,
+    verifyToken, 
+    isAdmin,
     upload.single('image'), 
     adminRitualController.addRitual
 );
 
-router.get('/rituals',verifyToken,ritualController.getRituals);
+router.get('/rituals', verifyToken, ritualController.getRituals);
 
-router.get('/rituals/search',verifyToken, ritualController.searchRituals);
+router.get('/rituals/search', verifyToken, ritualController.searchRituals);
 
-router.get('/rituals/detail/:id',verifyToken, ritualController.getRitualById);
+router.get('/rituals/detail/:id', verifyToken, ritualController.getRitualById);
 
-router.get('/rituals/available-partners', verifyToken,ritualController.getAvailablePartners);
+router.get('/rituals/available-pandits', verifyToken, ritualController.getAvailablePandits);
 
-router.post('/rituals/book', verifyToken,ritualController.createRitualBooking);
+router.post('/rituals/book', verifyToken, ritualController.createRitualBooking);
 
-router.get('/partner/requests',  verifyToken,isPartner,ritualController.getPartnerRitualRequests);
+router.get('/pandit/requests', verifyToken, isPandit, ritualController.getPanditRitualRequests);
 
-router.get('/partner/request/:id', verifyToken,ritualController.getPartnerRitualRequestById);
+router.get('/pandit/request/:id', verifyToken, isPandit, ritualController.getPanditRitualRequestById);
 
-router.patch('/partner/request/accept/:id',  verifyToken,ritualController.acceptRitualRequest);
+router.patch('/pandit/request/accept/:id', verifyToken, isPandit, ritualController.acceptRitualRequestByPandit);
 
-router.patch('/partner/request/reject/:id',  verifyToken,ritualController.rejectRitualRequest);
+router.patch('/pandit/request/reject/:id', verifyToken, isPandit, ritualController.rejectRitualRequestByPandit);
 
 router.post('/rituals/payment/create-order', verifyToken, ritualController.createRitualOrder);
 
 router.post('/rituals/payment/verify', verifyToken, ritualController.verifyRitualPayment);
-
 
 module.exports = router;

@@ -4,14 +4,14 @@ const ritualBookingSchema = new mongoose.Schema({
     bookingId: { type: String, unique: true }, 
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     ritualId: { type: mongoose.Schema.Types.ObjectId, ref: 'Ritual', required: true },
-partnerId: { 
+    panditId: { 
         type: mongoose.Schema.Types.ObjectId, 
-        ref: 'Partner', 
-        default: null 
+        ref: 'Pandit', 
+        required: true 
     },    
-     status: { 
+    status: { 
         type: String, 
-        enum: ['Pending', 'Accepted', 'Completed', 'Cancelled', "Rejected", "Confirmed"], 
+        enum: ['Pending', 'Accepted', 'Completed', 'Cancelled', 'Rejected', 'Confirmed'], 
         default: 'Pending' 
     },
     sankalp: String,
@@ -22,7 +22,7 @@ partnerId: {
         tob: String,
         pob: String
     },
-   schedule: {
+    schedule: {
         date: { type: Date, required: true }, 
         time: { type: String, required: true }, 
         isoDateTime: { type: Date } 
