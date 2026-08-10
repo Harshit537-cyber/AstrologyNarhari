@@ -3,6 +3,7 @@ const RitualBooking = require('../../models/Ritual/RitualBooking');
 const Pandit = require('../../models/Pandit/Pandit');
 const User = require('../../models/User');
 const sendPushNotification = require('../../utils/notificationService');
+const createGoogleMeet = require('../../utils/googleMeetHelper');
 
 const getRituals = async (req, res) => {
     try {
@@ -130,21 +131,27 @@ const getPanditRitualRequestById = async (req, res) => {
 
 const acceptRitualRequestByPandit = async (req, res) => {
     try {
-        const booking = await RitualBooking.findOneAndUpdate(
-            { _id: req.params.id, panditId: req.user.id, status: 'Pending' },
-            { status: 'Accepted' },
-            { new: true }
-        );
+        const booking = await RitualBooking.findOne({ _id: req.params.id, panditId: req.user.id, status: 'Pending' });
 
         if (!booking) {
             return res.status(400).json({ success: false, message: 'Booking request not found or already processed' });
         }
 
+        const meetingLink = await createGoogleMeet(
+            'Ritual Pooja Session',
+            booking.schedule?.isoDateTime || booking.schedule?.date,
+            30
+        );
+
+        booking.status = 'Accepted';
+        booking.zoomLink = meetingLink;
+        await booking.save();
+
         const user = await User.findById(booking.userId);
         if (user && user.fcmToken) {
             await sendPushNotification(
                 user.fcmToken,
-                { bookingId: booking._id, type: 'RITUAL_ACCEPTED' },
+                { bookingId: booking._id, meetingLink: meetingLink, type: 'RITUAL_ACCEPTED' },
                 { title: 'Pooja Booking Accepted! 🎉', body: `Pandit ji has accepted your ritual booking (${booking.bookingId}).` }
             );
         }
