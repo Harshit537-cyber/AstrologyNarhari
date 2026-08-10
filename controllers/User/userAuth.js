@@ -1,11 +1,11 @@
 const jwt = require('jsonwebtoken');
 const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
+const Pandit = require('../../models/Pandit/Pandit');
 const admin = require('../../config/firebase');
 const { DEACTIVATION_REASONS, ALLOWED_DURATIONS } = require('../../utils/deactivationReasons');
 const Transaction = require('../../models/Transaction/Transaction'); 
 const RitualTransaction = require('../../models/Ritual/RitualTransaction');
-
 
 const verifyOTP = async (req, res) => {
     try {
@@ -35,7 +35,6 @@ const verifyOTP = async (req, res) => {
                 isVerified: true
             });
         } else {
-          
             if (user.isActive === false && user.deactivatedBy === 'admin') {
                 return res.status(403).json({
                     success: false,
@@ -43,7 +42,6 @@ const verifyOTP = async (req, res) => {
                 });
             }
 
-          
             user.isVerified = true;
             user.isActive = true;
             user.deactivatedBy = null;
@@ -203,6 +201,88 @@ const getAllPartnersForUser = async (req, res) => {
     }
 };
 
+const getAllPandits = async (req, res) => {
+    try {
+        const pandits = await Pandit.find({
+            isVerified: true,
+            isProfileComplete: true,
+            profileApprovalStatus: 'Approved'
+        })
+        .select('fullName profilePic city primaryCategory expertise languages experience minPoojaFee bio averageRating totalReviews isOnline canArrangeSamagri poojaServiceMode')
+        .lean();
+
+        return res.status(200).json({ 
+            success: true, 
+            count: pandits.length,
+            data: pandits 
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const searchPandits = async (req, res) => {
+    try {
+        const { search, city, category } = req.query;
+        let query = {
+            isVerified: true,
+            isProfileComplete: true,
+            profileApprovalStatus: 'Approved'
+        };
+
+        if (search) {
+            query.$or = [
+                { fullName: { $regex: search, $options: 'i' } },
+                { city: { $regex: search, $options: 'i' } },
+                { primaryCategory: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        if (city) {
+            query.city = { $regex: city, $options: 'i' };
+        }
+
+        if (category) {
+            query.primaryCategory = { $regex: category, $options: 'i' };
+        }
+
+        const pandits = await Pandit.find(query)
+            .select('fullName profilePic city primaryCategory expertise languages experience minPoojaFee bio averageRating totalReviews isOnline canArrangeSamagri poojaServiceMode')
+            .lean();
+
+        return res.status(200).json({ 
+            success: true, 
+            count: pandits.length,
+            data: pandits 
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getPanditById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pandit = await Pandit.findOne({
+            _id: id,
+            isVerified: true,
+            isProfileComplete: true,
+            profileApprovalStatus: 'Approved'
+        }).select('-fcmToken -__v');
+
+        if (!pandit) {
+            return res.status(404).json({ success: false, message: 'Pandit not found or profile not approved' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: pandit
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 const updateFCMToken = async (req, res) => {
     try {
         const { fcmToken } = req.body;
@@ -224,7 +304,6 @@ const updateFCMToken = async (req, res) => {
         res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
     }
 };
-
 
 const logoutUser = async (req, res) => {
     try {
@@ -321,7 +400,6 @@ const getUserTransactionHistory =  async (req, res) => {
         }
 
     } catch (error) {
-        console.error("History Fetch Error:", error);
         res.status(500).json({ success: false, message: "Internal Server Error" });
     }
 };
@@ -333,6 +411,9 @@ module.exports = {
     searchExperts,
     getPartners,
     getAllPartnersForUser,
+    getAllPandits,
+    searchPandits,
+    getPanditById,
     updateFCMToken,
     deleteAccount,
     logoutUser,
