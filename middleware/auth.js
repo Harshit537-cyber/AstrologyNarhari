@@ -14,7 +14,7 @@ const verifyToken = async (req, res, next) => {
             return res.status(401).json({ message: 'Access denied. No token provided.' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secretkey');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'SECRET_KEY_123');
         
         console.log("Token Decoded ID:", decoded.id); 
         
@@ -49,4 +49,12 @@ const isUser = (req, res, next) => {
     }
 };
 
-module.exports = { verifyToken, isAdmin, isPartner, isUser };
+const isPandit = (req, res, next) => {
+    if (req.user && req.user.role === 'pandit') {
+        next();
+    } else {
+        res.status(403).json({ message: 'Access denied. Pandit role required.' });
+    }
+};
+
+module.exports = { verifyToken, isAdmin, isPartner, isUser, isPandit };

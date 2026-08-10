@@ -11,7 +11,10 @@ const {
      cancelBooking,
     rescheduleBooking,
     getPartnerClientLogs,
-    searchPartnerClientLogs
+    searchPartnerClientLogs,
+    clearPartnerRejectedBookings,
+    clearSingleRejectedBooking,
+    completeBooking
 } = require('../../controllers/bookingController/bookingController');
 
 router.post('/schedule', verifyToken, scheduleBooking);
@@ -28,6 +31,12 @@ router.post('/partner/respond', verifyToken, isPartner, respondToBooking);
 
 router.get('/client-logs', verifyToken, isPartner, getPartnerClientLogs);
 router.get('/client-logs/search', verifyToken, isPartner, searchPartnerClientLogs);
+
+router.delete('/partner/rejected/clear', verifyToken, isPartner, clearPartnerRejectedBookings);
+
+router.delete('/partner/rejected/:bookingId', verifyToken, isPartner, clearSingleRejectedBooking);
+router.post('/partner/complete', verifyToken, isPartner, completeBooking);
+
 
 router.get(
     '/client-logs',

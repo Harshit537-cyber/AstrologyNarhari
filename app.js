@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 
 const userAuthRoutes = require("./routes/UserRoutes/userAuth");
 const partnerAuthRoutes = require("./routes/PatnerRoutes/partnerAuth");
+const panditAuthRoutes = require("./routes/PanditRoutes/panditAuth");
 const adminAuthRoutes = require("./routes/AdminRoutes/adminAuth");
 const bookingRoutes = require("./routes/bookingRoutes/bookingRoutes");
 const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes");
@@ -24,6 +25,7 @@ app.use(cookieParser());
 app.use("/api/user", userAuthRoutes);
 app.use("/api/user/cart", cartRoutes);
 app.use("/api/partner", partnerAuthRoutes);
+app.use("/api/pandit", panditAuthRoutes);
 
 app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
 app.use("/api/review", require("./routes/review/reviewRoutes"));
@@ -36,7 +38,7 @@ app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
 app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
-app.use("/api/rituals", require("./routes/Rituals/RitualsRoutes"))
+app.use("/api/rituals", require("./routes/Rituals/RitualsRoutes"));
 app.use("/api/shipping", require("./routes/UserRoutes/addressRoutes"));
 app.use("/api/tickets", ticketRoutes);
 
@@ -48,12 +50,12 @@ app.use("/api/admin/coupon", couponRoutes);
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
 app.use("/api/admin/card", require("./routes/AdminRoutes/cardRoutes"));
 app.use("/api/admin/shop/banner", require("./routes/AdminRoutes/E-comm/topBannerRoutes"));
-app.use("/api/partner/rating", require("./routes/PatnerRoutes/partnerRatingRoutes"))
+app.use("/api/partner/rating", require("./routes/PatnerRoutes/partnerRatingRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({
         success: true,
-        message: "Astrlogy Narhari Backend Running "
+        message: "Astrology Narhari Backend Running"
     });
 });
 

@@ -553,6 +553,150 @@ const searchPartnerClientLogs = async (req, res) => {
     }
 };
 
+const clearPartnerRejectedBookings = async (req, res) => {
+    try {
+        const rawPartnerId = req.user?.id || req.user?._id;
+        const partnerId = new mongoose.Types.ObjectId(rawPartnerId);
+
+       
+        const result = await Booking.deleteMany({ partner: partnerId, status: 'rejected' });
+
+        res.status(200).json({
+            success: true,
+            message: `${result.deletedCount} rejected booking(s) cleared successfully.`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+
+const clearSingleRejectedBooking = async (req, res) => {
+    try {
+        const { bookingId } = req.params; 
+        const rawPartnerId = req.user?.id || req.user?._id;
+        const partnerId = new mongoose.Types.ObjectId(rawPartnerId);
+
+      
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid Booking ID format'
+            });
+        }
+
+        
+        const deletedBooking = await Booking.findOneAndDelete({
+            _id: bookingId,
+            partner: partnerId,
+            status: 'rejected'
+        });
+
+        if (!deletedBooking) {
+            return res.status(404).json({
+                success: false,
+                message: 'Rejected booking not found or already deleted'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Rejected booking cleared successfully',
+            data: { bookingId }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+
+const completeBooking = async (req, res) => {
+    try {
+        const { bookingId, actualDuration } = req.body;
+        const rawPartnerId = req.user?.id || req.user?._id;
+        const partnerId = new mongoose.Types.ObjectId(rawPartnerId);
+
+        if (!bookingId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Booking ID is required'
+            });
+        }
+
+        const booking = await Booking.findOne({ _id: bookingId, partner: partnerId }).populate('user');
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found for this partner'
+            });
+        }
+
+        if (booking.status !== 'accepted') {
+            return res.status(400).json({
+                success: false,
+                message: `Only 'accepted' bookings can be completed. Current status: ${booking.status}`
+            });
+        }
+
+        
+        const finalDuration = actualDuration ? Number(actualDuration) : booking.duration;
+        const finalFee = booking.ratePerMinute * finalDuration;
+
+      
+        booking.status = 'completed';
+        booking.duration = finalDuration;
+        booking.totalFee = finalFee;
+        await booking.save();
+
+        
+        const partner = await Partner.findById(partnerId);
+        if (partner) {
+            partner.walletBalance = (partner.walletBalance || 0) + finalFee;
+            await partner.save();
+        }
+
+       
+        if (booking.user && booking.user.fcmToken) {
+            const notificationPayload = {
+                title: 'Consultation Completed! 🎉',
+                body: `Your session with ${partner?.fullName || 'Astrologer'} is complete. Please rate your experience.`
+            };
+
+            const dataPayload = {
+                bookingId: String(booking._id),
+                type: 'BOOKING_COMPLETED'
+            };
+
+            sendPushNotification(booking.user.fcmToken, dataPayload, notificationPayload)
+                .then(() => console.log("Completion notification sent to User"))
+                .catch(err => console.error("Notification Error:", err));
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Booking marked as completed and fee credited to partner wallet.',
+            data: booking
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
 
 module.exports = {
     scheduleBooking,
@@ -564,5 +708,8 @@ module.exports = {
     cancelBooking,
     rescheduleBooking,
     getPartnerClientLogs,
-    searchPartnerClientLogs
+    searchPartnerClientLogs,
+    clearPartnerRejectedBookings,
+    clearSingleRejectedBooking,
+    completeBooking
 };

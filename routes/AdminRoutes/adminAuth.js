@@ -20,7 +20,9 @@ const {
     deleteUserById, 
     deletePartner, 
     approvePartnerProfile,
-    getPendingKycPartners
+    getPendingKycPartners,
+    approveMinRateUpdate,
+    getPendingMinRatePartners
 } = require('../../controllers/admin/adminAuth');
 
 const { verifyToken, isAdmin } = require('../../middleware/auth');
@@ -51,14 +53,17 @@ router.put("/dashboard/users/:id/deactivate", verifyToken, isAdmin, deactivateUs
 router.put("/dashboard/users/:id/activate", verifyToken, isAdmin, activateUser);
 
 router.get("/dashboard/all-partners", verifyToken, isAdmin, getAllPartners);
-router.put("/dashboard/partners/:id", verifyToken, isAdmin, upload.single("profilePic"), updatePartner);
+router.get("/dashboard/partners/pending-kyc-partners", verifyToken, isAdmin, getPendingKycPartners);
+router.get("/dashboard/partners/pending-min-rate", verifyToken, isAdmin, getPendingMinRatePartners);
+
 router.get("/dashboard/partners/:id", verifyToken, isAdmin, getPartnerById);
+router.put("/dashboard/partners/:id", verifyToken, isAdmin, upload.single("profilePic"), updatePartner);
 router.put("/dashboard/partners/:id/documents", verifyToken, isAdmin, updatePartnerDocumentStatus);
 router.put("/dashboard/partners/:id/deactivate", verifyToken, isAdmin, deactivatePartner);
 router.put("/dashboard/partners/:id/activate", verifyToken, isAdmin, activatePartner);
 router.delete("/dashboard/partners/:id", verifyToken, isAdmin, deletePartner);
-router.get("/dashboard/partners/pending-kyc-partners", verifyToken, isAdmin, getPendingKycPartners);
 
 router.put("/dashboard/partners/:id/profile-approval", verifyToken, isAdmin, approvePartnerProfile);
+router.put("/dashboard/partners/:id/min-rate-approval", verifyToken, isAdmin, approveMinRateUpdate);
 
 module.exports = router;

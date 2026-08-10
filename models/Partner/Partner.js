@@ -67,6 +67,15 @@ const partnerSchema = new mongoose.Schema({
         type: Number,
         default: 25
     },
+    requestedMinRate: {
+        type: Number,
+        default: null
+    },
+    minRateApprovalStatus: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected'],
+        default: null
+    },
     additionalPhotos: [{
         type: String
     }],
@@ -105,11 +114,11 @@ const partnerSchema = new mongoose.Schema({
     isOnline: { type: Boolean, default: false },
     isBusy: { type: Boolean, default: false },
     fcmToken: { type: String, default: null },
-     walletBalance: { 
+    walletBalance: { 
         type: Number, 
         default: 0 
     },
- categories: [{
+    categories: [{
         type: String,
         uppercase: true, 
         enum: [
@@ -121,7 +130,7 @@ const partnerSchema = new mongoose.Schema({
         ]
     }],
 
-ritualEarningsHistory: [{
+    ritualEarningsHistory: [{
         userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         userName: String,      
         bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'RitualBooking' },
@@ -130,6 +139,5 @@ ritualEarningsHistory: [{
         paymentDate: { type: Date, default: Date.now }
     }],
 }, { timestamps: true });
-
 
 module.exports = mongoose.model('Partner', partnerSchema);

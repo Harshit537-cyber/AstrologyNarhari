@@ -629,14 +629,17 @@ const updateMinRate = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Partner not found' });
         }
 
-        partner.minRate = Number(minRate);
+        partner.requestedMinRate = Number(minRate);
+        partner.minRateApprovalStatus = 'Pending';
         await partner.save();
 
         return res.status(200).json({
             success: true,
-            message: 'Minimum rate updated successfully',
+            message: 'Minimum rate update request submitted for admin approval',
             data: {
-                minRate: partner.minRate
+                minRate: partner.minRate,
+                requestedMinRate: partner.requestedMinRate,
+                minRateApprovalStatus: partner.minRateApprovalStatus
             }
         });
     } catch (error) {
@@ -646,7 +649,7 @@ const updateMinRate = async (req, res) => {
 
 const getMinRate = async (req, res) => {
     try {
-        const partner = await Partner.findById(req.user.id).select('minRate');
+        const partner = await Partner.findById(req.user.id).select('minRate requestedMinRate minRateApprovalStatus');
         if (!partner) {
             return res.status(404).json({ success: false, message: 'Partner not found' });
         }
@@ -654,7 +657,9 @@ const getMinRate = async (req, res) => {
         return res.status(200).json({
             success: true,
             data: {
-                minRate: partner.minRate || 0
+                minRate: partner.minRate || 0,
+                requestedMinRate: partner.requestedMinRate || null,
+                minRateApprovalStatus: partner.minRateApprovalStatus || null
             }
         });
     } catch (error) {
