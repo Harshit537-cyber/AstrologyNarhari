@@ -3,20 +3,23 @@ const RitualBooking = require('../../models/Ritual/RitualBooking');
 const Pandit = require('../../models/Pandit/Pandit');
 const User = require('../../models/User');
 const sendPushNotification = require('../../utils/notificationService');
+const createGoogleMeet = require('../../utils/googleMeetHelper');
 
+// 1. Get All Live Rituals
 const getRituals = async (req, res) => {
     try {
-        const rituals = await Ritual.find({ isActive: true });
+        const rituals = await Ritual.find({ isLive: true });
         return res.status(200).json({ success: true, data: rituals });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
 };
 
+// 2. Search Live Rituals by Title
 const searchRituals = async (req, res) => {
     try {
         const { search } = req.query;
-        let query = { isActive: true };
+        let query = { isLive: true };
         if (search) {
             query.title = { $regex: search, $options: 'i' };
         }
@@ -27,6 +30,7 @@ const searchRituals = async (req, res) => {
     }
 };
 
+// 3. Get Ritual Detail By ID
 const getRitualById = async (req, res) => {
     try {
         const ritual = await Ritual.findById(req.params.id);
@@ -39,6 +43,7 @@ const getRitualById = async (req, res) => {
     }
 };
 
+// 4. Get Available Pandits
 const getAvailablePandits = async (req, res) => {
     try {
         const pandits = await Pandit.find({
@@ -53,6 +58,7 @@ const getAvailablePandits = async (req, res) => {
     }
 };
 
+// 5. Create Ritual Booking
 const createRitualBooking = async (req, res) => {
     try {
         const { ritualId, panditId, sankalp, personalDetails, schedule, shippingDetails, paymentDetails } = req.body;
@@ -99,6 +105,7 @@ const createRitualBooking = async (req, res) => {
     }
 };
 
+// 6. Get Pandit Ritual Requests
 const getPanditRitualRequests = async (req, res) => {
     try {
         const requests = await RitualBooking.find({ panditId: req.user.id })
@@ -112,6 +119,7 @@ const getPanditRitualRequests = async (req, res) => {
     }
 };
 
+// 7. Get Single Ritual Request for Pandit
 const getPanditRitualRequestById = async (req, res) => {
     try {
         const request = await RitualBooking.findOne({ _id: req.params.id, panditId: req.user.id })
@@ -128,23 +136,30 @@ const getPanditRitualRequestById = async (req, res) => {
     }
 };
 
+// 8. Accept Ritual Request By Pandit
 const acceptRitualRequestByPandit = async (req, res) => {
     try {
-        const booking = await RitualBooking.findOneAndUpdate(
-            { _id: req.params.id, panditId: req.user.id, status: 'Pending' },
-            { status: 'Accepted' },
-            { new: true }
-        );
+        const booking = await RitualBooking.findOne({ _id: req.params.id, panditId: req.user.id, status: 'Pending' });
 
         if (!booking) {
             return res.status(400).json({ success: false, message: 'Booking request not found or already processed' });
         }
 
+        const meetingLink = await createGoogleMeet(
+            'Ritual Pooja Session',
+            booking.schedule?.isoDateTime || booking.schedule?.date,
+            30
+        );
+
+        booking.status = 'Accepted';
+        booking.zoomLink = meetingLink;
+        await booking.save();
+
         const user = await User.findById(booking.userId);
         if (user && user.fcmToken) {
             await sendPushNotification(
                 user.fcmToken,
-                { bookingId: booking._id, type: 'RITUAL_ACCEPTED' },
+                { bookingId: booking._id, meetingLink: meetingLink, type: 'RITUAL_ACCEPTED' },
                 { title: 'Pooja Booking Accepted! 🎉', body: `Pandit ji has accepted your ritual booking (${booking.bookingId}).` }
             );
         }
@@ -155,6 +170,7 @@ const acceptRitualRequestByPandit = async (req, res) => {
     }
 };
 
+// 9. Reject Ritual Request By Pandit
 const rejectRitualRequestByPandit = async (req, res) => {
     try {
         const booking = await RitualBooking.findOneAndUpdate(
@@ -182,6 +198,7 @@ const rejectRitualRequestByPandit = async (req, res) => {
     }
 };
 
+// 10. Create Ritual Payment Order
 const createRitualOrder = async (req, res) => {
     try {
         return res.status(200).json({ success: true, message: 'Order created' });
@@ -190,6 +207,7 @@ const createRitualOrder = async (req, res) => {
     }
 };
 
+// 11. Verify Ritual Payment
 const verifyRitualPayment = async (req, res) => {
     try {
         return res.status(200).json({ success: true, message: 'Payment verified' });

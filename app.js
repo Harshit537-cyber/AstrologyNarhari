@@ -15,6 +15,9 @@ const cartRoutes = require("./routes/UserRoutes/cartRoutes");
 const ticketRoutes = require("./routes/ticketRoutes/ticketRoutes");
 const razorpayInstance = require("./config/razorpay");
 
+// 🟢 NEW: Instant Session Routes Import
+const sessionRoutes = require("./routes/sessionRoutes/sessionRoutes"); // (Apne folder path ke hisaab se adjust kar lein agar routes/sessionRoutes/sessionRoutes.js ho)
+
 const app = express();
 
 app.use(cors());
@@ -37,6 +40,10 @@ app.use("/api/banner", require("./routes/UserRoutes/bannerRoutes"));
 app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
+
+// 🟢 NEW: Instant Chat & Voice Call Request API Route
+app.use("/api/session", sessionRoutes);
+
 app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
 app.use("/api/rituals", require("./routes/Rituals/RitualsRoutes"));
 app.use("/api/shipping", require("./routes/UserRoutes/addressRoutes"));
