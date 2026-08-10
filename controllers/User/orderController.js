@@ -13,7 +13,8 @@ exports.createOrder = async (req, res) => {
             paymentMethod,
             couponCode,
             notes,
-            address
+            address,
+            paymentDetails
         } = req.body;
 
         // Validate Payment Method
@@ -157,11 +158,8 @@ exports.createOrder = async (req, res) => {
                 }
 
             } else {
-
                 discount = coupon.discountValue;
-
             }
-
         }
 
         // Charges
@@ -207,7 +205,10 @@ exports.createOrder = async (req, res) => {
                     ? "Pending"
                     : "Paid",
 
-            orderStatus: "Pending",
+            orderStatus:
+                paymentMethod === "COD"
+                    ? "Pending"
+                    : "Confirmed",
 
             coupon: coupon
                 ? {
@@ -220,7 +221,8 @@ exports.createOrder = async (req, res) => {
             paymentDetails:
                 paymentMethod === "ONLINE"
                     ? {
-                        paymentGateway: "ONLINE",
+                        transactionId: paymentDetails?.transactionId || "",
+                        paymentGateway: "Razorpay",
                         paymentDate: new Date()
                     }
                     : {},
