@@ -1,17 +1,13 @@
-// controllers/Session/sessionController.js
 const SessionRequest = require('../../models/SessionRequest/SessionRequest');
 const Partner = require('../../models/Partner/Partner');
 const User = require('../../models/User');
 const admin = require('../../config/firebase');
-const { triggerExotelCall } = require('../../services/exotelService'); // ✅ Fixed Import Name
+const { triggerExotelCall } = require('../../services/exotelService');
 
-// ==========================================
-// 1. USER: Send Instant Chat or Call Request
-// ==========================================
 const initiateSessionRequest = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { partnerId, type } = req.body; // type: 'chat' OR 'call'
+        const { partnerId, type } = req.body;
 
         if (!['chat', 'call'].includes(type)) {
             return res.status(400).json({ success: false, message: "Type must be 'chat' or 'call'" });
@@ -27,8 +23,7 @@ const initiateSessionRequest = async (req, res) => {
         }
 
         const user = await User.findById(userId);
-        
-        // Minimum Balance Check (Min 5 mins balance required)
+
         const minRate = partner.minRate || 10;
         const requiredBalance = minRate * 5;
 
@@ -39,7 +34,6 @@ const initiateSessionRequest = async (req, res) => {
             });
         }
 
-        // 1. Create Pending Request Record
         const sessionRequest = await SessionRequest.create({
             user: userId,
             partner: partnerId,
@@ -48,7 +42,6 @@ const initiateSessionRequest = async (req, res) => {
             status: 'pending'
         });
 
-        // 2. Push Notification to Astro Partner (FCM)
         if (partner.fcmToken) {
             const message = {
                 token: partner.fcmToken,
@@ -64,7 +57,6 @@ const initiateSessionRequest = async (req, res) => {
             await admin.messaging().send(message);
         }
 
-        // 3. Update Firebase Realtime Database Node (For Instant Pop-up on Partner App)
         await admin.database().ref(`session_requests/${partnerId}`).set({
             requestId: sessionRequest._id.toString(),
             userId: userId,
@@ -85,13 +77,10 @@ const initiateSessionRequest = async (req, res) => {
     }
 };
 
-// ==========================================
-// 2. PARTNER: Accept or Decline Request
-// ==========================================
 const respondToSessionRequest = async (req, res) => {
     try {
         const partnerId = req.user.id;
-        const { requestId, action } = req.body; // action: 'accept' OR 'decline'
+        const { requestId, action } = req.body;
 
         const sessionReq = await SessionRequest.findById(requestId).populate('user partner');
 
@@ -99,15 +88,12 @@ const respondToSessionRequest = async (req, res) => {
             return res.status(400).json({ success: false, message: "Request expired or already processed" });
         }
 
-        // Clear Realtime Notification Node
         await admin.database().ref(`session_requests/${partnerId}`).remove();
 
-        // ---------------- DECLINE ACTION ----------------
         if (action === 'decline') {
             sessionReq.status = 'rejected';
             await sessionReq.save();
 
-            // Notify User via FCM
             if (sessionReq.user.fcmToken) {
                 await admin.messaging().send({
                     token: sessionReq.user.fcmToken,
@@ -121,21 +107,17 @@ const respondToSessionRequest = async (req, res) => {
             return res.status(200).json({ success: true, message: "Request declined successfully" });
         }
 
-        // ---------------- ACCEPT ACTION ----------------
         if (action === 'accept') {
             sessionReq.status = 'accepted';
             sessionReq.startTime = new Date();
 
-            // Mark Astro Partner as Busy
             await Partner.findByIdAndUpdate(partnerId, { isBusy: true });
 
-            // CASE 1: INSTANT CHAT ACCEPTED
             if (sessionReq.type === 'chat') {
                 const chatRoomId = `chat_${sessionReq.user._id}_${partnerId}_${Date.now()}`;
                 sessionReq.chatRoomId = chatRoomId;
                 await sessionReq.save();
 
-                // Create Firebase Chat Session Node
                 await admin.database().ref(`chats/${chatRoomId}`).set({
                     user: sessionReq.user._id.toString(),
                     partner: partnerId,
@@ -143,7 +125,6 @@ const respondToSessionRequest = async (req, res) => {
                     createdAt: Date.now()
                 });
 
-                // Notify User with Chat Room ID
                 if (sessionReq.user.fcmToken) {
                     await admin.messaging().send({
                         token: sessionReq.user.fcmToken,
@@ -163,9 +144,7 @@ const respondToSessionRequest = async (req, res) => {
                 });
             }
 
-            // CASE 2: VOICE CALL ACCEPTED (EXOTEL) - ✅ FIXED THIS BLOCK
             if (sessionReq.type === 'call') {
-                // Wallet balance se Call Duration Limit (Seconds me) calculate karna
                 const userWallet = sessionReq.user.walletBalance || 0;
                 const ratePerMin = sessionReq.ratePerMin || 10;
                 const maxAllowedMinutes = userWallet / ratePerMin;
@@ -178,16 +157,14 @@ const respondToSessionRequest = async (req, res) => {
                     });
                 }
 
-                // Trigger Exotel Call with exact parameters
                 const callResult = await triggerExotelCall(
-                    sessionReq.partner.mobile,  // Partner Number (From)
-                    sessionReq.user.mobile,     // User Number (To)
-                    timeLimitSec,               // Time Limit
-                    sessionReq._id.toString()   // Request ID
+                    sessionReq.partner.mobile,
+                    sessionReq.user.mobile,
+                    timeLimitSec,
+                    sessionReq._id.toString()
                 );
 
                 if (!callResult.success) {
-                    // Reverse busy status if call failed
                     await Partner.findByIdAndUpdate(partnerId, { isBusy: false });
                     return res.status(500).json({ 
                         success: false, 
@@ -199,7 +176,6 @@ const respondToSessionRequest = async (req, res) => {
                 sessionReq.exotelCallSid = callResult.callSid;
                 await sessionReq.save();
 
-                // Notify User
                 if (sessionReq.user.fcmToken) {
                     await admin.messaging().send({
                         token: sessionReq.user.fcmToken,
@@ -221,7 +197,65 @@ const respondToSessionRequest = async (req, res) => {
     }
 };
 
+const getPartnerPendingRequest = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+
+        const sessionReq = await SessionRequest.findOne({
+            partner: partnerId,
+            status: 'pending'
+        }).populate('user', 'fullName profilePic mobile walletBalance');
+
+        if (!sessionReq) {
+            return res.status(200).json({
+                success: true,
+                hasPendingRequest: false,
+                message: "No pending request found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            hasPendingRequest: true,
+            request: sessionReq
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getUserRequestStatus = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { requestId } = req.params;
+
+        const sessionReq = await SessionRequest.findOne({
+            _id: requestId,
+            user: userId
+        }).populate('partner', 'name profilePic minRate mobile');
+
+        if (!sessionReq) {
+            return res.status(404).json({
+                success: false,
+                message: "Session request not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            status: sessionReq.status,
+            request: sessionReq
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     initiateSessionRequest,
-    respondToSessionRequest
+    respondToSessionRequest,
+    getPartnerPendingRequest,
+    getUserRequestStatus
 };
