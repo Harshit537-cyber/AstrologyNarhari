@@ -175,6 +175,50 @@ const getProfile = async (req, res) => {
     }
 };
 
+
+
+const updatePanditFCMToken = async (req, res) => {
+    try {
+        const { fcmToken } = req.body;
+        const panditId = req.user.id;
+
+        if (!fcmToken) {
+            return res.status(400).json({
+                success: false,
+                message: "FCM Token is required"
+            });
+        }
+
+        const updatedPandit = await Pandit.findByIdAndUpdate(
+            panditId,
+            { fcmToken },
+            { new: true }
+        );
+
+        if (!updatedPandit) {
+            return res.status(404).json({
+                success: false,
+                message: "Pandit not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "FCM Token updated successfully for pandit"
+        });
+
+    } catch (error) {
+        console.error("Update Pandit FCM Token Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal Server Error"
+        });
+    }
+};
+
+
+
 const logoutPandit = async (req, res) => {
     try {
         await Pandit.findByIdAndUpdate(req.user.id, { fcmToken: null });
@@ -188,5 +232,6 @@ module.exports = {
     verifyOtp,
     register,
     getProfile,
+    updatePanditFCMToken,
     logoutPandit
 };
