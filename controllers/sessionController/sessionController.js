@@ -9,6 +9,10 @@ const initiateSessionRequest = async (req, res) => {
         const userId = req.user.id;
         const { partnerId, type } = req.body;
 
+        if (!partnerId || !type) {
+            return res.status(400).json({ success: false, message: "partnerId and type are required" });
+        }
+
         if (!['chat', 'call'].includes(type)) {
             return res.status(400).json({ success: false, message: "Type must be 'chat' or 'call'" });
         }
@@ -18,11 +22,10 @@ const initiateSessionRequest = async (req, res) => {
             return res.status(400).json({ success: false, message: "Astrologer is currently offline" });
         }
 
-        if (partner.isBusy) {
-            return res.status(400).json({ success: false, message: "Astrologer is currently busy" });
-        }
-
         const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
 
         const minRate = partner.minRate || 10;
         const requiredBalance = minRate * 5;
@@ -43,7 +46,7 @@ const initiateSessionRequest = async (req, res) => {
         });
 
         if (partner.fcmToken) {
-            const message = {
+            admin.messaging().send({
                 token: partner.fcmToken,
                 data: {
                     type: 'INCOMING_SESSION_REQUEST',
@@ -53,18 +56,17 @@ const initiateSessionRequest = async (req, res) => {
                     userPic: user.profilePic || '',
                 },
                 android: { priority: 'high' }
-            };
-            await admin.messaging().send(message);
+            }).catch(err => console.error("FCM Error:", err.message));
         }
 
-        await admin.database().ref(`session_requests/${partnerId}`).set({
+        admin.database().ref(`session_requests/${partnerId}/${sessionRequest._id}`).set({
             requestId: sessionRequest._id.toString(),
             userId: userId,
             userName: user.fullName || 'User',
             type: type,
             status: 'pending',
             timestamp: Date.now()
-        });
+        }).catch(err => console.error("Firebase DB Error:", err.message));
 
         return res.status(200).json({
             success: true,
@@ -77,31 +79,75 @@ const initiateSessionRequest = async (req, res) => {
     }
 };
 
+const cancelSessionRequest = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { requestId } = req.body;
+
+        if (!requestId) {
+            return res.status(400).json({ success: false, message: "requestId is required" });
+        }
+
+        const sessionReq = await SessionRequest.findOne({ _id: requestId, user: userId });
+
+        if (!sessionReq) {
+            return res.status(404).json({ success: false, message: "Request not found" });
+        }
+
+        if (sessionReq.status !== 'pending') {
+            return res.status(400).json({ success: false, message: "Only pending requests can be cancelled" });
+        }
+
+        sessionReq.status = 'cancelled';
+        await sessionReq.save();
+
+        admin.database().ref(`session_requests/${sessionReq.partner}/${requestId}`).remove()
+            .catch(err => console.error("Firebase DB Error:", err.message));
+
+        return res.status(200).json({
+            success: true,
+            message: "Request cancelled successfully"
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 const respondToSessionRequest = async (req, res) => {
     try {
         const partnerId = req.user.id;
         const { requestId, action } = req.body;
 
+        if (!requestId || !action) {
+            return res.status(400).json({ success: false, message: "requestId and action are required" });
+        }
+
+        if (!['accept', 'decline'].includes(action)) {
+            return res.status(400).json({ success: false, message: "Action must be 'accept' or 'decline'" });
+        }
+
         const sessionReq = await SessionRequest.findById(requestId).populate('user partner');
 
         if (!sessionReq || sessionReq.status !== 'pending') {
-            return res.status(400).json({ success: false, message: "Request expired or already processed" });
+            return res.status(400).json({ success: false, message: "Request expired, cancelled or already processed" });
         }
 
-        await admin.database().ref(`session_requests/${partnerId}`).remove();
+        admin.database().ref(`session_requests/${partnerId}/${requestId}`).remove()
+            .catch(err => console.error("Firebase DB Error:", err.message));
 
         if (action === 'decline') {
             sessionReq.status = 'rejected';
             await sessionReq.save();
 
-            if (sessionReq.user.fcmToken) {
-                await admin.messaging().send({
+            if (sessionReq.user && sessionReq.user.fcmToken) {
+                admin.messaging().send({
                     token: sessionReq.user.fcmToken,
                     data: { 
                         type: 'REQUEST_REJECTED', 
                         message: 'Astrologer declined your request.' 
                     }
-                });
+                }).catch(err => console.error("FCM Error:", err.message));
             }
 
             return res.status(200).json({ success: true, message: "Request declined successfully" });
@@ -111,29 +157,27 @@ const respondToSessionRequest = async (req, res) => {
             sessionReq.status = 'accepted';
             sessionReq.startTime = new Date();
 
-            await Partner.findByIdAndUpdate(partnerId, { isBusy: true });
-
             if (sessionReq.type === 'chat') {
                 const chatRoomId = `chat_${sessionReq.user._id}_${partnerId}_${Date.now()}`;
                 sessionReq.chatRoomId = chatRoomId;
                 await sessionReq.save();
 
-                await admin.database().ref(`chats/${chatRoomId}`).set({
+                admin.database().ref(`chats/${chatRoomId}`).set({
                     user: sessionReq.user._id.toString(),
                     partner: partnerId,
                     status: 'active',
                     createdAt: Date.now()
-                });
+                }).catch(err => console.error("Firebase DB Error:", err.message));
 
-                if (sessionReq.user.fcmToken) {
-                    await admin.messaging().send({
+                if (sessionReq.user && sessionReq.user.fcmToken) {
+                    admin.messaging().send({
                         token: sessionReq.user.fcmToken,
                         data: { 
                             type: 'REQUEST_ACCEPTED', 
                             sessionType: 'chat',
                             chatRoomId: chatRoomId 
                         }
-                    });
+                    }).catch(err => console.error("FCM Error:", err.message));
                 }
 
                 return res.status(200).json({
@@ -165,7 +209,6 @@ const respondToSessionRequest = async (req, res) => {
                 );
 
                 if (!callResult.success) {
-                    await Partner.findByIdAndUpdate(partnerId, { isBusy: false });
                     return res.status(500).json({ 
                         success: false, 
                         message: "Failed to connect call via Exotel", 
@@ -176,11 +219,11 @@ const respondToSessionRequest = async (req, res) => {
                 sessionReq.exotelCallSid = callResult.callSid;
                 await sessionReq.save();
 
-                if (sessionReq.user.fcmToken) {
-                    await admin.messaging().send({
+                if (sessionReq.user && sessionReq.user.fcmToken) {
+                    admin.messaging().send({
                         token: sessionReq.user.fcmToken,
                         data: { type: 'REQUEST_ACCEPTED', sessionType: 'call' }
-                    });
+                    }).catch(err => console.error("FCM Error:", err.message));
                 }
 
                 return res.status(200).json({
@@ -192,32 +235,78 @@ const respondToSessionRequest = async (req, res) => {
             }
         }
 
+        return res.status(400).json({ success: false, message: "Invalid action or request type" });
+
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
 };
 
-const getPartnerPendingRequest = async (req, res) => {
+const endSession = async (req, res) => {
     try {
-        const partnerId = req.user.id;
+        const { requestId } = req.body;
 
-        const sessionReq = await SessionRequest.findOne({
-            partner: partnerId,
-            status: 'pending'
-        }).populate('user', 'fullName profilePic mobile walletBalance');
+        if (!requestId) {
+            return res.status(400).json({ success: false, message: "requestId is required" });
+        }
 
-        if (!sessionReq) {
-            return res.status(200).json({
-                success: true,
-                hasPendingRequest: false,
-                message: "No pending request found"
-            });
+        const sessionReq = await SessionRequest.findById(requestId);
+
+        if (!sessionReq || sessionReq.status !== 'accepted') {
+            return res.status(400).json({ success: false, message: "Session is not active or already completed" });
+        }
+
+        const endTime = new Date();
+        const startTime = sessionReq.startTime || new Date();
+        const durationSeconds = Math.max(1, Math.ceil((endTime - startTime) / 1000));
+        const durationMinutes = Math.ceil(durationSeconds / 60);
+
+        const totalCost = durationMinutes * (sessionReq.ratePerMin || 10);
+
+        sessionReq.status = 'completed';
+        sessionReq.endTime = endTime;
+        sessionReq.durationSeconds = durationSeconds;
+        sessionReq.totalCost = totalCost;
+        await sessionReq.save();
+
+        await User.findByIdAndUpdate(sessionReq.user, {
+            $inc: { walletBalance: -totalCost }
+        });
+
+        await Partner.findByIdAndUpdate(sessionReq.partner, {
+            $inc: { walletBalance: totalCost }
+        });
+
+        if (sessionReq.chatRoomId) {
+            admin.database().ref(`chats/${sessionReq.chatRoomId}`).update({ status: 'ended' })
+                .catch(err => console.error("Firebase DB Error:", err.message));
         }
 
         return res.status(200).json({
             success: true,
-            hasPendingRequest: true,
-            request: sessionReq
+            message: "Session ended successfully",
+            durationMinutes,
+            totalCost
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getPartnerPendingRequests = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+
+        const requests = await SessionRequest.find({
+            partner: partnerId,
+            status: 'pending'
+        }).populate('user', 'fullName profilePic mobile walletBalance').sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            count: requests.length,
+            requests
         });
 
     } catch (error) {
@@ -255,7 +344,9 @@ const getUserRequestStatus = async (req, res) => {
 
 module.exports = {
     initiateSessionRequest,
+    cancelSessionRequest,
     respondToSessionRequest,
-    getPartnerPendingRequest,
+    endSession,
+    getPartnerPendingRequests,
     getUserRequestStatus
 };
