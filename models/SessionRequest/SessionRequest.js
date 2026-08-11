@@ -1,4 +1,3 @@
-// models/SessionRequest.js
 const mongoose = require('mongoose');
 
 const sessionRequestSchema = new mongoose.Schema({
@@ -19,7 +18,7 @@ const sessionRequestSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        enum: ['pending', 'accepted', 'rejected', 'timeout', 'completed', 'failed'], 
+        enum: ['pending', 'accepted', 'rejected', 'timeout', 'completed', 'cancelled', 'failed'], 
         default: 'pending' 
     },
     ratePerMin: { 

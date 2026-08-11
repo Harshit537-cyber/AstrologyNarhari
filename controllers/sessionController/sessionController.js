@@ -258,23 +258,23 @@ const endSession = async (req, res) => {
 
         const endTime = new Date();
         const startTime = sessionReq.startTime || new Date();
-        const durationSeconds = Math.max(1, Math.ceil((endTime - startTime) / 1000));
-        const durationMinutes = Math.ceil(durationSeconds / 60);
+        const durationInSeconds = Math.max(1, Math.ceil((endTime - startTime) / 1000));
+        const durationMinutes = Math.ceil(durationInSeconds / 60);
 
-        const totalCost = durationMinutes * (sessionReq.ratePerMin || 10);
+        const totalDeductedAmount = durationMinutes * (sessionReq.ratePerMin || 10);
 
         sessionReq.status = 'completed';
         sessionReq.endTime = endTime;
-        sessionReq.durationSeconds = durationSeconds;
-        sessionReq.totalCost = totalCost;
+        sessionReq.durationInSeconds = durationInSeconds;
+        sessionReq.totalDeductedAmount = totalDeductedAmount;
         await sessionReq.save();
 
         await User.findByIdAndUpdate(sessionReq.user, {
-            $inc: { walletBalance: -totalCost }
+            $inc: { walletBalance: -totalDeductedAmount }
         });
 
         await Partner.findByIdAndUpdate(sessionReq.partner, {
-            $inc: { walletBalance: totalCost }
+            $inc: { walletBalance: totalDeductedAmount }
         });
 
         if (sessionReq.chatRoomId) {
@@ -286,7 +286,7 @@ const endSession = async (req, res) => {
             success: true,
             message: "Session ended successfully",
             durationMinutes,
-            totalCost
+            totalDeductedAmount
         });
 
     } catch (error) {
