@@ -33,9 +33,11 @@ const cleanUploadedFiles = (files) => {
 
 const verifyOtp = async (req, res) => {
     try {
-        const { idToken, mobile: bodyMobile } = req.body;
+        // Request body se role bhi accept kar rahe hain
+        const { idToken, mobile: bodyMobile, role } = req.body;
         let mobile;
 
+        // Firebase Token verification
         if (idToken) {
             const decodedToken = await admin.auth().verifyIdToken(idToken);
             mobile = decodedToken.phone_number;
@@ -44,28 +46,41 @@ const verifyOtp = async (req, res) => {
         }
 
         if (!mobile) {
-            return res.status(400).json({ success: false, message: "Firebase ID Token or Mobile number is required" });
+            return res.status(400).json({ 
+                success: false, 
+                message: "Firebase ID Token or Mobile number is required" 
+            });
         }
 
         let partner = await Partner.findOne({ mobile });
 
+        // User role set karna (request body se ya default 'partner')
+        const assignedRole = role || (partner ? partner.role : 'partner');
+
         if (!partner) {
+            // New Partner Creation
             partner = await Partner.create({
                 mobile,
-                role: 'partner',
+                role: assignedRole,
                 isVerified: true
             });
         } else {
+            // Update Existing Partner
             partner.isVerified = true;
+            if (role) {
+                partner.role = role; // Agar request me role bheja gaya hai to update karein
+            }
             await partner.save();
         }
 
+        // Generate JWT Token
         const token = jwt.sign(
             { id: partner._id, role: partner.role },
             process.env.JWT_SECRET || 'SECRET_KEY_123',
             { expiresIn: '7d' }
         );
 
+        // Success Response
         return res.status(200).json({
             success: true,
             message: "Authentication successful",
@@ -73,6 +88,7 @@ const verifyOtp = async (req, res) => {
             data: {
                 id: partner._id,
                 mobile: partner.mobile,
+                role: partner.role, // Response me role include kiya gaya hai
                 isProfileComplete: partner.isProfileComplete,
                 profileApprovalStatus: partner.profileApprovalStatus,
                 isActive: partner.isActive
@@ -80,7 +96,11 @@ const verifyOtp = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(401).json({ success: false, message: "Invalid or expired Firebase token", error: error.message });
+        return res.status(401).json({ 
+            success: false, 
+            message: "Invalid or expired Firebase token", 
+            error: error.message 
+        });
     }
 };
 
