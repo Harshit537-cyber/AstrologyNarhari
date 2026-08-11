@@ -21,9 +21,10 @@ exports.addProduct = async (req, res) => {
             careInstructions,
             isFeatured,
             isActive,
+            slug
         } = req.body;
 
-        if (!name || !description || !category || !price) {
+        if (!name || !description || !category || !price || !slug) {
             return res.status(400).json({
                 success: false,
                 message: "Required fields are missing.",
@@ -73,6 +74,7 @@ exports.addProduct = async (req, res) => {
             careInstructions,
             isFeatured,
             isActive,
+            slug
         });
 
         return res.status(201).json({
@@ -212,6 +214,8 @@ exports.updateProduct = async (req, res) => {
             req.body.isFeatured ?? product.isFeatured;
         product.isActive =
             req.body.isActive ?? product.isActive;
+        product.slug =
+            req.body.slug ?? product.slug;
 
         if (req.body.benefits) {
             product.benefits =
