@@ -70,6 +70,7 @@ const verifyOtp = async (req, res) => {
             data: {
                 id: pandit._id,
                 mobile: pandit.mobile,
+                role: pandit.role, // <-- यहाँ role ऐड कर दिया गया है
                 isProfileComplete: pandit.isProfileComplete,
                 profileApprovalStatus: pandit.profileApprovalStatus
             }
@@ -142,7 +143,6 @@ const register = async (req, res) => {
         pandit.bio = bio;
         pandit.isProfileComplete = true;
         
-        // <-- यहाँ 'Pending' से बदलकर 'Approved' कर दिया है
         pandit.profileApprovalStatus = 'Approved'; 
 
         await pandit.save();
