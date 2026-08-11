@@ -22,13 +22,9 @@ const initiateSessionRequest = async (req, res) => {
             return res.status(400).json({ success: false, message: "Astrologer is currently offline" });
         }
 
-        if (partner.isBusy) {
-            return res.status(400).json({ success: false, message: "Astrologer is currently busy" });
-        }
-
         const user = await User.findById(userId);
         if (!user) {
-            return res.status(440).json({ success: false, message: "User not found" });
+            return res.status(404).json({ success: false, message: "User not found" });
         }
 
         const minRate = partner.minRate || 10;
@@ -63,7 +59,7 @@ const initiateSessionRequest = async (req, res) => {
             }).catch(err => console.error("FCM Error:", err.message));
         }
 
-        admin.database().ref(`session_requests/${partnerId}`).set({
+        admin.database().ref(`session_requests/${partnerId}/${sessionRequest._id}`).set({
             requestId: sessionRequest._id.toString(),
             userId: userId,
             userName: user.fullName || 'User',
@@ -76,6 +72,41 @@ const initiateSessionRequest = async (req, res) => {
             success: true,
             message: "Request sent successfully",
             requestId: sessionRequest._id
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const cancelSessionRequest = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { requestId } = req.body;
+
+        if (!requestId) {
+            return res.status(400).json({ success: false, message: "requestId is required" });
+        }
+
+        const sessionReq = await SessionRequest.findOne({ _id: requestId, user: userId });
+
+        if (!sessionReq) {
+            return res.status(404).json({ success: false, message: "Request not found" });
+        }
+
+        if (sessionReq.status !== 'pending') {
+            return res.status(400).json({ success: false, message: "Only pending requests can be cancelled" });
+        }
+
+        sessionReq.status = 'cancelled';
+        await sessionReq.save();
+
+        admin.database().ref(`session_requests/${sessionReq.partner}/${requestId}`).remove()
+            .catch(err => console.error("Firebase DB Error:", err.message));
+
+        return res.status(200).json({
+            success: true,
+            message: "Request cancelled successfully"
         });
 
     } catch (error) {
@@ -99,10 +130,10 @@ const respondToSessionRequest = async (req, res) => {
         const sessionReq = await SessionRequest.findById(requestId).populate('user partner');
 
         if (!sessionReq || sessionReq.status !== 'pending') {
-            return res.status(400).json({ success: false, message: "Request expired or already processed" });
+            return res.status(400).json({ success: false, message: "Request expired, cancelled or already processed" });
         }
 
-        admin.database().ref(`session_requests/${partnerId}`).remove()
+        admin.database().ref(`session_requests/${partnerId}/${requestId}`).remove()
             .catch(err => console.error("Firebase DB Error:", err.message));
 
         if (action === 'decline') {
@@ -125,8 +156,6 @@ const respondToSessionRequest = async (req, res) => {
         if (action === 'accept') {
             sessionReq.status = 'accepted';
             sessionReq.startTime = new Date();
-
-            await Partner.findByIdAndUpdate(partnerId, { isBusy: true });
 
             if (sessionReq.type === 'chat') {
                 const chatRoomId = `chat_${sessionReq.user._id}_${partnerId}_${Date.now()}`;
@@ -166,7 +195,6 @@ const respondToSessionRequest = async (req, res) => {
                 const timeLimitSec = Math.floor(maxAllowedMinutes * 60);
 
                 if (timeLimitSec < 60) {
-                    await Partner.findByIdAndUpdate(partnerId, { isBusy: false });
                     return res.status(400).json({ 
                         success: false, 
                         message: "User wallet balance is too low for a 1-minute call." 
@@ -181,7 +209,6 @@ const respondToSessionRequest = async (req, res) => {
                 );
 
                 if (!callResult.success) {
-                    await Partner.findByIdAndUpdate(partnerId, { isBusy: false });
                     return res.status(500).json({ 
                         success: false, 
                         message: "Failed to connect call via Exotel", 
@@ -215,27 +242,71 @@ const respondToSessionRequest = async (req, res) => {
     }
 };
 
-const getPartnerPendingRequest = async (req, res) => {
+const endSession = async (req, res) => {
     try {
-        const partnerId = req.user.id;
+        const { requestId } = req.body;
 
-        const sessionReq = await SessionRequest.findOne({
-            partner: partnerId,
-            status: 'pending'
-        }).populate('user', 'fullName profilePic mobile walletBalance');
+        if (!requestId) {
+            return res.status(400).json({ success: false, message: "requestId is required" });
+        }
 
-        if (!sessionReq) {
-            return res.status(200).json({
-                success: true,
-                hasPendingRequest: false,
-                message: "No pending request found"
-            });
+        const sessionReq = await SessionRequest.findById(requestId);
+
+        if (!sessionReq || sessionReq.status !== 'accepted') {
+            return res.status(400).json({ success: false, message: "Session is not active or already completed" });
+        }
+
+        const endTime = new Date();
+        const startTime = sessionReq.startTime || new Date();
+        const durationSeconds = Math.max(1, Math.ceil((endTime - startTime) / 1000));
+        const durationMinutes = Math.ceil(durationSeconds / 60);
+
+        const totalCost = durationMinutes * (sessionReq.ratePerMin || 10);
+
+        sessionReq.status = 'completed';
+        sessionReq.endTime = endTime;
+        sessionReq.durationSeconds = durationSeconds;
+        sessionReq.totalCost = totalCost;
+        await sessionReq.save();
+
+        await User.findByIdAndUpdate(sessionReq.user, {
+            $inc: { walletBalance: -totalCost }
+        });
+
+        await Partner.findByIdAndUpdate(sessionReq.partner, {
+            $inc: { walletBalance: totalCost }
+        });
+
+        if (sessionReq.chatRoomId) {
+            admin.database().ref(`chats/${sessionReq.chatRoomId}`).update({ status: 'ended' })
+                .catch(err => console.error("Firebase DB Error:", err.message));
         }
 
         return res.status(200).json({
             success: true,
-            hasPendingRequest: true,
-            request: sessionReq
+            message: "Session ended successfully",
+            durationMinutes,
+            totalCost
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getPartnerPendingRequests = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+
+        const requests = await SessionRequest.find({
+            partner: partnerId,
+            status: 'pending'
+        }).populate('user', 'fullName profilePic mobile walletBalance').sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            count: requests.length,
+            requests
         });
 
     } catch (error) {
@@ -273,7 +344,9 @@ const getUserRequestStatus = async (req, res) => {
 
 module.exports = {
     initiateSessionRequest,
+    cancelSessionRequest,
     respondToSessionRequest,
-    getPartnerPendingRequest,
+    endSession,
+    getPartnerPendingRequests,
     getUserRequestStatus
 };
