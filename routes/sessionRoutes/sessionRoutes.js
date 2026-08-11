@@ -5,7 +5,7 @@ const {
     respondToSessionRequest,
     getPartnerPendingRequest,
     getUserRequestStatus
-} = require('../../controllers/Session/sessionController');
+} = require('../../controllers/sessionController/sessionController');
 const { verifyToken } = require('../../middleware/auth');
 
 router.post('/user/request', verifyToken, initiateSessionRequest);
