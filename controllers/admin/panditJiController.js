@@ -91,9 +91,6 @@ const createPandit = async (req, res) => {
 };
 
 
-// =====================================================
-// GET ALL PANDITS
-// =====================================================
 const getAllPandits = async (req, res) => {
     try {
         const {

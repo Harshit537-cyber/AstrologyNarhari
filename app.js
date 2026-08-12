@@ -59,6 +59,7 @@ app.use("/api/admin/card", require("./routes/AdminRoutes/cardRoutes"));
 app.use("/api/admin/shop/banner", require("./routes/AdminRoutes/E-comm/topBannerRoutes"));
 app.use("/api/partner/rating", require("./routes/PatnerRoutes/partnerRatingRoutes"));
 app.use("/api/admin/pandit", require("./routes/AdminRoutes/panditJiRoutes"));
+app.use("/api/gift", require("./routes/gift/giftRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({
