@@ -284,3 +284,80 @@ exports.getGiftDetails = async (req, res) => {
         res.status(500).json({ success: false, message: "Invalid Gift ID or Server Error" });
     }
 };
+
+
+// PARTNER API
+
+exports.getReceivedGifts = async (req, res) => {
+    try {
+        const partnerId = req.user._id || req.user.id; 
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const history = await GiftTransaction.find({ receiverId: partnerId })
+            .populate('giftId', 'giftName iconUrl price')
+            .populate('senderId', 'fullName profilePic name') 
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        const total = await GiftTransaction.countDocuments({ receiverId: partnerId });
+
+        res.status(200).json({
+            success: true,
+            totalGifts: total,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(total / limit)
+            },
+            history
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getSessionEarnings = async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const partnerId = req.user._id || req.user.id;
+
+        const transactions = await GiftTransaction.find({ 
+            receiverId: partnerId, 
+            sessionId: sessionId 
+        }).populate('giftId', 'giftName iconUrl');
+
+        const totalSessionEarning = transactions.reduce((acc, item) => acc + item.partnerEarning, 0);
+
+        res.status(200).json({
+            success: true,
+            totalEarning: totalSessionEarning,
+            totalGifts: transactions.length,
+            transactions
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getPartnerGiftSummary = async (req, res) => {
+    try {
+        const partnerId = req.user._id || req.user.id;
+        const partner = await Partner.findById(partnerId).select('walletBalance fullName');
+
+        const totalGiftsCount = await GiftTransaction.countDocuments({ receiverId: partnerId });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                partnerName: partner.fullName,
+                currentWalletBalance: partner.walletBalance,
+                totalGiftsReceived: totalGiftsCount
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
