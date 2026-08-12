@@ -1,8 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const { verifyOtp, register, getProfile, logoutPandit, updatePanditFCMToken } = require('../../controllers/Pandit/panditAuthController');
+const { 
+    verifyOtp, 
+    register, 
+    getProfile, 
+    updateProfile, 
+    deleteAccount, 
+    logoutPandit, 
+    updatePanditFCMToken 
+} = require('../../controllers/Pandit/panditAuthController');
 const { verifyToken, isPandit } = require('../../middleware/auth');
 
 const storage = multer.diskStorage({
@@ -24,6 +31,8 @@ const cpUpload = upload.fields([
 router.post('/verify-otp', verifyOtp);
 router.post('/register', verifyToken, isPandit, cpUpload, register);
 router.get('/profile', verifyToken, isPandit, getProfile);
+router.put('/profile', verifyToken, isPandit, cpUpload, updateProfile);
+router.delete('/account', verifyToken, isPandit, deleteAccount);
 router.post('/logout', verifyToken, isPandit, logoutPandit);
 router.patch('/update-fcm', verifyToken, isPandit, updatePanditFCMToken);
 

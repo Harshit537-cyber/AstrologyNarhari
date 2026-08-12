@@ -192,7 +192,13 @@ const respondToSessionRequest = async (req, res) => {
                 const userWallet = sessionReq.user.walletBalance || 0;
                 const ratePerMin = sessionReq.ratePerMin || 10;
                 const maxAllowedMinutes = userWallet / ratePerMin;
-                const timeLimitSec = Math.floor(maxAllowedMinutes * 60);
+                
+                // Exotel max time limit is 14400 seconds (4 hours). Cap it to prevent errors.
+                let timeLimitSec = Math.floor(maxAllowedMinutes * 60);
+                const MAX_EXOTEL_LIMIT = 14400; 
+                if (timeLimitSec > MAX_EXOTEL_LIMIT) {
+                    timeLimitSec = MAX_EXOTEL_LIMIT;
+                }
 
                 if (timeLimitSec < 60) {
                     return res.status(400).json({ 
