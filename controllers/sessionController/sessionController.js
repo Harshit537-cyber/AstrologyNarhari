@@ -7,10 +7,10 @@ const { triggerExotelCall } = require('../../services/exotelService');
 const initiateSessionRequest = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { partnerId, type } = req.body;
+        const { partnerId, type, durationMinutes } = req.body;
 
-        if (!partnerId || !type) {
-            return res.status(400).json({ success: false, message: "partnerId and type are required" });
+        if (!partnerId || !type || !durationMinutes) {
+            return res.status(400).json({ success: false, message: "partnerId, type, and durationMinutes are required" });
         }
 
         if (!['chat', 'call'].includes(type)) {
@@ -28,12 +28,12 @@ const initiateSessionRequest = async (req, res) => {
         }
 
         const minRate = partner.minRate || 10;
-        const requiredBalance = minRate * 5;
+        const requiredBalance = minRate * Number(durationMinutes);
 
         if ((user.walletBalance || 0) < requiredBalance) {
             return res.status(400).json({ 
                 success: false, 
-                message: `Insufficient wallet balance. Minimum ₹${requiredBalance} required.` 
+                message: `Insufficient wallet balance. Minimum ₹${requiredBalance} required for ${durationMinutes} minutes.` 
             });
         }
 
@@ -42,6 +42,7 @@ const initiateSessionRequest = async (req, res) => {
             partner: partnerId,
             type,
             ratePerMin: minRate,
+            durationMinutes: Number(durationMinutes),
             status: 'pending'
         });
 
@@ -52,6 +53,7 @@ const initiateSessionRequest = async (req, res) => {
                     type: 'INCOMING_SESSION_REQUEST',
                     requestId: sessionRequest._id.toString(),
                     sessionType: type,
+                    durationMinutes: durationMinutes.toString(),
                     userName: user.fullName || 'User',
                     userPic: user.profilePic || '',
                 },
@@ -64,6 +66,7 @@ const initiateSessionRequest = async (req, res) => {
             userId: userId,
             userName: user.fullName || 'User',
             type: type,
+            durationMinutes: durationMinutes,
             status: 'pending',
             timestamp: Date.now()
         }).catch(err => console.error("Firebase DB Error:", err.message));
@@ -189,22 +192,23 @@ const respondToSessionRequest = async (req, res) => {
             }
 
             if (sessionReq.type === 'call') {
-                const userWallet = sessionReq.user.walletBalance || 0;
-                const ratePerMin = sessionReq.ratePerMin || 10;
-                const maxAllowedMinutes = userWallet / ratePerMin;
-                const timeLimitSec = Math.floor(maxAllowedMinutes * 60);
+                const durationMinutes = sessionReq.durationMinutes || 5; 
+                const timeLimitSec = durationMinutes * 60; 
 
-                if (timeLimitSec < 60) {
+                const userWallet = sessionReq.user.walletBalance || 0;
+                const requiredAmount = durationMinutes * (sessionReq.ratePerMin || 10);
+
+                if (userWallet < requiredAmount) {
                     return res.status(400).json({ 
                         success: false, 
-                        message: "User wallet balance is too low for a 1-minute call." 
+                        message: "User wallet balance has dropped below required amount for this call duration." 
                     });
                 }
 
                 const callResult = await triggerExotelCall(
                     sessionReq.partner.mobile,
                     sessionReq.user.mobile,
-                    timeLimitSec,
+                    timeLimitSec, 
                     sessionReq._id.toString()
                 );
 
@@ -228,7 +232,7 @@ const respondToSessionRequest = async (req, res) => {
 
                 return res.status(200).json({
                     success: true,
-                    message: "Voice call connecting via Exotel",
+                    message: `Voice call connecting via Exotel for ${durationMinutes} minutes`,
                     callSid: callResult.callSid,
                     sessionType: 'call'
                 });
@@ -261,7 +265,8 @@ const endSession = async (req, res) => {
         const durationInSeconds = Math.max(1, Math.ceil((endTime - startTime) / 1000));
         const durationMinutes = Math.ceil(durationInSeconds / 60);
 
-        const totalDeductedAmount = durationMinutes * (sessionReq.ratePerMin || 10);
+        const finalDuration = sessionReq.durationMinutes ? Math.min(durationMinutes, sessionReq.durationMinutes) : durationMinutes;
+        const totalDeductedAmount = finalDuration * (sessionReq.ratePerMin || 10);
 
         sessionReq.status = 'completed';
         sessionReq.endTime = endTime;
@@ -285,7 +290,7 @@ const endSession = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "Session ended successfully",
-            durationMinutes,
+            durationMinutes: finalDuration,
             totalDeductedAmount
         });
 

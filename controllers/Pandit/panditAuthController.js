@@ -50,7 +50,7 @@ const verifyOtp = async (req, res) => {
                 mobile,
                 role: 'pandit',
                 isVerified: true,
-                profileApprovalStatus: 'Approved' // Auto-approve on create
+                profileApprovalStatus: 'Approved'
             });
         } else {
             pandit.isVerified = true;
@@ -70,7 +70,7 @@ const verifyOtp = async (req, res) => {
             data: {
                 id: pandit._id,
                 mobile: pandit.mobile,
-                role: pandit.role, // <-- यहाँ role ऐड कर दिया गया है
+                role: pandit.role,
                 isProfileComplete: pandit.isProfileComplete,
                 profileApprovalStatus: pandit.profileApprovalStatus
             }
@@ -142,7 +142,6 @@ const register = async (req, res) => {
         pandit.certificatePhotos = certificatePhotosUrls;
         pandit.bio = bio;
         pandit.isProfileComplete = true;
-        
         pandit.profileApprovalStatus = 'Approved'; 
 
         await pandit.save();
@@ -175,7 +174,96 @@ const getProfile = async (req, res) => {
     }
 };
 
+const updateProfile = async (req, res) => {
+    try {
+        const pandit = await Pandit.findById(req.user.id);
+        if (!pandit) {
+            cleanUploadedFiles(req.files);
+            return res.status(404).json({ success: false, message: 'Pandit not found' });
+        }
 
+        const {
+            fullName,
+            dateOfBirth,
+            gender,
+            city,
+            poojaServiceMode,
+            expertise,
+            primaryCategory,
+            languages,
+            experience,
+            vedicEducation,
+            canArrangeSamagri,
+            expectedMonthlyEarnings,
+            minPoojaFee,
+            bio
+        } = req.body;
+
+        let profilePicUrl = pandit.profilePic;
+        if (req.files?.profilePic?.[0]) {
+            profilePicUrl = await uploadToCloudinary(req.files.profilePic[0].path, 'pandits/profiles');
+        }
+
+        let certificatePhotosUrls = pandit.certificatePhotos || [];
+        if (req.files?.certificatePhotos) {
+            const uploadPromises = req.files.certificatePhotos.map((file) =>
+                uploadToCloudinary(file.path, 'pandits/certificates')
+            );
+            const uploadedUrls = await Promise.all(uploadPromises);
+            certificatePhotosUrls = [...certificatePhotosUrls, ...uploadedUrls].slice(0, 4);
+        }
+
+        if (fullName !== undefined) pandit.fullName = fullName;
+        if (profilePicUrl !== undefined) pandit.profilePic = profilePicUrl;
+        if (dateOfBirth !== undefined) pandit.dateOfBirth = dateOfBirth;
+        if (gender !== undefined) pandit.gender = gender;
+        if (city !== undefined) pandit.city = city;
+        if (poojaServiceMode !== undefined) pandit.poojaServiceMode = poojaServiceMode;
+        if (expertise !== undefined) pandit.expertise = typeof expertise === 'string' ? JSON.parse(expertise) : expertise;
+        if (primaryCategory !== undefined) pandit.primaryCategory = primaryCategory;
+        if (languages !== undefined) pandit.languages = typeof languages === 'string' ? JSON.parse(languages) : languages;
+        if (experience !== undefined) pandit.experience = Number(experience);
+        if (vedicEducation !== undefined) pandit.vedicEducation = vedicEducation;
+        if (canArrangeSamagri !== undefined) {
+            pandit.canArrangeSamagri = canArrangeSamagri === 'true' || canArrangeSamagri === true || canArrangeSamagri === 'Yes';
+        }
+        if (expectedMonthlyEarnings !== undefined) pandit.expectedMonthlyEarnings = Number(expectedMonthlyEarnings);
+        if (minPoojaFee !== undefined) pandit.minPoojaFee = Number(minPoojaFee);
+        if (certificatePhotosUrls.length > 0) pandit.certificatePhotos = certificatePhotosUrls;
+        if (bio !== undefined) pandit.bio = bio;
+
+        await pandit.save();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Pandit profile updated successfully',
+            data: pandit
+        });
+
+    } catch (error) {
+        cleanUploadedFiles(req.files);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+const deleteAccount = async (req, res) => {
+    try {
+        const pandit = await Pandit.findById(req.user.id);
+        if (!pandit) {
+            return res.status(404).json({ success: false, message: 'Pandit not found' });
+        }
+
+        await Pandit.findByIdAndDelete(req.user.id);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Pandit account deleted successfully'
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
 
 const updatePanditFCMToken = async (req, res) => {
     try {
@@ -208,16 +296,12 @@ const updatePanditFCMToken = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Update Pandit FCM Token Error:", error);
-
         return res.status(500).json({
             success: false,
             message: "Internal Server Error"
         });
     }
 };
-
-
 
 const logoutPandit = async (req, res) => {
     try {
@@ -232,6 +316,8 @@ module.exports = {
     verifyOtp,
     register,
     getProfile,
+    updateProfile,
+    deleteAccount,
     updatePanditFCMToken,
     logoutPandit
 };
