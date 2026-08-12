@@ -6,6 +6,7 @@ const userAuthRoutes = require("./routes/UserRoutes/userAuth");
 const partnerAuthRoutes = require("./routes/PatnerRoutes/partnerAuth");
 const panditAuthRoutes = require("./routes/PanditRoutes/panditAuth");
 const adminAuthRoutes = require("./routes/AdminRoutes/adminAuth");
+const adminNotificationRoutes = require("./routes/AdminRoutes/adminNotificationRoutes");
 const bookingRoutes = require("./routes/bookingRoutes/bookingRoutes");
 const bannerRoutes = require("./routes/AdminRoutes/bannerRoutes");
 const productCategoryRoutes = require("./routes/AdminRoutes/E-comm/categoryRoutes");
@@ -15,8 +16,7 @@ const cartRoutes = require("./routes/UserRoutes/cartRoutes");
 const ticketRoutes = require("./routes/ticketRoutes/ticketRoutes");
 const razorpayInstance = require("./config/razorpay");
 
-// 🟢 NEW: Instant Session Routes Import
-const sessionRoutes = require("./routes/sessionRoutes/sessionRoutes"); // (Apne folder path ke hisaab se adjust kar lein agar routes/sessionRoutes/sessionRoutes.js ho)
+const sessionRoutes = require("./routes/sessionRoutes/sessionRoutes");
 
 const app = express();
 
@@ -41,7 +41,6 @@ app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
 
-// 🟢 NEW: Instant Chat & Voice Call Request API Route
 app.use("/api/session", sessionRoutes);
 
 app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
@@ -50,6 +49,7 @@ app.use("/api/shipping", require("./routes/UserRoutes/addressRoutes"));
 app.use("/api/tickets", ticketRoutes);
 
 app.use("/api/admin", adminAuthRoutes);
+app.use("/api/admin/notifications", adminNotificationRoutes);
 app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/admin/product-category", productCategoryRoutes);
 app.use("/api/admin/product", productRoutes);
