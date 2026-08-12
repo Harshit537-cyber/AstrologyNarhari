@@ -52,6 +52,9 @@ const bookingSchema = new mongoose.Schema({
     endTime: { type: Date },
     cancellationReason: { type: String, default: null },
     callSid: { type: String, default: null },
+    commissionPercentage: { type: Number, default: 0 },
+    adminCommission: { type: Number, default: 0 },
+    partnerEarning: { type: Number, default: 0 },
     rating: {
         type: Number,
         min: 1,

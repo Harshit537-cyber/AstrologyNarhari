@@ -26,6 +26,9 @@ exports.exotelWebhook =async (req, res) => {
 
         const user = await User.findById(booking.user._id).session(session);
         const partner = await Partner.findById(booking.partner._id).session(session);
+        const adminUser = await User.findOne({ role: 'admin' }).session(session);
+
+
 
         if (partner) {
             partner.isBusy = false;
@@ -35,23 +38,42 @@ exports.exotelWebhook =async (req, res) => {
        const durationSeconds = parseInt(Duration || 0);
         let finalCost = 0;
         let billedMins = 0;
+         let isCallSuccessful = false;
 
        if (Status === 'completed' && durationSeconds >= 30) {
             finalCost = booking.totalFee; 
             billedMins = booking.duration; 
+            isCallSuccessful = true
         }
 
         const userBalBefore = user?.walletBalance || 0;
         const partnerBalBefore = partner?.walletBalance || 0;
 
 
+if (isCallSuccessful) {
+            if (partner) {
+                const pEarning = booking.partnerEarning || (finalCost * 0.8); // Backup if field empty
+                partner.walletBalance = parseFloat((partner.walletBalance + pEarning).toFixed(2));
+                await partner.save({ session });
+            }
 
-   if (finalCost > 0) {
-            if (user) user.walletBalance = parseFloat((user.walletBalance - finalCost).toFixed(2));
-            if (partner) partner.walletBalance = parseFloat((partner.walletBalance + finalCost).toFixed(2));
+    
+            if (adminUser) {
+                const aComm = booking.adminCommission || (finalCost * 0.2); // Backup
+                adminUser.walletBalance = parseFloat((adminUser.walletBalance + aComm).toFixed(2));
+                await adminUser.save({ session });
+            }
             
-            if (user) await user.save({ session });
-            if (partner) await partner.save({ session });
+            booking.status = 'completed';
+            booking.paymentStatus = 'completed';
+        } else {
+            
+            if (user) {
+                user.walletBalance = parseFloat((user.walletBalance + booking.totalFee).toFixed(2));
+                await user.save({ session });
+            }
+            booking.status = 'missed';
+            booking.paymentStatus = 'refunded'; 
         }
 
 
@@ -84,13 +106,7 @@ exports.exotelWebhook =async (req, res) => {
 
         await newCallLog.save({ session });
 
-       if (finalCost > 0) {
-            booking.status = 'completed';
-            booking.paymentStatus = 'completed';
-        } else {
-            booking.status = 'missed';
-            booking.paymentStatus = 'pending'; 
-        }
+     
 
                 booking.actualDuration = durationSeconds;
 
