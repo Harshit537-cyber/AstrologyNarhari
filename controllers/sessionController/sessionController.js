@@ -314,6 +314,31 @@ const getPartnerPendingRequests = async (req, res) => {
     }
 };
 
+const getPartnerAcceptedRequests = async (req, res) => {
+    try {
+        const partnerId = req.user.id;
+        const { status } = req.query;
+
+        const filterStatus = status || 'accepted';
+
+        const acceptedRequests = await SessionRequest.find({
+            partner: partnerId,
+            status: filterStatus
+        })
+        .populate('user', 'fullName profilePic mobile walletBalance')
+        .sort({ updatedAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            count: acceptedRequests.length,
+            requests: acceptedRequests
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 const getUserRequestStatus = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -348,5 +373,6 @@ module.exports = {
     respondToSessionRequest,
     endSession,
     getPartnerPendingRequests,
+    getPartnerAcceptedRequests,
     getUserRequestStatus
 };
