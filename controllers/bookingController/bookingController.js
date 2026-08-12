@@ -64,14 +64,14 @@ const scheduleBooking = async (req, res) => {
             });
         }
 
-         let commPercent = 20; 
+         let commPercent = 0; 
         try {
             const config = await CommissionConfig.findOne({ partnerId: partnerId });
             if (config) {
                 commPercent = config.commissionPercentage;
             }
         } catch (err) {
-            console.error("Commission fetch error:", err);
+            console.error("Error fetching config, using 0%");
         }
 
         const totalFee = partner.minRate * duration;
