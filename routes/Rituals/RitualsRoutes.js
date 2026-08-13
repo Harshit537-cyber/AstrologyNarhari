@@ -24,6 +24,8 @@ router.get('/rituals/available-pandits', verifyToken, ritualController.getAvaila
 
 router.post('/rituals/book', verifyToken, ritualController.createRitualBooking);
 
+router.get('/rituals/my-bookings', verifyToken, ritualController.getUserRitualBookings);
+
 router.get('/pandit/requests', verifyToken, isPandit, ritualController.getPanditRitualRequests);
 
 router.get('/pandit/request/:id', verifyToken, isPandit, ritualController.getPanditRitualRequestById);
