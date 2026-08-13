@@ -32,16 +32,16 @@ exports.initiateCall = async (req, res) => {
 
         const user = booking.user;
         const partner = booking.partner;
-if (partner.isAcceptingRequests === false) {
-            await sendPushNotification(user.fcmToken, { type: 'PARTNER_UNAVAILABLE' }, {
-                title: "Partner Unavailable",
-                body: `Astrologer ${partner.fullName || 'Partner'} is not accepting calls right now.`
-            });
+// if (partner.isAcceptingRequests === false) {
+//             await sendPushNotification(user.fcmToken, { type: 'PARTNER_UNAVAILABLE' }, {
+//                 title: "Partner Unavailable",
+//                 body: `Astrologer ${partner.fullName || 'Partner'} is not accepting calls right now.`
+//             });
 
-            return res.status(403).json({ 
-                message: "Partner is not picking up calls right now. Please try again later." 
-            });
-        }
+//             return res.status(403).json({ 
+//                 message: "Partner is not picking up calls right now. Please try again later." 
+//             });
+//         }
 
   if (user.walletBalance < booking.totalFee) {
             return res.status(400).json({ 
