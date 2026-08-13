@@ -54,12 +54,15 @@ app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/admin/product-category", productCategoryRoutes);
 app.use("/api/admin/product", productRoutes);
 app.use("/api/admin/coupon", couponRoutes);
+
+app.use("/api/v1/calls", require("./routes/callWebhookRoutes/callWebhookRoutes"));
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
 app.use("/api/admin/card", require("./routes/AdminRoutes/cardRoutes"));
 app.use("/api/admin/shop/banner", require("./routes/AdminRoutes/E-comm/topBannerRoutes"));
 app.use("/api/partner/rating", require("./routes/PatnerRoutes/partnerRatingRoutes"));
 app.use("/api/admin/pandit", require("./routes/AdminRoutes/panditJiRoutes"));
 app.use("/api/gift", require("./routes/gift/giftRoutes"));
+app.use("/api/admin/commission", require("./routes/AdminRoutes/adminCommisionRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({

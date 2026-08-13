@@ -4,7 +4,8 @@ const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
 const moment = require('moment');
 const { validateBookingTime } = require('../../utils/dateValidator');
-const sendPushNotification = require("../../utils/notificationService")
+const sendPushNotification = require("../../utils/notificationService");
+const CommissionConfig = require('../../models/Partner/CommissionConfig');
 
 const scheduleBooking = async (req, res) => {
     try {
@@ -63,14 +64,26 @@ const scheduleBooking = async (req, res) => {
             });
         }
 
-        const totalFee = partner.minRate * duration;
-        const currentBalance = user.walletBalance || 0;
+         let commPercent = 0; 
+        try {
+            const config = await CommissionConfig.findOne({ partnerId: partnerId });
+            if (config) {
+                commPercent = config.commissionPercentage;
+            }
+        } catch (err) {
+            console.error("Error fetching config, using 0%");
+        }
 
+        const totalFee = partner.minRate * duration;
+        const adminShare = parseFloat(((totalFee * commPercent) / 100).toFixed(2));
+        const partnerShare = parseFloat((totalFee - adminShare).toFixed(2));
+
+        const currentBalance = user.walletBalance || 0;
         if (currentBalance < totalFee) {
             return res.status(400).json({ success: false, message: 'Insufficient balance. Please recharge.' });
         }
 
-        user.walletBalance = currentBalance - totalFee;
+        user.walletBalance = parseFloat((currentBalance - totalFee).toFixed(2));
         await user.save();
 
         const newBooking = new Booking({
@@ -84,6 +97,9 @@ const scheduleBooking = async (req, res) => {
             mode,
             ratePerMinute: partner.minRate,
             totalFee,
+            commissionPercentage: commPercent,
+            adminCommission: adminShare,
+            partnerEarning: partnerShare,
             status: 'pending'
         });
 

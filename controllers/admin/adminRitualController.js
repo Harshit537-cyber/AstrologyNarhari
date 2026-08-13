@@ -7,7 +7,7 @@ exports.addRitual = async (req, res) => {
         const {
             title, tagline, price, originalPrice, discount,
             duration, format, about, category,
-            benefits, whatsIncluded, formConfig
+            benefits, whatsIncluded, formConfig,slug
         } = req.body;
 
         let imageUrl = "";
@@ -33,6 +33,7 @@ exports.addRitual = async (req, res) => {
             duration,
             format,
             about,
+            slug,
             benefits: parsedBenefits,
             whatsIncluded: parsedIncluded,
             category,
@@ -67,7 +68,7 @@ exports.updateRitual =  async (req, res) => {
         const { 
             title, tagline, price, originalPrice, discount, 
             duration, format, about, category, 
-            benefits, whatsIncluded, formConfig 
+            benefits, whatsIncluded, formConfig, slug 
         } = req.body;
 
         let ritual = await Ritual.findById(id);
@@ -118,6 +119,7 @@ exports.updateRitual =  async (req, res) => {
                 duration,
                 format,
                 about,
+                slug,
                 benefits: parsedBenefits,
                 whatsIncluded: parsedIncluded,
                 category,

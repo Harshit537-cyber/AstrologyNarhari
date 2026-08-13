@@ -5,7 +5,7 @@ const sendPushNotification = require('../../utils/notificationService');
 const mongoose = require('mongoose');
 const CallLog = require("../../models/CallLog/CallLog")
 
-exports.exotelWebhook =async (req, res) => {
+exports.exotelWebhook = async (req, res) => {
     const { bookingId, auth } = req.query;
     const { Status, Duration, RecordingUrl, CallSid, StartTime, EndTime } = req.body;
 
@@ -20,38 +20,60 @@ exports.exotelWebhook =async (req, res) => {
         const booking = await Booking.findById(bookingId).populate('user partner').session(session);
         if (!booking || booking.status === 'completed') {
             await session.abortTransaction();
-            session.endSession(); 
+            session.endSession();
             return res.status(200).send("Already Processed");
         }
 
         const user = await User.findById(booking.user._id).session(session);
         const partner = await Partner.findById(booking.partner._id).session(session);
+        const adminUser = await User.findOne({ role: 'admin' }).session(session);
+
+
 
         if (partner) {
             partner.isBusy = false;
             await partner.save({ session });
         }
 
-       const durationSeconds = parseInt(Duration || 0);
+        const durationSeconds = parseInt(Duration || 0);
         let finalCost = 0;
         let billedMins = 0;
+        let isCallSuccessful = false;
 
-       if (Status === 'completed' && durationSeconds >= 30) {
-            finalCost = booking.totalFee; 
-            billedMins = booking.duration; 
+        if (Status === 'completed' && durationSeconds >= 30) {
+            finalCost = booking.totalFee;
+            billedMins = booking.duration;
+            isCallSuccessful = true
         }
 
         const userBalBefore = user?.walletBalance || 0;
         const partnerBalBefore = partner?.walletBalance || 0;
 
 
+        if (isCallSuccessful) {
+            if (partner) {
+                const pEarning = booking.partnerEarning || finalCost;
+                partner.walletBalance = parseFloat((partner.walletBalance + pEarning).toFixed(2));
+                await partner.save({ session });
+            }
 
-   if (finalCost > 0) {
-            if (user) user.walletBalance = parseFloat((user.walletBalance - finalCost).toFixed(2));
-            if (partner) partner.walletBalance = parseFloat((partner.walletBalance + finalCost).toFixed(2));
-            
-            if (user) await user.save({ session });
-            if (partner) await partner.save({ session });
+
+            if (adminUser) {
+                const aComm = booking.adminCommission || 0;
+                adminUser.walletBalance = parseFloat((adminUser.walletBalance + aComm).toFixed(2));
+                await adminUser.save({ session });
+            }
+
+            booking.status = 'completed';
+            booking.paymentStatus = 'completed';
+        } else {
+
+            if (user) {
+                user.walletBalance = parseFloat((user.walletBalance + booking.totalFee).toFixed(2));
+                await user.save({ session });
+            }
+            booking.status = 'missed';
+            booking.paymentStatus = 'refunded';
         }
 
 
@@ -73,7 +95,7 @@ exports.exotelWebhook =async (req, res) => {
             },
             callSid: CallSid,
             status: Status === 'completed' ? 'completed' : (Status || 'failed'),
-            durationSeconds:  durationSeconds,
+            durationSeconds: durationSeconds,
             billedMinutes: billedMins,
             ratePerMinute: booking.ratePerMinute,
             totalCost: finalCost,
@@ -83,23 +105,13 @@ exports.exotelWebhook =async (req, res) => {
         });
 
         await newCallLog.save({ session });
-
-       if (finalCost > 0) {
-            booking.status = 'completed';
-            booking.paymentStatus = 'completed';
-        } else {
-            booking.status = 'missed';
-            booking.paymentStatus = 'pending'; 
-        }
-
-                booking.actualDuration = durationSeconds;
-
+        booking.actualDuration = durationSeconds;
         await booking.save({ session });
 
         await session.commitTransaction();
         session.endSession();
 
-       if (booking.status === 'completed') {
+        if (booking.status === 'completed') {
             await sendPushNotification(user?.fcmToken, { type: 'CALL_SUCCESS' }, {
                 title: "Consultation Done",
                 body: `Charged ₹${finalCost} for ${booking.duration} mins session.`

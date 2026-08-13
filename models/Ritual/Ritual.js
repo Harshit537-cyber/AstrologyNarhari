@@ -10,6 +10,7 @@ const ritualSchema = new mongoose.Schema({
     duration: String, 
     format: { type: String }, 
     about: String,
+    slug: String,
     benefits: [{ 
         title: String,
         description: String

@@ -95,6 +95,19 @@ const createRitualBooking = async (req, res) => {
     }
 };
 
+const getUserRitualBookings = async (req, res) => {
+    try {
+        const bookings = await RitualBooking.find({ userId: req.user.id })
+            .populate('panditId', 'fullName profileImage mobile email')
+            .populate('ritualId')
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({ success: true, data: bookings });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 const getPanditRitualRequests = async (req, res) => {
     try {
         const requests = await RitualBooking.find({ panditId: req.user.id })
@@ -206,6 +219,7 @@ module.exports = {
     getRitualById,
     getAvailablePandits,
     createRitualBooking,
+    getUserRitualBookings,
     getPanditRitualRequests,
     getPanditRitualRequestById,
     acceptRitualRequestByPandit,
