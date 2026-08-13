@@ -14,7 +14,12 @@ router.post(
     adminRitualController.addRitual
 );
 
+router.put('/:id', verifyToken,isAdmin,upload.single('image'),  adminRitualController.updateRitual);
+
+
 router.get('/rituals', verifyToken, ritualController.getRituals);
+
+
 
 router.get('/rituals/search', verifyToken, ritualController.searchRituals);
 
