@@ -1,4 +1,5 @@
 const Ritual = require('../../models/Ritual/Ritual');
+const RitualBooking = require('../../models/Ritual/RitualBooking');
 const cloudinary = require('../../config/cloudinary');
 const fs = require('fs');
 
@@ -60,8 +61,7 @@ exports.addRitual = async (req, res) => {
     }
 };
 
-
-exports.updateRitual =  async (req, res) => {
+exports.updateRitual = async (req, res) => {
     try {
         const { id } = req.params;
         const { 
@@ -81,11 +81,9 @@ exports.updateRitual =  async (req, res) => {
         if (req.file) {
             if (ritual.image) {
                 try {
-                   
                     const urlParts = ritual.image.split('/');
                     const fileNameWithExtension = urlParts[urlParts.length - 1]; 
                     const publicIdWithoutExtension = fileNameWithExtension.split('.')[0]; 
-                    
                     const fullPublicId = `rituals_banners/${publicIdWithoutExtension}`;
                     
                     await cloudinary.uploader.destroy(fullPublicId);
@@ -164,7 +162,6 @@ exports.getAllRituals = async (req, res) => {
     }
 };
 
-
 exports.getRitualById = async (req, res) => {
     try {
         const ritual = await Ritual.findById(req.params.id);
@@ -202,12 +199,12 @@ exports.deleteRitual = async (req, res) => {
                 message: "Ritual not found" 
             });
         }
-       if (ritual.image) {
+        
+        if (ritual.image) {
             try {
                 const urlParts = ritual.image.split('/');
                 const fileNameWithExtension = urlParts[urlParts.length - 1];
                 const publicId = fileNameWithExtension.split('.')[0];
-                
                 const fullPublicId = `rituals_banners/${publicId}`;
                 
                 await cloudinary.uploader.destroy(fullPublicId);
@@ -228,6 +225,59 @@ exports.deleteRitual = async (req, res) => {
         res.status(500).json({ 
             success: false, 
             message: "Failed to delete ritual", 
+            error: error.message 
+        });
+    }
+};
+
+// ================= ADMIN RITUAL BOOKING APIS =================
+
+exports.getAllRitualBookingsForAdmin = async (req, res) => {
+    try {
+        const bookings = await RitualBooking.find({})
+            .populate('userId', 'fullName mobile email')
+            .populate('panditId', 'fullName mobile email profileImage')
+            .populate('ritualId')
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({ 
+            success: true, 
+            count: bookings.length, 
+            data: bookings 
+        });
+    } catch (error) {
+        console.error("Get All Ritual Bookings Error:", error);
+        return res.status(500).json({ 
+            success: false, 
+            message: "Failed to fetch ritual bookings", 
+            error: error.message 
+        });
+    }
+};
+
+exports.getRitualBookingByIdForAdmin = async (req, res) => {
+    try {
+        const booking = await RitualBooking.findById(req.params.id)
+            .populate('userId', 'fullName mobile email')
+            .populate('panditId', 'fullName mobile email profileImage')
+            .populate('ritualId');
+
+        if (!booking) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Ritual booking not found' 
+            });
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            data: booking 
+        });
+    } catch (error) {
+        console.error("Get Ritual Booking By ID Error:", error);
+        return res.status(500).json({ 
+            success: false, 
+            message: "Failed to fetch ritual booking details", 
             error: error.message 
         });
     }
