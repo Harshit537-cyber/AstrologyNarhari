@@ -10,7 +10,7 @@ const commissionConfigSchema = new mongoose.Schema({
     commissionPercentage: { 
         type: Number, 
         required: true, 
-        default: 20 
+        default: 0 
     },
     lastUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } 
 }, { timestamps: true });
