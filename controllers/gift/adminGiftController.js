@@ -6,6 +6,7 @@ const Partner = require('../../models/Partner/Partner');
 const mongoose = require('mongoose');
 const LiveSession = require('../../models/Agora/LiveSession');
 const GiftTransaction = require("../../models/Gift/GiftTransaction");
+const sendPushNotification = require("../../utils/notificationService")
 
 //ADMIN API  
 
@@ -239,6 +240,20 @@ exports.sendGiftInLive = async (req, res) => {
 
         await session.commitTransaction();
         session.endSession();
+
+        if (partner && partner.fcmToken) {
+            const giftNotification = {
+                title: 'New Gift Received! 🎁',
+                body: `${user.fullName || user.name} sent you a ${gift.giftName}!`
+            };
+            const giftData = {
+                type: 'GIFT_RECEIVED',
+                giftName: gift.giftName,
+                senderName: user.fullName || user.name
+            };
+            sendPushNotification(partner.fcmToken, giftData, giftNotification);
+        }
+
 
         res.status(200).json({
             success: true,
