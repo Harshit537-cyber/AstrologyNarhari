@@ -54,6 +54,7 @@ app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/admin/product-category", productCategoryRoutes);
 app.use("/api/admin/product", productRoutes);
 app.use("/api/admin/coupon", couponRoutes);
+app.use("/api/admin/insights", require("./routes/AdminRoutes/adminInsightsRoutes"));
 
 app.use("/api/v1/calls", require("./routes/callWebhookRoutes/callWebhookRoutes"));
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
