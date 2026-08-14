@@ -48,6 +48,9 @@ app.use("/api/rituals", require("./routes/Rituals/RitualsRoutes"));
 app.use("/api/shipping", require("./routes/UserRoutes/addressRoutes"));
 app.use("/api/tickets", ticketRoutes);
 
+
+app.use("/", require("./routes/AdminRoutes/blogRoutes"));
+
 app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/notifications", adminNotificationRoutes);
 app.use("/api/admin/banner", bannerRoutes);
