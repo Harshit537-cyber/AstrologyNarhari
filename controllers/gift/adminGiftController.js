@@ -285,6 +285,45 @@ exports.getGiftDetails = async (req, res) => {
     }
 };
 
+exports.getMyGiftHistory = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+
+        const history = await GiftTransaction.find({ senderId: userId })
+            .populate('receiverId', 'fullName profilePic') 
+            .populate('giftId', 'giftName iconUrl price')   
+            .sort({ createdAt: -1 });
+
+        if (!history || history.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: "No gift history found",
+                data: []
+            });
+        }
+
+        const formattedHistory = history.map(item => ({
+            transactionId: item._id,
+            partnerName: item.receiverId ? item.receiverId.fullName : "Unknown Partner",
+            partnerPic: item.receiverId ? item.receiverId.profilePic : null,
+            giftName: item.giftId ? item.giftId.giftName : "Unknown Gift",
+            giftIcon: item.giftId ? item.giftId.iconUrl : null,
+            amountSpent: item.amount,
+            date: item.createdAt,
+            balanceBefore: item.userBalanceBefore,
+            balanceAfter: item.userBalanceAfter
+        }));
+
+        res.status(200).json({
+            success: true,
+            count: formattedHistory.length,
+            data: formattedHistory
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
 
 // PARTNER API
 
