@@ -17,52 +17,133 @@ const uploadToCloudinary = async (filePath) => {
 };
 
 
+// exports.createArticle = async (req, res) => {
+//     try {
+//         if (req.user.role !== 'admin') {
+//             return res.status(403).json({ success: false, message: "Admins only" });
+//         }
+
+//         // Parallel Upload using Path
+//         const uploadPromises = [
+//             req.files?.thumbnail ? uploadToCloudinary(req.files.thumbnail[0].path) : Promise.resolve(""),
+//             req.files?.bannerImage ? uploadToCloudinary(req.files.bannerImage[0].path) : Promise.resolve(""),
+//             req.files?.authorProfilePic ? uploadToCloudinary(req.files.authorProfilePic[0].path) : Promise.resolve("")
+//         ];
+
+//         const [thumbnailUrl, bannerUrl, authorPicUrl] = await Promise.all(uploadPromises);
+
+//         const parseSafely = (data) => {
+//             try { return typeof data === 'string' ? JSON.parse(data) : data; } 
+//             catch (e) { return []; }
+//         };
+
+//         const articleData = {
+//             ...req.body,
+//             thumbnail: thumbnailUrl,
+//             bannerImage: bannerUrl,
+//             author: {
+//                 name: req.body.authorName,
+//                 designation: req.body.authorDesignation,
+//                 profilePic: authorPicUrl
+//             },
+//             quote: {
+//                 text: req.body.quoteText || "",
+//                 author: req.body.quoteAuthor || ""
+//             },
+//             keyTakeaways: parseSafely(req.body.keyTakeaways),
+//             ritual: parseSafely(req.body.ritual),
+//             tags: parseSafely(req.body.tags),
+//             slug: req.body.title.toLowerCase().split(' ').join('-') + '-' + Date.now(),
+//             createdBy: req.user.id
+//         };
+
+//         const newArticle = await Article.create(articleData);
+//         res.status(201).json({ success: true, message: "Article published successfully", data: newArticle });
+
+//     } catch (error) {
+//         console.error("Create Error:", error);
+//         res.status(500).json({ success: false, message: error.message });
+//     }
+// };
+
+
+
 exports.createArticle = async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
-            return res.status(403).json({ success: false, message: "Admins only" });
+            return res.status(403).json({
+                success: false,
+                message: "Admins only"
+            });
         }
 
-        // Parallel Upload using Path
         const uploadPromises = [
-            req.files?.thumbnail ? uploadToCloudinary(req.files.thumbnail[0].path) : Promise.resolve(""),
-            req.files?.bannerImage ? uploadToCloudinary(req.files.bannerImage[0].path) : Promise.resolve(""),
-            req.files?.authorProfilePic ? uploadToCloudinary(req.files.authorProfilePic[0].path) : Promise.resolve("")
+            req.files?.thumbnail
+                ? uploadToCloudinary(req.files.thumbnail[0].path)
+                : Promise.resolve(""),
+
+            req.files?.bannerImage
+                ? uploadToCloudinary(req.files.bannerImage[0].path)
+                : Promise.resolve(""),
+
+            req.files?.authorProfilePic
+                ? uploadToCloudinary(req.files.authorProfilePic[0].path)
+                : Promise.resolve("")
         ];
 
-        const [thumbnailUrl, bannerUrl, authorPicUrl] = await Promise.all(uploadPromises);
+        const [thumbnailUrl, bannerUrl, authorPicUrl] =
+            await Promise.all(uploadPromises);
 
         const parseSafely = (data) => {
-            try { return typeof data === 'string' ? JSON.parse(data) : data; } 
-            catch (e) { return []; }
+            try {
+                return typeof data === 'string' ? JSON.parse(data) : data;
+            } catch (e) {
+                return [];
+            }
         };
 
         const articleData = {
             ...req.body,
+
             thumbnail: thumbnailUrl,
             bannerImage: bannerUrl,
+
             author: {
                 name: req.body.authorName,
                 designation: req.body.authorDesignation,
                 profilePic: authorPicUrl
             },
+
             quote: {
                 text: req.body.quoteText || "",
                 author: req.body.quoteAuthor || ""
             },
+
             keyTakeaways: parseSafely(req.body.keyTakeaways),
             ritual: parseSafely(req.body.ritual),
             tags: parseSafely(req.body.tags),
-            slug: req.body.title.toLowerCase().split(' ').join('-') + '-' + Date.now(),
+
+            // Slug will come directly from request body
+            slug: req.body.slug,
+
             createdBy: req.user.id
         };
 
         const newArticle = await Article.create(articleData);
-        res.status(201).json({ success: true, message: "Article published successfully", data: newArticle });
+
+        res.status(201).json({
+            success: true,
+            message: "Article published successfully",
+            data: newArticle
+        });
 
     } catch (error) {
         console.error("Create Error:", error);
-        res.status(500).json({ success: false, message: error.message });
+
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
 
@@ -114,54 +195,169 @@ exports.getArticleById = async (req, res) => {
     }
 };
 
+// exports.updateArticle = async (req, res) => {
+//     try {
+//         if (req.user.role !== 'admin') {
+//             return res.status(403).json({ success: false, message: "Unauthorized: Admins only" });
+//         }
+
+//         const articleId = req.params.id;
+//         const currentArticle = await Article.findById(articleId);
+//         if (!currentArticle) return res.status(404).json({ success: false, message: "Article not found" });
+
+//         const uploadPromises = [
+//             req.files?.thumbnail ? uploadToCloudinary(req.files.thumbnail[0].path) : Promise.resolve(null),
+//             req.files?.bannerImage ? uploadToCloudinary(req.files.bannerImage[0].path) : Promise.resolve(null),
+//             req.files?.authorProfilePic ? uploadToCloudinary(req.files.authorProfilePic[0].path) : Promise.resolve(null)
+//         ];
+
+//         const [newThumbnail, newBanner, newAuthorPic] = await Promise.all(uploadPromises);
+
+//         let updateData = { ...req.body };
+//         if (newThumbnail) updateData.thumbnail = newThumbnail;
+//         if (newBanner) updateData.bannerImage = newBanner;
+
+//         updateData.author = {
+//             name: req.body.authorName || currentArticle.author.name,
+//             designation: req.body.authorDesignation || currentArticle.author.designation,
+//             profilePic: newAuthorPic || currentArticle.author.profilePic
+//         };
+
+//         const parseSafely = (data, fallback) => {
+//             try { return typeof data === 'string' ? JSON.parse(data) : data; } 
+//             catch (e) { return fallback; }
+//         };
+
+//         if (req.body.keyTakeaways) updateData.keyTakeaways = parseSafely(req.body.keyTakeaways, currentArticle.keyTakeaways);
+//         if (req.body.ritual) updateData.ritual = parseSafely(req.body.ritual, currentArticle.ritual);
+//         if (req.body.tags) updateData.tags = parseSafely(req.body.tags, currentArticle.tags);
+
+//         if (req.body.title && req.body.title !== currentArticle.title) {
+//             updateData.slug = req.body.title.toLowerCase().split(' ').join('-') + '-' + Date.now();
+//         }
+
+//         const updatedArticle = await Article.findByIdAndUpdate(articleId, { $set: updateData }, { new: true });
+//         res.status(200).json({ success: true, message: "Article updated successfully", data: updatedArticle });
+
+//     } catch (error) {
+//         res.status(500).json({ success: false, message: error.message });
+//     }
+// };
+
+
+
+
 exports.updateArticle = async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
-            return res.status(403).json({ success: false, message: "Unauthorized: Admins only" });
+            return res.status(403).json({
+                success: false,
+                message: "Unauthorized: Admins only"
+            });
         }
 
         const articleId = req.params.id;
+
         const currentArticle = await Article.findById(articleId);
-        if (!currentArticle) return res.status(404).json({ success: false, message: "Article not found" });
+
+        if (!currentArticle) {
+            return res.status(404).json({
+                success: false,
+                message: "Article not found"
+            });
+        }
 
         const uploadPromises = [
-            req.files?.thumbnail ? uploadToCloudinary(req.files.thumbnail[0].path) : Promise.resolve(null),
-            req.files?.bannerImage ? uploadToCloudinary(req.files.bannerImage[0].path) : Promise.resolve(null),
-            req.files?.authorProfilePic ? uploadToCloudinary(req.files.authorProfilePic[0].path) : Promise.resolve(null)
+            req.files?.thumbnail
+                ? uploadToCloudinary(req.files.thumbnail[0].path)
+                : Promise.resolve(null),
+
+            req.files?.bannerImage
+                ? uploadToCloudinary(req.files.bannerImage[0].path)
+                : Promise.resolve(null),
+
+            req.files?.authorProfilePic
+                ? uploadToCloudinary(req.files.authorProfilePic[0].path)
+                : Promise.resolve(null)
         ];
 
-        const [newThumbnail, newBanner, newAuthorPic] = await Promise.all(uploadPromises);
+        const [newThumbnail, newBanner, newAuthorPic] =
+            await Promise.all(uploadPromises);
 
         let updateData = { ...req.body };
-        if (newThumbnail) updateData.thumbnail = newThumbnail;
-        if (newBanner) updateData.bannerImage = newBanner;
+
+        if (newThumbnail) {
+            updateData.thumbnail = newThumbnail;
+        }
+
+        if (newBanner) {
+            updateData.bannerImage = newBanner;
+        }
 
         updateData.author = {
             name: req.body.authorName || currentArticle.author.name,
-            designation: req.body.authorDesignation || currentArticle.author.designation,
-            profilePic: newAuthorPic || currentArticle.author.profilePic
+            designation:
+                req.body.authorDesignation || currentArticle.author.designation,
+            profilePic:
+                newAuthorPic || currentArticle.author.profilePic
         };
 
         const parseSafely = (data, fallback) => {
-            try { return typeof data === 'string' ? JSON.parse(data) : data; } 
-            catch (e) { return fallback; }
+            try {
+                return typeof data === 'string'
+                    ? JSON.parse(data)
+                    : data;
+            } catch (e) {
+                return fallback;
+            }
         };
 
-        if (req.body.keyTakeaways) updateData.keyTakeaways = parseSafely(req.body.keyTakeaways, currentArticle.keyTakeaways);
-        if (req.body.ritual) updateData.ritual = parseSafely(req.body.ritual, currentArticle.ritual);
-        if (req.body.tags) updateData.tags = parseSafely(req.body.tags, currentArticle.tags);
-
-        if (req.body.title && req.body.title !== currentArticle.title) {
-            updateData.slug = req.body.title.toLowerCase().split(' ').join('-') + '-' + Date.now();
+        if (req.body.keyTakeaways) {
+            updateData.keyTakeaways = parseSafely(
+                req.body.keyTakeaways,
+                currentArticle.keyTakeaways
+            );
         }
 
-        const updatedArticle = await Article.findByIdAndUpdate(articleId, { $set: updateData }, { new: true });
-        res.status(200).json({ success: true, message: "Article updated successfully", data: updatedArticle });
+        if (req.body.ritual) {
+            updateData.ritual = parseSafely(
+                req.body.ritual,
+                currentArticle.ritual
+            );
+        }
+
+        if (req.body.tags) {
+            updateData.tags = parseSafely(
+                req.body.tags,
+                currentArticle.tags
+            );
+        }
+
+        // Slug will only be updated if provided in request body
+        if (req.body.slug) {
+            updateData.slug = req.body.slug;
+        }
+
+        const updatedArticle = await Article.findByIdAndUpdate(
+            articleId,
+            { $set: updateData },
+            { new: true }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Article updated successfully",
+            data: updatedArticle
+        });
 
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
+
 
 exports.deleteArticle = async (req, res) => {
     try {
