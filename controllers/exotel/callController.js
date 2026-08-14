@@ -2,7 +2,8 @@ const Booking = require('../../models/Booking/Booking');
 const Partner = require('../../models/Partner/Partner');
 const User = require('../../models/User');
 const { triggerExotelCall } = require('../../services/exotelService');
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
+const sendPushNotification = require("../../utils/notificationService")
 
 exports.initiateCall = async (req, res) => {
     const { bookingId } = req.body;
@@ -31,6 +32,17 @@ exports.initiateCall = async (req, res) => {
 
         const user = booking.user;
         const partner = booking.partner;
+// if (partner.isAcceptingRequests === false) {
+//             await sendPushNotification(user.fcmToken, { type: 'PARTNER_UNAVAILABLE' }, {
+//                 title: "Partner Unavailable",
+//                 body: `Astrologer ${partner.fullName || 'Partner'} is not accepting calls right now.`
+//             });
+
+//             return res.status(403).json({ 
+//                 message: "Partner is not picking up calls right now. Please try again later." 
+//             });
+//         }
+
   if (user.walletBalance < booking.totalFee) {
             return res.status(400).json({ 
                 message: `Insufficient balance. You need ₹${booking.totalFee} for this ${booking.duration} min session.` 
@@ -165,5 +177,89 @@ exports.getCallHistoryByUid = async (req, res) => {
             success: false,
             message: "Internal Server Error"
         });
+    }
+};
+
+exports.togglePartnerAvailability =  async (req, res) => {
+    try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ message: "Authentication failed. User not found in request." });
+        }
+
+        const partnerId = req.user.id;
+        const partner = await Partner.findById(partnerId);
+
+        if (!partner) {
+            return res.status(404).json({ message: "Partner not found in database." });
+        }
+        partner.isAcceptingRequests = partner.isAcceptingRequests === undefined ? false : !partner.isAcceptingRequests;
+        
+        await partner.save();
+
+        return res.status(200).json({ 
+            success: true, 
+            isAcceptingRequests: partner.isAcceptingRequests,
+            message: partner.isAcceptingRequests ? "You are now ONLINE" : "You are now OFFLINE"
+        });
+
+    } catch (error) {
+        console.error("TOGGLE_ERROR:", error); 
+        res.status(500).json({ message: "Internal Server Error", error: error.message });
+    }
+};
+
+
+exports.initiateChat = async (req, res) => {
+    const { bookingId } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    try {
+        const booking = await Booking.findById(bookingId).populate('partner user');
+        
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        if (booking.user._id.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "Unauthorized access to this chat" });
+        }
+
+        if (booking.status !== 'accepted') {
+            return res.status(400).json({ message: "Booking not accepted yet" });
+        }
+
+        const partner = booking.partner;
+        const user = booking.user;
+
+        if (partner.isAcceptingRequests === false) {
+            await sendPushNotification(user.fcmToken, { type: 'CHAT_REJECTED' }, {
+                title: "Partner Unavailable",
+                body: `${partner.fullName} is not accepting chat requests right now.`
+            });
+
+            return res.status(403).json({ 
+                success: false,
+                message: "Partner is not picking up chat right now. Please try again later." 
+            });
+        }
+
+        if (partner.isBusy) {
+            return res.status(400).json({ 
+                success: false,
+                message: "Partner is currently busy on another session." 
+            });
+        }
+
+        partner.isBusy = true;
+        await partner.save();
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Partner available. You can proceed to chat.",
+            partnerName: partner.fullName,
+            firebaseNode: `chats/${bookingId}` 
+        });
+
+    } catch (error) {
+        console.error("Chat Init Error:", error);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 };
