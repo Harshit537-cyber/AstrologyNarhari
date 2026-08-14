@@ -11,9 +11,7 @@ const articleSchema = new mongoose.Schema({
         designation: { type: String, required: true },
         profilePic: { type: String }
     },
-    slug:{
-        type:String
-    },
+   
     publishedDate: { type: Date, default: Date.now },
     readTime: { type: String, required: true },
     thumbnail: { type: String, required: true },
