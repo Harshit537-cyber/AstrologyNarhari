@@ -74,7 +74,7 @@ exports.createArticle = async (req, res) => {
       });
     }
 
-    const BACKEND_URL = "https://astrologynarhari-1.onrender.com"
+    const BACKEND_URL = "https://astrologynarhari-1.onrender.com/article || http://localhost:5000/article";
 
     const uploadPromises = [
       req.files?.thumbnail
