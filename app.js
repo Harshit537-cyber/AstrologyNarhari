@@ -49,7 +49,7 @@ app.use("/api/shipping", require("./routes/UserRoutes/addressRoutes"));
 app.use("/api/tickets", ticketRoutes);
 
 
-app.use("/", require("./routes/AdminRoutes/blogRoutes"));
+app.use("/article", require("./routes/AdminRoutes/blogRoutes"));
 
 app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/notifications", adminNotificationRoutes);
