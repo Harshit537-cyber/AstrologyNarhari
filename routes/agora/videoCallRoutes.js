@@ -11,4 +11,6 @@ router.post('/settle', verifyToken, videoCallController.completeAndSettleCall);
 
 router.post('/refund', verifyToken, videoCallController.cancelAndRefund);
 
+router.get("/get-call-history", verifyToken, videoCallController.getVideoCallHistory);
+
 module.exports = router;

@@ -30,9 +30,9 @@ exports.initiateVideoCall = async (req, res) => {
         const bookingEnd = moment(booking.endTime).tz("Asia/Kolkata");
 
         if (now.isBefore(bookingStart.clone().subtract(5, 'minutes'))) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Call session starts at ${bookingStart.format('hh:mm A')} IST. You can join 5 mins early.` 
+            return res.status(400).json({
+                success: false,
+                message: `Call session starts at ${bookingStart.format('hh:mm A')} IST. You can join 5 mins early.`
             });
         }
 
@@ -58,7 +58,7 @@ exports.initiateVideoCall = async (req, res) => {
 };
 
 
-exports.terminateVideoCall =  async (req, res) => {
+exports.terminateVideoCall = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -67,7 +67,7 @@ exports.terminateVideoCall =  async (req, res) => {
         const userId = req.user.id;
 
         const booking = await Booking.findById(bookingId).populate('user').session(session);
-        
+
         if (!booking || ['completed', 'cancelled', 'refunded'].includes(booking.status)) {
             await session.abortTransaction();
             session.endSession();
@@ -91,7 +91,7 @@ exports.terminateVideoCall =  async (req, res) => {
 
         const earnings = parseFloat(booking.partnerEarning.toFixed(2));
         partner.walletBalance = parseFloat((partner.walletBalance + earnings).toFixed(2));
-        
+
         partner.ritualEarningsHistory.push({
             userId: booking.user._id,
             userName: booking.user.fullName || "User",
@@ -138,10 +138,10 @@ exports.completeAndSettleCall = async (req, res) => {
 
     try {
         const { bookingId, actualDuration } = req.body;
-        const userId = req.user.id; 
+        const userId = req.user.id;
 
         const booking = await Booking.findById(bookingId).populate('user').session(session);
-        
+
         if (!booking || booking.status === 'completed') {
             await session.abortTransaction();
             session.endSession();
@@ -165,10 +165,10 @@ exports.completeAndSettleCall = async (req, res) => {
 
         const earnings = parseFloat(booking.partnerEarning.toFixed(2));
         partner.walletBalance = parseFloat((partner.walletBalance + earnings).toFixed(2));
-        
+
         partner.ritualEarningsHistory.push({
             userId: booking.user._id,
-            userName: booking.user.fullName || "User", 
+            userName: booking.user.fullName || "User",
             bookingId: booking._id,
             amount: earnings,
             ritualName: `Video Call Session (${booking.actualDuration} mins)`,
@@ -190,8 +190,8 @@ exports.completeAndSettleCall = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        res.status(200).json({ 
-            success: true, 
+        res.status(200).json({
+            success: true,
             message: "Call settled successfully",
             data: { partnerEarned: earnings }
         });
@@ -202,6 +202,8 @@ exports.completeAndSettleCall = async (req, res) => {
         res.status(500).json({ success: false, message: "Settlement failed", error: error.message });
     }
 };
+
+
 exports.cancelAndRefund = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -242,7 +244,7 @@ exports.cancelAndRefund = async (req, res) => {
 exports.joinCallSession = async (req, res) => {
     try {
         const { bookingId } = req.body;
-        const partnerId = req.user.id; 
+        const partnerId = req.user.id;
 
         const booking = await Booking.findById(bookingId);
         if (!booking || booking.status !== 'accepted') {
@@ -256,7 +258,7 @@ exports.joinCallSession = async (req, res) => {
         await Partner.findByIdAndUpdate(partnerId, { isBusy: true });
 
         const channelName = bookingId.toString();
-        const tokens = generateAgoraTokens(channelName, 2); 
+        const tokens = generateAgoraTokens(channelName, 2);
 
         res.status(200).json({
             success: true,
@@ -269,5 +271,63 @@ exports.joinCallSession = async (req, res) => {
 
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getVideoCallHistory = async (req, res) => {
+    try {
+        const userId = req.user.id || req.user._id;
+        const role = req.user.role;
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        let filter = {};
+        if (role === 'user') {
+            filter = { user: userId };
+        } else if (role === 'partner') {
+            filter = { partner: userId };
+        }
+
+        const totalRecords = await Booking.countDocuments(filter);
+
+        const history = await Booking.find(filter)
+            .populate(role === 'user' ? 'partner' : 'user', 'fullName profilePic')
+            .sort({ createdAt: -1 }) 
+            .skip(skip)
+            .limit(limit);
+
+        const formattedHistory = history.map(item => {
+            const otherParty = role === 'user' ? item.partner : item.user;
+            return {
+                bookingId: item._id,
+                otherPartyName: otherParty ? otherParty.fullName : "Deleted Account",
+                otherPartyPic: otherParty ? otherParty.profilePic : null,
+                date: item.date,
+                timeSlot: item.timeSlot,
+                actualDuration: item.actualDuration,
+                mode: item.mode,
+                totalFee: item.totalFee,
+                status: item.status,
+                rating: item.rating,
+                review: item.review,
+                createdAt: item.createdAt
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            pagination: {
+                totalRecords,
+                totalPages: Math.ceil(totalRecords / limit),
+                currentPage: page,
+                limit
+            },
+            data: formattedHistory
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error fetching history", error: error.message });
     }
 };
