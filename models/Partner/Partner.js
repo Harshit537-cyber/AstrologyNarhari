@@ -116,6 +116,12 @@ const partnerSchema = new mongoose.Schema({
     isOnline: { type: Boolean, default: false },
     isBusy: { type: Boolean, default: false },
     fcmToken: { type: String, default: null },
+    firebaseUid: { 
+    type: String, 
+    default: null, 
+    unique: true, 
+    sparse: true  
+},
     walletBalance: { 
         type: Number, 
         default: 0 
