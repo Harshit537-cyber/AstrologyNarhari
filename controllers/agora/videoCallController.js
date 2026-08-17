@@ -29,16 +29,16 @@ exports.initiateVideoCall = async (req, res) => {
         const bookingStart = moment(booking.startTime).tz("Asia/Kolkata");
         const bookingEnd = moment(booking.endTime).tz("Asia/Kolkata");
 
-        if (now.isBefore(bookingStart.clone().subtract(5, 'minutes'))) {
-            return res.status(400).json({
-                success: false,
-                message: `Call session starts at ${bookingStart.format('hh:mm A')} IST. You can join 5 mins early.`
-            });
-        }
+        // if (now.isBefore(bookingStart.clone().subtract(5, 'minutes'))) {
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: `Call session starts at ${bookingStart.format('hh:mm A')} IST. You can join 5 mins early.`
+        //     });
+        // }
 
-        if (now.isAfter(bookingEnd)) {
-            return res.status(400).json({ success: false, message: "This booking session has expired" });
-        }
+        // if (now.isAfter(bookingEnd)) {
+        //     return res.status(400).json({ success: false, message: "This booking session has expired" });
+        // }
 
         const channelName = bookingId.toString();
         const roleUid = req.user.role === 'user' ? 1 : 2;
@@ -80,16 +80,24 @@ exports.terminateVideoCall = async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized request" });
         }
 
+        const finalDuration = actualDuration || 0;
+        const totalActualFee = finalDuration * booking.ratePerMinute;
+        const adminAmt = parseFloat(((totalActualFee * booking.commissionPercentage) / 100).toFixed(2));
+        const finalEarnings = parseFloat((totalActualFee - adminAmt).toFixed(2));
+
         booking.status = 'completed';
         booking.paymentStatus = 'completed';
-        booking.actualDuration = actualDuration || 0;
+        booking.actualDuration = finalDuration;
+        booking.totalFee = totalActualFee;
+        booking.adminCommission = adminAmt;
+        booking.partnerEarning = finalEarnings;
         booking.endTime = new Date();
         await booking.save({ session });
 
         const partner = await Partner.findById(booking.partner).session(session);
         if (!partner) throw new Error("Partner not found");
 
-        const earnings = parseFloat(booking.partnerEarning.toFixed(2));
+        const earnings = finalEarnings;
         partner.walletBalance = parseFloat((partner.walletBalance + earnings).toFixed(2));
 
         partner.ritualEarningsHistory.push({
@@ -106,10 +114,10 @@ exports.terminateVideoCall = async (req, res) => {
             bookingId: booking._id,
             partnerId: booking.partner,
             userId: booking.user._id,
-            totalAmountPaid: booking.totalFee,
+            totalAmountPaid: totalActualFee,
             commissionPercentage: booking.commissionPercentage,
-            adminAmount: booking.adminCommission,
-            partnerAmount: earnings,
+            adminAmount: adminAmt,
+            partnerAmount: finalEarnings,
             mode: 'Video Call'
         }], { session });
 
@@ -154,16 +162,28 @@ exports.completeAndSettleCall = async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized: You are not part of this booking" });
         }
 
+        const finalDuration = actualDuration || booking.duration;
+        const totalActualFee = finalDuration * booking.ratePerMinute;
+
+
+        const adminAmt = parseFloat(((totalActualFee * booking.commissionPercentage) / 100).toFixed(2));
+
+        const earnings = parseFloat((totalActualFee - adminAmt).toFixed(2));
+
         booking.status = 'completed';
         booking.paymentStatus = 'completed';
-        booking.actualDuration = actualDuration || booking.duration;
+        booking.actualDuration = finalDuration;
+        booking.totalFee = totalActualFee;
+        booking.adminCommission = adminAmt;
+        booking.partnerEarning = earnings;
         booking.endTime = new Date();
+
         await booking.save({ session });
+
 
         const partner = await Partner.findById(booking.partner).session(session);
         if (!partner) throw new Error("Partner not found");
 
-        const earnings = parseFloat(booking.partnerEarning.toFixed(2));
         partner.walletBalance = parseFloat((partner.walletBalance + earnings).toFixed(2));
 
         partner.ritualEarningsHistory.push({
@@ -204,7 +224,7 @@ exports.completeAndSettleCall = async (req, res) => {
 };
 
 
-exports.cancelAndRefund = async (req, res) => {
+exports.cancelVideoAndRefund = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -213,14 +233,30 @@ exports.cancelAndRefund = async (req, res) => {
         const requesterId = req.user.id;
 
         const booking = await Booking.findById(bookingId).session(session);
+
         if (!booking || ['completed', 'cancelled', 'refunded'].includes(booking.status)) {
             await session.abortTransaction();
             session.endSession();
             return res.status(400).json({ success: false, message: "Refund not possible" });
         }
 
+        if (booking.user.toString() !== requesterId && booking.partner.toString() !== requesterId && req.user.role !== 'admin') {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(403).json({ success: false, message: "Unauthorized to cancel this booking" });
+        }
+
         const user = await User.findById(booking.user).session(session);
+        if (!user) throw new Error("User not found");
+
         user.walletBalance = parseFloat((user.walletBalance + booking.totalFee).toFixed(2));
+
+        user.walletHistory.push({
+            amount: booking.totalFee,
+            type: 'credit',
+            reason: `Refund for booking: ${bookingId}`,
+            date: new Date()
+        });
         await user.save({ session });
 
         booking.status = 'cancelled';
@@ -231,7 +267,7 @@ exports.cancelAndRefund = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        res.status(200).json({ success: true, message: "Booking refunded" });
+        res.status(200).json({ success: true, message: "Booking refunded successfully" });
 
     } catch (error) {
         await session.abortTransaction();
@@ -239,7 +275,6 @@ exports.cancelAndRefund = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
 
 exports.joinCallSession = async (req, res) => {
     try {
@@ -253,6 +288,14 @@ exports.joinCallSession = async (req, res) => {
 
         if (booking.partner.toString() !== partnerId) {
             return res.status(403).json({ success: false, message: "Unauthorized: This booking is not assigned to you" });
+        }
+
+        const now = moment().tz("Asia/Kolkata");
+        const bookingEnd = moment(booking.endTime).tz("Asia/Kolkata");
+
+
+        if (now.isAfter(bookingEnd)) {
+            return res.status(400).json({ success: false, message: "This session has already expired" });
         }
 
         await Partner.findByIdAndUpdate(partnerId, { isBusy: true });
@@ -271,63 +314,5 @@ exports.joinCallSession = async (req, res) => {
 
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-exports.getVideoCallHistory = async (req, res) => {
-    try {
-        const userId = req.user.id || req.user._id;
-        const role = req.user.role;
-
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const skip = (page - 1) * limit;
-
-        let filter = {};
-        if (role === 'user') {
-            filter = { user: userId };
-        } else if (role === 'partner') {
-            filter = { partner: userId };
-        }
-
-        const totalRecords = await Booking.countDocuments(filter);
-
-        const history = await Booking.find(filter)
-            .populate(role === 'user' ? 'partner' : 'user', 'fullName profilePic')
-            .sort({ createdAt: -1 }) 
-            .skip(skip)
-            .limit(limit);
-
-        const formattedHistory = history.map(item => {
-            const otherParty = role === 'user' ? item.partner : item.user;
-            return {
-                bookingId: item._id,
-                otherPartyName: otherParty ? otherParty.fullName : "Deleted Account",
-                otherPartyPic: otherParty ? otherParty.profilePic : null,
-                date: item.date,
-                timeSlot: item.timeSlot,
-                actualDuration: item.actualDuration,
-                mode: item.mode,
-                totalFee: item.totalFee,
-                status: item.status,
-                rating: item.rating,
-                review: item.review,
-                createdAt: item.createdAt
-            };
-        });
-
-        res.status(200).json({
-            success: true,
-            pagination: {
-                totalRecords,
-                totalPages: Math.ceil(totalRecords / limit),
-                currentPage: page,
-                limit
-            },
-            data: formattedHistory
-        });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Error fetching history", error: error.message });
     }
 };

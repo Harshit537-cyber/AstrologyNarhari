@@ -9,8 +9,7 @@ router.post('/terminate', verifyToken, videoCallController.terminateVideoCall);
 
 router.post('/settle', verifyToken, videoCallController.completeAndSettleCall);
 
-router.post('/refund', verifyToken, videoCallController.cancelAndRefund);
+router.post('/refund', verifyToken, videoCallController.cancelVideoAndRefund);
 
-router.get("/get-call-history", verifyToken, videoCallController.getVideoCallHistory);
 
 module.exports = router;
