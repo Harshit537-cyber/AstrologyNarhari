@@ -34,13 +34,15 @@ const cleanUploadedFiles = (files) => {
 const verifyOtp = async (req, res) => {
     try {
         // Request body se role bhi accept kar rahe hain
-        const { idToken, mobile: bodyMobile, role } = req.body;
+        const { idToken, mobile: bodyMobile, role,firebaseUid: bodyUid  } = req.body;
         let mobile;
+         let firebaseUid = bodyUid;
 
         // Firebase Token verification
         if (idToken) {
             const decodedToken = await admin.auth().verifyIdToken(idToken);
             mobile = decodedToken.phone_number;
+              firebaseUid = decodedToken.uid;
         } else if (bodyMobile) {
             mobile = bodyMobile;
         }
@@ -62,13 +64,17 @@ const verifyOtp = async (req, res) => {
             partner = await Partner.create({
                 mobile,
                 role: assignedRole,
-                isVerified: true
+                isVerified: true,
+                   firebaseUid: firebaseUid
             });
         } else {
             // Update Existing Partner
             partner.isVerified = true;
             if (role) {
                 partner.role = role; // Agar request me role bheja gaya hai to update karein
+            }
+            if (firebaseUid) {
+                partner.firebaseUid = firebaseUid; 
             }
             await partner.save();
         }
@@ -91,7 +97,8 @@ const verifyOtp = async (req, res) => {
                 role: partner.role, // Response me role include kiya gaya hai
                 isProfileComplete: partner.isProfileComplete,
                 profileApprovalStatus: partner.profileApprovalStatus,
-                isActive: partner.isActive
+                isActive: partner.isActive,
+                firebaseUid: partner.firebaseUid,
             }
         });
 
