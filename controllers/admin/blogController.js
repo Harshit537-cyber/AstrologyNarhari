@@ -26,8 +26,8 @@ exports.renderBlogPage = async (req, res) => {
         </head>
 
         <body style="
-          background:#0b0b0b;
-          color:white;
+          background:#fafafa;
+          color:#1a1a1a;
           font-family:Arial;
           text-align:center;
           padding:50px;
@@ -67,8 +67,8 @@ exports.renderBlogPage = async (req, res) => {
           margin:0;
           padding:0;
           font-family:Arial,sans-serif;
-          background:#0b0b0b;
-          color:#fff;
+          background:#fafafa;
+          color:#1a1a1a;
           display:flex;
           justify-content:center;
           align-items:center;
@@ -140,8 +140,8 @@ exports.renderBlogPage = async (req, res) => {
           body {
             margin: 0;
             font-family: Arial, Helvetica, sans-serif;
-            background: #0b0b0b;
-            color: #f5f5f5;
+            background: #fafafa;
+            color: #1a1a1a;
             line-height: 1.7;
           }
 
@@ -155,22 +155,24 @@ exports.renderBlogPage = async (req, res) => {
             display: inline-block;
             padding: 6px 14px;
             border-radius: 20px;
-            background: rgba(212, 175, 55, 0.12);
-            color: #d4af37;
+            background: rgba(180, 138, 20, 0.1);
+            color: #b48a14;
             font-size: 13px;
             font-weight: 600;
             margin-bottom: 20px;
+            border: 1px solid rgba(180, 138, 20, 0.25);
           }
 
           h1 {
             font-size: 48px;
             line-height: 1.2;
             margin: 0 0 15px;
+            color: #111;
           }
 
           .subtitle {
             font-size: 20px;
-            color: #aaa;
+            color: #666;
             margin-bottom: 25px;
           }
 
@@ -178,7 +180,7 @@ exports.renderBlogPage = async (req, res) => {
             display: flex;
             gap: 20px;
             flex-wrap: wrap;
-            color: #aaa;
+            color: #777;
             font-size: 14px;
             margin-bottom: 30px;
           }
@@ -189,31 +191,33 @@ exports.renderBlogPage = async (req, res) => {
             object-fit: cover;
             border-radius: 18px;
             margin-bottom: 35px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
           }
 
           .summary {
             padding: 25px;
-            border-left: 4px solid #d4af37;
-            background: #151515;
+            border-left: 4px solid #b48a14;
+            background: #ffffff;
             border-radius: 8px;
             margin-bottom: 35px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
           }
 
           .summary h2 {
-            color: #d4af37;
+            color: #b48a14;
             margin-top: 0;
           }
 
           .content {
             font-size: 17px;
-            color: #ddd;
+            color: #2b2b2b;
             line-height: 1.8;
           }
 
           .content h1,
           .content h2,
           .content h3 {
-            color: #d4af37;
+            color: #a67c10;
           }
 
           .content img {
@@ -227,7 +231,8 @@ exports.renderBlogPage = async (req, res) => {
             align-items: center;
             gap: 15px;
             padding: 20px;
-            background: #151515;
+            background: #ffffff;
+            border: 1px solid #eee;
             border-radius: 12px;
             margin: 35px 0;
           }
@@ -241,11 +246,11 @@ exports.renderBlogPage = async (req, res) => {
 
           .author-name {
             font-weight: 700;
-            color: #fff;
+            color: #111;
           }
 
           .author-designation {
-            color: #999;
+            color: #888;
             font-size: 14px;
           }
 
@@ -254,7 +259,7 @@ exports.renderBlogPage = async (req, res) => {
           }
 
           .section h2 {
-            color: #d4af37;
+            color: #a67c10;
             margin-bottom: 20px;
           }
 
@@ -262,7 +267,8 @@ exports.renderBlogPage = async (req, res) => {
             display: flex;
             gap: 15px;
             padding: 15px;
-            background: #151515;
+            background: #ffffff;
+            border: 1px solid #eee;
             border-radius: 10px;
             margin-bottom: 12px;
           }
@@ -275,7 +281,7 @@ exports.renderBlogPage = async (req, res) => {
             justify-content: center;
             border-radius: 50%;
             background: #d4af37;
-            color: #000;
+            color: #fff;
             font-weight: bold;
             flex-shrink: 0;
           }
@@ -283,17 +289,18 @@ exports.renderBlogPage = async (req, res) => {
           .quote {
             margin: 40px 0;
             padding: 30px;
-            background: #151515;
+            background: #fff9ec;
             border-radius: 15px;
             border-left: 4px solid #d4af37;
             font-size: 20px;
             font-style: italic;
+            color: #3a3a3a;
           }
 
           .quote-author {
             display: block;
             margin-top: 10px;
-            color: #d4af37;
+            color: #a67c10;
             font-size: 14px;
             font-style: normal;
           }
@@ -307,9 +314,10 @@ exports.renderBlogPage = async (req, res) => {
           .tag {
             padding: 6px 12px;
             border-radius: 20px;
-            background: #1c1c1c;
-            color: #d4af37;
+            background: #f2f2f2;
+            color: #a67c10;
             font-size: 13px;
+            border: 1px solid #e5e5e5;
           }
 
           @media (max-width: 768px) {
@@ -577,8 +585,8 @@ exports.renderBlogPage = async (req, res) => {
       </head>
 
       <body style="
-        background:#0b0b0b;
-        color:white;
+        background:#fafafa;
+        color:#1a1a1a;
         font-family:Arial;
         padding:40px;
       ">
@@ -588,21 +596,21 @@ exports.renderBlogPage = async (req, res) => {
         <h3>Error Message</h3>
 
         <pre style="
-          background:#151515;
+          background:#f2f2f2;
           padding:20px;
           border-radius:10px;
           white-space:pre-wrap;
-          color:#ff6b6b;
+          color:#c0392b;
         ">${error.message}</pre>
 
         <h3>Stack</h3>
 
         <pre style="
-          background:#151515;
+          background:#f2f2f2;
           padding:20px;
           border-radius:10px;
           white-space:pre-wrap;
-          color:#ddd;
+          color:#333;
         ">${error.stack || "No stack available"}</pre>
 
       </body>
