@@ -112,6 +112,5 @@ router.get(
 
 
 
-router.get("/blog/:slug", articleController.renderBlogPage);
 
 module.exports = router;
