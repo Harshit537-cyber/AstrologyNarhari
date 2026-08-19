@@ -1,13 +1,60 @@
 const Article = require('../../models/Articles/Article')
 
-exports.renderBlogPage = async (req, res) => {
+
+  exports.renderBlogPage = async (req, res) => {
   try {
+
+    console.log("========== BLOG RENDER START ==========");
+
     const { slug } = req.params;
+
+    console.log("BLOG SLUG:", slug);
 
     const article = await Article.findOne({
       slug: slug,
       isPublished: true,
     }).lean();
+
+    console.log("ARTICLE FOUND:", !!article);
+
+    if (!article) {
+      console.log("ARTICLE NOT FOUND FOR SLUG:", slug);
+
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Blog Not Found</title>
+        </head>
+
+        <body style="
+          background:#0b0b0b;
+          color:white;
+          font-family:Arial;
+          text-align:center;
+          padding:50px;
+        ">
+
+          <h1>Blog Not Found</h1>
+
+          <p>
+            No published article found for slug:
+            <strong>${slug}</strong>
+          </p>
+
+        </body>
+        </html>
+      `);
+    }
+
+    console.log("ARTICLE ID:", article._id);
+    console.log("ARTICLE TITLE:", article.title);
+    console.log("ARTICLE SLUG:", article.slug);
+    console.log("ARTICLE PUBLISHED:", article.isPublished);
+    console.log("ARTICLE AUTHOR:", article.author);
+    console.log("ARTICLE TAGS:", article.tags);
+
+    // 👇 YOUR EXISTING HTML CODE STARTS HERE
 
     if (!article) {
       return res.status(404).send(`
@@ -540,4 +587,4 @@ exports.renderBlogPage = async (req, res) => {
       </html>
     `);
   }
-};
+}
