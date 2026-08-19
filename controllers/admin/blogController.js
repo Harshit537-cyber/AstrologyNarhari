@@ -1,9 +1,7 @@
-const Article = require('../../models/Articles/Article')
+const Article = require("../../models/Articles/Article");
 
-
-  exports.renderBlogPage = async (req, res) => {
+exports.renderBlogPage = async (req, res) => {
   try {
-
     console.log("========== BLOG RENDER START ==========");
 
     const { slug } = req.params;
@@ -374,19 +372,13 @@ const Article = require('../../models/Articles/Article')
                 : ""
             }
 
-            ${
-              article.readTime
-                ? `<span>⏱ ${article.readTime}</span>`
-                : ""
-            }
+            ${article.readTime ? `<span>⏱ ${article.readTime}</span>` : ""}
 
             ${
               article.publishedDate
                 ? `
                   <span>
-                    📅 ${new Date(
-                      article.publishedDate
-                    ).toLocaleDateString()}
+                    📅 ${new Date(article.publishedDate).toLocaleDateString()}
                   </span>
                 `
                 : ""
@@ -498,7 +490,7 @@ const Article = require('../../models/Articles/Article')
                           </div>
 
                         </div>
-                      `
+                      `,
                     )
                     .join("")}
 
@@ -546,7 +538,7 @@ const Article = require('../../models/Articles/Article')
                           <span class="tag">
                             ${tag}
                           </span>
-                        `
+                        `,
                       )
                       .join("")}
 
@@ -565,10 +557,11 @@ const Article = require('../../models/Articles/Article')
     `;
 
     return res.status(200).send(html);
-
   } catch (error) {
-
-    console.error("Render Blog Error:", error);
+    console.error("========== BLOG RENDER ERROR ==========");
+    console.error("ERROR MESSAGE:", error.message);
+    console.error("ERROR STACK:", error.stack);
+    console.error("FULL ERROR:", error);
 
     return res.status(500).send(`
       <!DOCTYPE html>
@@ -576,15 +569,45 @@ const Article = require('../../models/Articles/Article')
       <html>
 
       <head>
-        <title>Server Error</title>
+
+        <title>Blog Render Error</title>
+
+        <meta charset="UTF-8">
+
       </head>
 
-      <body>
-        <h1>Internal Server Error</h1>
-        <p>${error.message}</p>
+      <body style="
+        background:#0b0b0b;
+        color:white;
+        font-family:Arial;
+        padding:40px;
+      ">
+
+        <h1>Blog Render Error</h1>
+
+        <h3>Error Message</h3>
+
+        <pre style="
+          background:#151515;
+          padding:20px;
+          border-radius:10px;
+          white-space:pre-wrap;
+          color:#ff6b6b;
+        ">${error.message}</pre>
+
+        <h3>Stack</h3>
+
+        <pre style="
+          background:#151515;
+          padding:20px;
+          border-radius:10px;
+          white-space:pre-wrap;
+          color:#ddd;
+        ">${error.stack || "No stack available"}</pre>
+
       </body>
 
       </html>
     `);
   }
-}
+};
