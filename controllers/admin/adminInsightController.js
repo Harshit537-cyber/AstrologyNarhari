@@ -503,3 +503,41 @@ exports.getCategoriesList = async (req, res) => {
 };
 
 
+exports.getAllArticles = async (req, res) => {
+  try {
+    const { category, isPublished, isFeatured } = req.query;
+
+    const filter = {};
+
+    if (category) {
+      filter.category = category;
+    }
+
+    if (isPublished !== undefined) {
+      filter.isPublished = isPublished === "true";
+    }
+
+    if (isFeatured !== undefined) {
+      filter.isFeatured = isFeatured === "true";
+    }
+
+    const articles = await Article.find(filter)
+      .populate("createdBy", "name email")
+      .sort({ publishedDate: -1 });
+
+    return res.status(200).json({
+      success: true,
+      message: "Articles fetched successfully",
+      count: articles.length,
+      data: articles,
+    });
+  } catch (error) {
+    console.error("Get All Articles Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch articles",
+      error: error.message,
+    });
+  }
+};

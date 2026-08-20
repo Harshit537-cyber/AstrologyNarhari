@@ -28,6 +28,7 @@ router.post(
 router.get(
   "/admin/all",
   verifyToken,
+  isAdmin,
   articleController.adminGetAllArticles
 );
 
@@ -107,6 +108,8 @@ router.get(
   articleController.getCategoriesList
 );
 
+
+router.get("/get-articles", articleController.getAllArticles);
 
 
 
