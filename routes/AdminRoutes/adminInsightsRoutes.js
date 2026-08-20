@@ -28,7 +28,6 @@ router.post(
 router.get(
   "/admin/all",
   verifyToken,
-  isAdmin,
   articleController.adminGetAllArticles
 );
 
