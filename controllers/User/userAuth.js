@@ -192,7 +192,7 @@ const getAllPartnersForUser = async (req, res) => {
             isProfileComplete: true,
             profileApprovalStatus: 'Approved'
         })
-        .select('fullName profilePic specialties languages experience minRate averageRating totalReviews isOnline firebaseUid')
+        .select('fullName mobile profilePic specialties languages experience minRate averageRating totalReviews isOnline firebaseUid')
         .lean();
 
         return res.status(200).json({ success: true, data: partners });
