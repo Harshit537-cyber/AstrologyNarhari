@@ -5,7 +5,7 @@ const User = require('../../models/User');
 const AdminEarning = require('../../models/Agora/AdminEarning');
 const { generateAgoraTokens } = require('../../services/agoraService');
 const moment = require('moment-timezone');
-
+const sendPushNotification = require("../../utils/notificationService")
 
 exports.initiateVideoCall = async (req, res) => {
     try {
@@ -29,20 +29,32 @@ exports.initiateVideoCall = async (req, res) => {
         const bookingStart = moment(booking.startTime).tz("Asia/Kolkata");
         const bookingEnd = moment(booking.endTime).tz("Asia/Kolkata");
 
-        // if (now.isBefore(bookingStart.clone().subtract(5, 'minutes'))) {
-        //     return res.status(400).json({
-        //         success: false,
-        //         message: `Call session starts at ${bookingStart.format('hh:mm A')} IST. You can join 5 mins early.`
-        //     });
-        // }
-
-        // if (now.isAfter(bookingEnd)) {
-        //     return res.status(400).json({ success: false, message: "This booking session has expired" });
-        // }
-
+       
         const channelName = bookingId.toString();
         const roleUid = req.user.role === 'user' ? 1 : 2;
         const tokens = generateAgoraTokens(channelName, roleUid);
+try {
+            const isUserCalling = booking.user._id.toString() === userId;
+            const recipient = isUserCalling ? booking.partner : booking.user;
+            const callerName = isUserCalling ? (booking.user.fullName || "User") : (booking.partner.name || "Partner");
+
+            if (recipient && recipient.fcmToken) {
+                const notificationData = {
+                    bookingId: bookingId.toString(),
+                    type: "VIDEO_CALL_START",
+                    channelName: channelName
+                };
+
+                const notificationContent = {
+                    title: "Incoming Video Call",
+                    body: `${callerName} is requesting to start the video call.`
+                };
+
+                sendPushNotification(recipient.fcmToken, notificationData, notificationContent);
+            }
+        } catch (pushError) {
+            console.error("Push Notification Error:", pushError.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -123,6 +135,28 @@ exports.terminateVideoCall = async (req, res) => {
 
         await session.commitTransaction();
         session.endSession();
+
+try {
+            const isUserTerminating = booking.user._id.toString() === userId;
+            
+            const recipientToken = isUserTerminating ? partner.fcmToken : booking.user.fcmToken;
+
+            if (recipientToken) {
+                const notificationData = {
+                    bookingId: bookingId.toString(),
+                    type: "VIDEO_CALL_ENDED"
+                };
+
+                const notificationContent = {
+                    title: "Call Ended",
+                    body: "The video call has been terminated and settled."
+                };
+
+                sendPushNotification(recipientToken, notificationData, notificationContent);
+            }
+        } catch (pushError) {
+            console.error("Termination Notification Error:", pushError.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -281,7 +315,7 @@ exports.joinCallSession = async (req, res) => {
         const { bookingId } = req.body;
         const partnerId = req.user.id;
 
-        const booking = await Booking.findById(bookingId);
+        const booking = await Booking.findById(bookingId).populate('user');
         if (!booking || booking.status !== 'accepted') {
             return res.status(400).json({ success: false, message: "Invalid booking or not accepted" });
         }
@@ -302,7 +336,24 @@ exports.joinCallSession = async (req, res) => {
 
         const channelName = bookingId.toString();
         const tokens = generateAgoraTokens(channelName, 2);
+try {
+            if (booking.user && booking.user.fcmToken) {
+                const notificationData = {
+                    bookingId: bookingId.toString(),
+                    type: "PARTNER_JOINED",
+                    channelName: channelName
+                };
 
+                const notificationContent = {
+                    title: "Partner Joined",
+                    body: "The partner has joined the call. You can start the conversation now."
+                };
+
+                sendPushNotification(booking.user.fcmToken, notificationData, notificationContent);
+            }
+        } catch (pushError) {
+            console.error("Join Notification Error:", pushError.message);
+        }
         res.status(200).json({
             success: true,
             message: "Call joined successfully",

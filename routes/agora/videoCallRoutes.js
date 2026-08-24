@@ -11,5 +11,7 @@ router.post('/settle', verifyToken, videoCallController.completeAndSettleCall);
 
 router.post('/refund', verifyToken, videoCallController.cancelVideoAndRefund);
 
+router.post("/join-call", verifyToken, videoCallController.joinCallSession);
+
 
 module.exports = router;
