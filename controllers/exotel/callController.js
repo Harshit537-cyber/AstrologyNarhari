@@ -99,20 +99,17 @@ exports.endCallManually = async (req, res) => {
             return res.status(403).json({ message: "You are not authorized to end this call" });
         }
 
+        if (booking.status === 'completed' || booking.status === 'missed') {
+            return res.status(200).json({ message: "Call already ended." });
+        }
+
         if (booking.partner) {
             booking.partner.isBusy = false;
             await booking.partner.save();
-            console.log("Partner marked as free (isBusy: false)");
+            console.log("Partner marked as free (isBusy: false) - via endCallManually");
         }
 
-        const { terminateExotelCall } = require('../../services/exotelService');
-        const result = await terminateExotelCall(booking.callSid);
-
-        if (result.success) {
-            res.status(200).json({ message: "Call termination initiated. Partner is now free." });
-        } else {
-            res.status(500).json({ message: "Exotel Error", error: result.error });
-        }
+        res.status(200).json({ message: "Call ended. Partner is now free." });
     } catch (error) {
         console.error("End Call Error:", error);
         res.status(500).json({ message: "Internal Server Error" });

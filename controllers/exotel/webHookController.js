@@ -18,7 +18,7 @@ exports.exotelWebhook = async (req, res) => {
 
     try {
         const booking = await Booking.findById(bookingId).populate('user partner').session(session);
-        if (!booking || booking.status === 'completed') {
+        if (!booking || booking.status === 'completed'|| booking.status === 'missed') {
             await session.abortTransaction();
             session.endSession();
             return res.status(200).send("Already Processed");
@@ -126,7 +126,7 @@ exports.exotelWebhook = async (req, res) => {
         return res.status(200).send("Call Logged and Processed");
 
     } catch (error) {
-        if (session.inAtomicityPlaceholder()) await session.abortTransaction();
+        if (session.inTransaction()) await session.abortTransaction();
         session.endSession();
         console.error("WEBHOOK_ERROR:", error);
         return res.status(500).send("Internal Error");
