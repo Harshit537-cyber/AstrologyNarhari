@@ -6,10 +6,17 @@ const mongoose = require('mongoose');
 const CallLog = require("../../models/CallLog/CallLog")
 
 exports.exotelWebhook = async (req, res) => {
-    const { bookingId, auth } = req.query;
+   
+    const { requestId:bookingId, auth } = req.query;
+     console.log("--- WEBHOOK TRIGGERED ---");
+    console.log("Booking ID:", bookingId);
+    console.log("Body Data:", req.body);
     const { Status, Duration, RecordingUrl, CallSid, StartTime, EndTime } = req.body;
 
+
     if (auth !== process.env.MY_INTERNAL_API_KEY) {
+                console.log("AUTH FAILED: Got", auth, "Expected", process.env.MY_INTERNAL_API_KEY);
+
         return res.status(401).send("Unauthorized");
     }
 
@@ -36,16 +43,17 @@ exports.exotelWebhook = async (req, res) => {
         }
 
         const durationSeconds = parseInt(Duration || 0);
+        const statusLower = Status ? Status.toLowerCase() : "";
+        
         let finalCost = 0;
         let billedMins = 0;
         let isCallSuccessful = false;
 
-        if (Status === 'completed' && durationSeconds >= 30) {
+        if (statusLower === 'completed' && durationSeconds >= 30) {
             finalCost = booking.totalFee;
             billedMins = booking.duration;
-            isCallSuccessful = true
+            isCallSuccessful = true;
         }
-
         const userBalBefore = user?.walletBalance || 0;
         const partnerBalBefore = partner?.walletBalance || 0;
 
@@ -99,7 +107,7 @@ exports.exotelWebhook = async (req, res) => {
             billedMinutes: billedMins,
             ratePerMinute: booking.ratePerMinute,
             totalCost: finalCost,
-            recordingUrl: RecordingUrl,
+            recordingUrl: RecordingUrl || "",
             startTime: StartTime || new Date(),
             endTime: EndTime || new Date()
         });
@@ -110,13 +118,14 @@ exports.exotelWebhook = async (req, res) => {
 
         await session.commitTransaction();
         session.endSession();
+        console.log("--- SUCCESS: TRANSACTION COMMITTED ---");
 
         if (booking.status === 'completed') {
             await sendPushNotification(user?.fcmToken, { type: 'CALL_SUCCESS' }, {
                 title: "Consultation Done",
                 body: `Charged ₹${finalCost} for ${booking.duration} mins session.`
             });
-        } else if (Status !== 'completed') {
+        } else if (statusLower !== 'completed') {
             await sendPushNotification(partner?.fcmToken, { type: 'MISSED_CALL' }, {
                 title: "Missed Call",
                 body: `You missed a consultation with ${user?.fullName}`
