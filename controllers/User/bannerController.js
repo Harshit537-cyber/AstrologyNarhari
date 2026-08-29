@@ -1,4 +1,6 @@
 const Banner = require("../../models/Banner/Banner");
+
+
 const getUserBanners = async (req, res) => {
     try {
         const banners = await Banner.find({
