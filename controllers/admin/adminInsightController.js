@@ -7,6 +7,7 @@ const uploadToCloudinary = async (filePath) => {
   try {
     const result = await cloudinary.uploader.upload(filePath, {
       folder: "cosmic_insights",
+          resource_type: "auto",
     });
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     return result.secure_url;
@@ -41,9 +42,15 @@ exports.createArticle = async (req, res) => {
       req.files?.authorProfilePic
         ? uploadToCloudinary(req.files.authorProfilePic[0].path)
         : Promise.resolve(""),
+
+         req.files?.video
+        ? uploadToCloudinary(req.files.video[0].path)
+        : Promise.resolve(""),
     ];
 
-    const [thumbnailUrl, bannerUrl, authorPicUrl] =
+    
+
+    const [thumbnailUrl, bannerUrl, authorPicUrl,videoUrl] =
       await Promise.all(uploadPromises);
 
     const parseSafely = (data) => {
@@ -63,6 +70,7 @@ exports.createArticle = async (req, res) => {
 
       thumbnail: thumbnailUrl,
       bannerImage: bannerUrl,
+       video: videoUrl,
 
       author: {
         name: req.body.authorName,
@@ -214,7 +222,7 @@ exports.updateArticle = async (req, res) => {
 
     const articleId = req.params.id;
 
-    const BACKEND_URL = "https://api.namahastro.com/article"
+    const BACKEND_URL = "https://api.namahastro.com/article"                                                       
 
     const currentArticle = await Article.findById(articleId);
 
@@ -237,9 +245,12 @@ exports.updateArticle = async (req, res) => {
       req.files?.authorProfilePic
         ? uploadToCloudinary(req.files.authorProfilePic[0].path)
         : Promise.resolve(null),
+        req.files?.video
+        ? uploadToCloudinary(req.files.video[0].path)
+        : Promise.resolve(null),
     ];
 
-    const [newThumbnail, newBanner, newAuthorPic] =
+    const [newThumbnail, newBanner, newAuthorPic,newVideo] =
       await Promise.all(uploadPromises);
 
     let updateData = { ...req.body };
@@ -250,6 +261,10 @@ exports.updateArticle = async (req, res) => {
 
     if (newBanner) {
       updateData.bannerImage = newBanner;
+    }
+
+    if (newVideo) {
+      updateData.video = newVideo;
     }
 
     updateData.author = {
@@ -477,7 +492,7 @@ exports.getRelatedArticles = async (req, res) => {
       isPublished: true,
       _id: { $ne: currentId },
     })
-      .select("title thumbnail category author readTime slug")
+      .select("title thumbnail category author readTime slug video")
       .limit(3)
       .sort("-publishedDate")
       .lean();

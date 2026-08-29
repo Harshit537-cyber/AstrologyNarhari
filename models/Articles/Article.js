@@ -22,6 +22,8 @@ const articleSchema = new mongoose.Schema(
     readTime: { type: String, required: true },
     thumbnail: { type: String, required: true },
     bannerImage: { type: String },
+        video: { type: String }, 
+
 
     summary: { type: String, required: true },
     quote: {
