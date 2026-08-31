@@ -69,6 +69,7 @@ app.use("/api/gift", require("./routes/gift/giftRoutes"));
 app.use("/api/admin/commission", require("./routes/AdminRoutes/adminCommisionRoutes"));
 app.use("/api/admin/restrictKeyword", require("./routes/AdminRoutes/adminRestrictKeyWordRoutes"));
 app.use("/api/video/call", require("./routes/agora/videoCallRoutes"));
+app.use("/api/contact", require("./routes/contact/contactRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({
