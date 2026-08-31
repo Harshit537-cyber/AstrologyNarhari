@@ -1,5 +1,5 @@
 const axios = require("axios");
-const exotelConfig = require("../config/exotel"); // Adjust path as per your folder structure
+const exotelConfig = require("../config/exotel"); 
 
 const triggerExotelCall = async (
   partnerMobile,
@@ -10,7 +10,6 @@ const triggerExotelCall = async (
   try {
     const url = exotelConfig.getCallUrl();
 
-    // Exotel ke liye Number Format Cleaning Logic (Adds leading '0')
     const cleanNumber = (num) => {
       if (!num) return "";
       let clean = String(num).replace(/\D/g, "");
@@ -20,8 +19,8 @@ const triggerExotelCall = async (
       return clean;
     };
 
-    const from = cleanNumber(partnerMobile); // Pehle Astro Partner ka phone bajega
-    const to = cleanNumber(userMobile); // Astro ke uthate hi User ka phone connect hoga
+    const from = cleanNumber(partnerMobile); 
+    const to = cleanNumber(userMobile); 
 
     // Raw Exophone format cleaning
     let rawExophone = String(exotelConfig.EXOPHONE || "")
@@ -46,7 +45,7 @@ const triggerExotelCall = async (
     params.append("From", from);
     params.append("To", to);
     params.append("CallerId", callerId);
-    params.append("TimeLimit", Math.floor(timeLimitSec || 300)); // Default 5 mins if not provided
+    params.append("TimeLimit", Math.floor(timeLimitSec || 300)); 
     params.append("Record", "true");
 
     if (callbackUrl.startsWith("http")) {
