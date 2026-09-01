@@ -70,6 +70,7 @@ app.use("/api/admin/commission", require("./routes/AdminRoutes/adminCommisionRou
 app.use("/api/admin/restrictKeyword", require("./routes/AdminRoutes/adminRestrictKeyWordRoutes"));
 app.use("/api/video/call", require("./routes/agora/videoCallRoutes"));
 app.use("/api/contact", require("./routes/contact/contactRoutes"));
+app.use("/api/video-blogs", require("./routes/Articles/videoBlogRoutes"))
 
 app.get("/", (req, res) => {
     res.status(200).json({
