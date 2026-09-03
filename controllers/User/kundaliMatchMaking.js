@@ -125,7 +125,7 @@ exports.generateKundli =  async (req, res) => {
 };
 
 
-exports.getFestivalCalendar =  async (req, res) => {
+exports.getFestivalCalendar = async (req, res) => {
     try {
         const { month, year, lat, lon, timezone } = req.body;
 
@@ -133,9 +133,9 @@ exports.getFestivalCalendar =  async (req, res) => {
             return res.status(400).json({ success: false, message: "month and year are required" });
         }
 
-       
+        // Payload for Vedic Rishi API
         const payload = {
-            day: 1,
+            day: 1, 
             month: Number(month),
             year: Number(year),
             hour: 12,
@@ -145,36 +145,76 @@ exports.getFestivalCalendar =  async (req, res) => {
             tzone: Number(timezone || 5.5) 
         };
 
-        console.log('Sending Payload to Vedic Rishi:', payload);
+        let responseData = null;
+        let activeEndpoint = "";
 
-        
-        let festivalsList;
-        try {
-            festivalsList = await getAstrologyData('major_festivals', payload);
-        } catch (e) {
-            console.log("Retrying with backup endpoint...");
-            festivalsList = await getAstrologyData('festival_calendar', payload);
+        // --- Ye 4 endpoints try karein, inme se ek aapke plan mein hoga ---
+        const endpointsToTry = [
+            'pantry_festivals',          // Most likely for your account
+            'pantry_monthly_festivals',  // Backup for pantry series
+            'pantry_festival_calendar',  // Another variation
+            'major_festivals'            // Standard premium
+        ];
+
+        for (let endpoint of endpointsToTry) {
+            try {
+                console.log(`Trying to reach: ${endpoint}...`);
+                const response = await getAstrologyData(endpoint, payload);
+                
+                // Agar data array hai ya festivals property hai toh success
+                if (response && (Array.isArray(response) || response.festivals || Array.isArray(response.major_festivals))) {
+                    responseData = response;
+                    activeEndpoint = endpoint;
+                    console.log(`Bingo! Working endpoint found: ${endpoint}`);
+                    break; 
+                }
+            } catch (err) {
+                console.log(`Endpoint ${endpoint} failed with: ${err.message}`);
+                continue; // Next try karein
+            }
         }
 
-        if (!Array.isArray(festivalsList)) {
-            return res.status(200).json({ success: true, festivals: [], summary: { total: 0 } });
+        // Response se festivals nikalna
+        let festivalsList = [];
+        if (Array.isArray(responseData)) {
+            festivalsList = responseData;
+        } else if (responseData && responseData.festivals) {
+            festivalsList = responseData.festivals;
+        } else if (responseData && responseData.major_festivals) {
+            festivalsList = responseData.major_festivals;
         }
 
+        if (festivalsList.length === 0) {
+            return res.status(200).json({ 
+                success: true, 
+                message: "No festivals found for this month in your active plan.", 
+                festivals: [],
+                endpoint_used: activeEndpoint
+            });
+        }
+
+        // Formatting Logic
         const calendarDots = {};
         const formatted = festivalsList.map(f => {
+            // Vedic rishi different fields use karta hai endpoints ke hisaab se
+            const fName = f.name || f.festival_name || f.text || "Festival";
             const dateKey = f.date ? f.date.split(' ')[0] : `${f.year}-${String(f.month).padStart(2, '0')}-${String(f.day).padStart(2, '0')}`;
+            
             if (!calendarDots[dateKey]) calendarDots[dateKey] = [];
-            calendarDots[dateKey].push(f.name);
-            return { name: f.name, date: dateKey, desc: f.description || "" };
+            calendarDots[dateKey].push(fName);
+            
+            return { name: fName, date: dateKey, desc: f.description || "" };
         });
 
         res.status(200).json({
             success: true,
             summary: { total: formatted.length, calendarDots },
-            festivals: formatted
+            festivals: formatted,
+            active_endpoint: activeEndpoint
         });
 
     } catch (error) {
+        console.error("Critical Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

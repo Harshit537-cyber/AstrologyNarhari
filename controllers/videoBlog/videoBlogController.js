@@ -63,7 +63,6 @@ exports.getAdminVideos =  async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
 
-        // Admin ke liye hum inactive videos bhi count karenge
         const totalVideos = await Video.countDocuments();
 
         const videos = await Video.find()

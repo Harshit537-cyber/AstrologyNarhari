@@ -38,6 +38,11 @@ const getAstrologyData = async (endpoint, data) => {
         });
         return response.data;
     } catch (error) {
+        if (error.response) {
+            console.log("--- API ERROR DETAILS ---");
+            console.log("Status:", error.response.status);
+            console.log("Message from API:", error.response.data); // Asli error yahan milega
+        }
         throw new Error(error.response?.data?.msg || "Astrology API Error");
     }
 };
