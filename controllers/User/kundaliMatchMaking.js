@@ -1,13 +1,15 @@
 const User = require('../../models/User');
-const { getMatchMakingReport ,getAstrologyData} = require('../../utils/astrologyService');
+const { getMatchMakingReport, getAstrologyData, getPdfReport,getFestivalData,getTithiEvent,
+    daysInMonth,
+    buildDate ,getHoroscopeData, validZodiacSigns } = require('../../utils/astrologyService');
 
 exports.checkCompatibility = async (req, res) => {
     try {
         const { boyDetails, girlDetails } = req.body;
-        
+
         const formatForAPI = (details) => {
-            const dateObj = new Date(details.dob); 
-            let [hour, min] = details.tob.split(':').map(Number); 
+            const dateObj = new Date(details.dob);
+            let [hour, min] = details.tob.split(':').map(Number);
 
             if (details.ampm === "PM" && hour < 12) hour += 12;
             if (details.ampm === "AM" && hour === 12) hour = 0;
@@ -41,7 +43,7 @@ exports.checkCompatibility = async (req, res) => {
         ]);
 
         let manglikConclusion = "";
-        if(maleManglik.is_present && femaleManglik.is_present) {
+        if (maleManglik.is_present && femaleManglik.is_present) {
             manglikConclusion = "Both are Manglik. Match is good.";
         } else if (!maleManglik.is_present && !femaleManglik.is_present) {
             manglikConclusion = "Both are Non-Manglik. Excellent match.";
@@ -53,10 +55,10 @@ exports.checkCompatibility = async (req, res) => {
             success: true,
             boyName: boyDetails.name,
             girlName: girlDetails.name,
-            score: report.total.received_points, 
+            score: report.total.received_points,
             total_points: 36,
             conclusion: report.total.conclusion,
-            
+
             manglikStatus: {
                 boy: maleManglik.is_present,
                 girl: femaleManglik.is_present,
@@ -69,12 +71,12 @@ exports.checkCompatibility = async (req, res) => {
                 tara: report.tara,
                 yoni: report.yoni,
                 maitri: report.maitri,
-                gana: report.gana,
-                bhakoot: report.bhakoot,
+                gana: report.gan,
+                bhakoot: report.bhakut,
                 nadi: report.nadi
             },
 
-            full_report: report 
+            full_report: report
         });
     } catch (error) {
         console.error("Error Detail:", error);
@@ -83,10 +85,9 @@ exports.checkCompatibility = async (req, res) => {
 };
 
 
-exports.generateKundli =  async (req, res) => {
+exports.generateKundli =async (req, res) => {
     try {
         const { dateOfBirth, timeOfBirth, lat, lon, timezone, fullName, gender } = req.body;
-
         const dob = new Date(dateOfBirth);
         const [hour, min] = timeOfBirth.split(':');
 
@@ -101,133 +102,163 @@ exports.generateKundli =  async (req, res) => {
             tzone: parseFloat(timezone || 5.5)
         };
 
-        const [planets, astroDetails, panchang] = await Promise.all([
-            getAstrologyData('planets', payload),
-            getAstrologyData('astro_details', payload),
-            getAstrologyData('basic_panchang', payload)
+        const pdfPayload = {
+            ...payload,
+            name: fullName,
+            gender: gender,
+            language: "hi",
+            chart_style: "NORTH_INDIAN",
+            footer_link: "https://yourwebsite.com",
+            logo_url: "https://yourwebsite.com/logo.png",
+            company_name: "Astro App",
+            company_info: "Online Astrology Consultation"
+        };
+
+        const [
+            planets,       
+            astro,         
+            panchang,       
+            vDasha,         
+            manglik,       
+            pdfData         
+        ] = await Promise.all([
+            getAstrologyData('planets', payload).catch(e => null),
+            getAstrologyData('astro_details', payload).catch(e => null),
+            getAstrologyData('basic_panchang', payload).catch(e => null),
+            getAstrologyData('major_vdasha', payload).catch(e => null),
+            getAstrologyData('manglik', payload).catch(e => null),
+            getPdfReport('basic_horoscope_pdf', pdfPayload)
         ]);
 
         res.status(200).json({
             success: true,
+            message: "Complete Kundli Data Generated",
+            pdf_link: pdfData ? pdfData.pdf_url : "PDF limit reached or endpoint not allowed",
             data: {
-                profile: { fullName, gender },
-                basic_panchang: panchang,
-                astrological_details: astroDetails,
-                planetary_positions: planets
+                user_profile: { fullName, gender },
+                panchang: panchang,
+                astrological_details: astro,
+                planetary_positions: planets,
+                dasha: vDasha,
+                doshas: {
+                    manglik: manglik,
+                }
             }
         });
+
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        console.error("Main Controller Error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
 
 exports.getFestivalCalendar = async (req, res) => {
     try {
-        const { month, year, lat, lon, timezone } = req.body;
+        const { month, year, hour, min, lat, lon, tzone } = req.body;
 
-        if (!month || !year) {
-            return res.status(400).json({ success: false, message: "month and year are required" });
+        const required = { month, year, hour, min, lat, lon, tzone };
+        const missing = Object.entries(required)
+            .filter(([, v]) => v === undefined || v === null || v === '')
+            .map(([k]) => k);
+        if (missing.length > 0) {
+            return res.status(400).json({ success: false, message: `Missing required field(s): ${missing.join(', ')}` });
         }
 
-        // Payload for Vedic Rishi API
-        const payload = {
-            day: 1, 
-            month: Number(month),
-            year: Number(year),
-            hour: 12,
-            min: 0,
-            lat: Number(lat || 28.6139),
-            lon: Number(lon || 77.2090),
-            tzone: Number(timezone || 5.5) 
+        const basePayload = {
+            month: parseInt(month), year: parseInt(year),
+            hour: parseInt(hour), min: parseInt(min),
+            lat: parseFloat(lat), lon: parseFloat(lon), tzone: parseFloat(tzone)
         };
-
-        let responseData = null;
-        let activeEndpoint = "";
-
-        // --- Ye 4 endpoints try karein, inme se ek aapke plan mein hoga ---
-        const endpointsToTry = [
-            'pantry_festivals',          // Most likely for your account
-            'pantry_monthly_festivals',  // Backup for pantry series
-            'pantry_festival_calendar',  // Another variation
-            'major_festivals'            // Standard premium
-        ];
-
-        for (let endpoint of endpointsToTry) {
-            try {
-                console.log(`Trying to reach: ${endpoint}...`);
-                const response = await getAstrologyData(endpoint, payload);
-                
-                // Agar data array hai ya festivals property hai toh success
-                if (response && (Array.isArray(response) || response.festivals || Array.isArray(response.major_festivals))) {
-                    responseData = response;
-                    activeEndpoint = endpoint;
-                    console.log(`Bingo! Working endpoint found: ${endpoint}`);
-                    break; 
-                }
-            } catch (err) {
-                console.log(`Endpoint ${endpoint} failed with: ${err.message}`);
-                continue; // Next try karein
-            }
+        if (Object.values(basePayload).some(v => Number.isNaN(v))) {
+            return res.status(400).json({ success: false, message: "One or more fields are not valid numbers" });
         }
 
-        // Response se festivals nikalna
-        let festivalsList = [];
-        if (Array.isArray(responseData)) {
-            festivalsList = responseData;
-        } else if (responseData && responseData.festivals) {
-            festivalsList = responseData.festivals;
-        } else if (responseData && responseData.major_festivals) {
-            festivalsList = responseData.major_festivals;
-        }
+        const totalDays = daysInMonth(basePayload.month, basePayload.year);
 
-        if (festivalsList.length === 0) {
-            return res.status(200).json({ 
-                success: true, 
-                message: "No festivals found for this month in your active plan.", 
-                festivals: [],
-                endpoint_used: activeEndpoint
+        const monthlyPanchangRes = await getFestivalData('monthly_panchang', { ...basePayload, day: 1 });
+        if (!monthlyPanchangRes.ok) {
+            return res.status(502).json({
+                success: false,
+                message: "Upstream monthly_panchang request failed",
+                error: { status: monthlyPanchangRes.status, data: monthlyPanchangRes.data }
             });
         }
+        const calendarGrid = Array.isArray(monthlyPanchangRes.data?.panchang) ? monthlyPanchangRes.data.panchang : [];
 
-        // Formatting Logic
-        const calendarDots = {};
-        const formatted = festivalsList.map(f => {
-            // Vedic rishi different fields use karta hai endpoints ke hisaab se
-            const fName = f.name || f.festival_name || f.text || "Festival";
-            const dateKey = f.date ? f.date.split(' ')[0] : `${f.year}-${String(f.month).padStart(2, '0')}-${String(f.day).padStart(2, '0')}`;
-            
-            if (!calendarDots[dateKey]) calendarDots[dateKey] = [];
-            calendarDots[dateKey].push(fName);
-            
-            return { name: fName, date: dateKey, desc: f.description || "" };
+        const festivalCalls = [];
+        for (let d = 1; d <= totalDays; d++) {
+            festivalCalls.push(
+                getFestivalData('panchang_festival', { ...basePayload, day: d })
+                    .then(result => ({ day: d, result }))
+            );
+        }
+        const festivalResults = await Promise.all(festivalCalls);
+
+        const failed = festivalResults.filter(f => !f.result.ok);
+        if (failed.length > 0) {
+            console.error(`${failed.length}/${totalDays} panchang_festival calls failed`, failed.map(f => f.day));
+        }
+
+        const religious = [];
+        const auspicious = [];
+        const highlights = [];
+        const today = new Date();
+
+        calendarGrid.forEach(entry => {
+            const eventName = getTithiEvent(entry.tithi);
+            if (eventName) {
+                auspicious.push({
+                    date: buildDate(basePayload.year, basePayload.month, entry.day),
+                    day: entry.day,
+                    tithi: entry.tithi,
+                    event: eventName
+                });
+            }
         });
+
+        festivalResults.forEach(({ day, result }) => {
+            if (!result.ok) return;
+            const festivalsField = result.data?.festivals;
+            if (!Array.isArray(festivalsField) || festivalsField.length === 0) return;
+
+            const names = festivalsField
+                .flatMap(str => String(str).split(','))
+                .map(n => n.trim())
+                .filter(Boolean);
+
+            const dateStr = buildDate(basePayload.year, basePayload.month, day);
+            names.forEach(name => {
+                const festObj = { name, date: dateStr, day };
+                religious.push(festObj);
+                if (new Date(dateStr) >= today) highlights.push(festObj);
+            });
+        });
+
+        highlights.sort((a, b) => new Date(a.date) - new Date(b.date));
 
         res.status(200).json({
             success: true,
-            summary: { total: formatted.length, calendarDots },
-            festivals: formatted,
-            active_endpoint: activeEndpoint
+            calendarGrid,
+            tabs: { all_events: religious, religious, auspicious },
+            upcoming_highlights: highlights.slice(0, 5),
+            meta: failed.length > 0 ? { warning: `${failed.length} day(s) failed to load festival data` } : undefined
         });
 
     } catch (error) {
-        console.error("Critical Error:", error);
+        console.error("Dashboard Error:", error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
 
 exports.getDailyBasisDashboardHoroscope = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
 
         if (!user || !user.zodiac || user.zodiac === "Auto-calculated") {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Please set your zodiac sign in profile first" 
+            return res.status(400).json({
+                success: false,
+                message: "Please set your zodiac sign in profile first"
             });
         }
 
@@ -255,89 +286,79 @@ exports.getDailyBasisDashboardHoroscope = async (req, res) => {
 };
 
 
-exports.getDetailedHoroscope =  async (req, res) => {
+exports.getWeeklyHoroscope = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id);
-
-        if (!user || !user.zodiac || user.zodiac === "Auto-calculated") {
-            return res.status(400).json({
-                success: false,
-                message: "Please set your zodiac sign in profile first"
-            });
+        const user = await User.findById(req.user.id).select('zodiac');
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        if (!user.zodiac) {
+            return res.status(400).json({ success: false, message: "Zodiac sign not set on user profile" });
         }
 
-        const period = req.query.period || "daily";
-        const zodiacSign = user.zodiac.toLowerCase();
-
-        const endpoint = `horoscope_prediction/${period}/${zodiacSign}`;
-console.log("Endpoint:", endpoint);
-        const response = await getAstrologyData(endpoint, {
-            timezone: 5.5,
-        });
-
-        console.log("API RAW DATA:", JSON.stringify(response, null, 2));
-
-        let forecast = "";
-
-        if (typeof response.prediction === "object") {
-            forecast = Object.values(response.prediction).join(" ");
-        } else {
-            forecast = response.prediction || "";
+        const zodiacName = user.zodiac.toLowerCase(); // "Virgo" -> "virgo"
+        if (!validZodiacSigns.includes(zodiacName)) {
+            return res.status(400).json({ success: false, message: "Invalid zodiac sign stored on user profile" });
         }
 
-        res.status(200).json({
-            success: true,
-            data: {
-                zodiac: user.zodiac,
-                date:
-                    response.prediction_date ||
-                    response.date ||
-                    response.week_range ||
-                    response.month_name ||
-                    response.year ||
-                    "",
+        const { timezone } = req.body;
+        if (timezone === undefined || timezone === null || timezone === '') {
+            return res.status(400).json({ success: false, message: "timezone is required for weekly horoscope" });
+        }
+        const tz = parseFloat(timezone);
+        if (Number.isNaN(tz)) {
+            return res.status(400).json({ success: false, message: "timezone must be a valid number" });
+        }
 
-                ratings: {
-                    love: response.rating?.love
-                        ? `${response.rating.love * 20}%`
-                        : null,
-                    career: response.rating?.career
-                        ? `${response.rating.career * 20}%`
-                        : null,
-                    health: response.rating?.health
-                        ? `${response.rating.health * 20}%`
-                        : null,
-                    finance: response.rating?.finance
-                        ? `${response.rating.finance * 20}%`
-                        : null,
-                },
+        const result = await getHoroscopeData(`horoscope_prediction/weekly/${zodiacName}`, { timezone: tz });
+        if (!result.ok) {
+            return res.status(502).json({ success: false, message: "Upstream weekly horoscope request failed", error: { status: result.status, data: result.data } });
+        }
 
-                forecast: {
-                    title: `${period.toUpperCase()} FORECAST`,
-                    content: forecast,
-                },
+        res.status(200).json({ success: true, zodiacName, horoscope: result.data });
 
-                lucky: {
-                    color: response.lucky_color || null,
-                    number: response.lucky_number || null,
-                    time:
-                        response.lucky_time ||
-                        response.lucky_hour ||
-                        null,
-                },
-            },
-        });
     } catch (error) {
-        console.error("HOROSCOPE API ERROR:", error);
-
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+        console.error("Weekly Horoscope Error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
+exports.getMonthlyHoroscope = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('zodiac');
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        if (!user.zodiac) {
+            return res.status(400).json({ success: false, message: "Zodiac sign not set on user profile" });
+        }
 
+        const zodiacName = user.zodiac.toLowerCase();
+        if (!validZodiacSigns.includes(zodiacName)) {
+            return res.status(400).json({ success: false, message: "Invalid zodiac sign stored on user profile" });
+        }
+
+        let tz = 5.5;
+        const { timezone } = req.body;
+        if (timezone !== undefined && timezone !== null && timezone !== '') {
+            tz = parseFloat(timezone);
+            if (Number.isNaN(tz)) {
+                return res.status(400).json({ success: false, message: "timezone must be a valid number" });
+            }
+        }
+
+        const result = await getHoroscopeData(`horoscope_prediction/monthly/${zodiacName}`, { timezone: tz });
+        if (!result.ok) {
+            return res.status(502).json({ success: false, message: "Upstream monthly horoscope request failed", error: { status: result.status, data: result.data } });
+        }
+
+        res.status(200).json({ success: true, zodiacName, horoscope: result.data });
+
+    } catch (error) {
+        console.error("Monthly Horoscope Error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 exports.getUserKundli = async (req, res) => {
     try {
         const { userId } = req.params;

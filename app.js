@@ -47,7 +47,7 @@ app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
 app.use("/api/rituals", require("./routes/Rituals/RitualsRoutes"));
 app.use("/api/shipping", require("./routes/UserRoutes/addressRoutes"));
 app.use("/api/tickets", ticketRoutes);
-
+app.use("/api/palm", require("./routes/palm/palmRoutes"));
 
 app.use("/article", require("./routes/AdminRoutes/blogRoutes"));
 

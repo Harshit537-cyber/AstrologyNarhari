@@ -7,8 +7,8 @@ router.post('/check-compatibility', verifyToken, isUser, matchController.checkCo
 router.post("/generate-kundali", verifyToken, isUser, matchController.generateKundli);
 router.post("/festivals", verifyToken, isUser, matchController.getFestivalCalendar);
 router.get("/get-daily-horoscope", verifyToken, isUser, matchController.getDailyBasisDashboardHoroscope);
-router.get("/get-detailed-horoscope", verifyToken, isUser, matchController.getDetailedHoroscope);
-
+router.post('/horoscope/weekly',verifyToken, isUser, matchController.getWeeklyHoroscope);
+router.post('/horoscope/monthly', verifyToken, isUser, matchController.getMonthlyHoroscope);
 router.get(
   "/get-kundli/:userId",
   
