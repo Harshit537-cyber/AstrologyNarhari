@@ -123,10 +123,70 @@ const validZodiacSigns = [
     'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'
 ];
 
+const buildAuthHeader = () => {
+    const { userId, apiKey } = config;
 
+    if (!userId || !apiKey) {
+        throw new Error('Missing ASTROLOGY_API_USER_ID or ASTROLOGY_API_PASSWORD in environment.');
+    }
+
+    const raw = `${userId}:${apiKey}`;
+    return `Basic ${Buffer.from(raw).toString('base64')}`;
+};
+
+ const getDetailedHoroscopeData = async (type, zodiac, timezone) => {
+    let endpoint = '';
+    const tz = timezone !== undefined && timezone !== null && timezone !== '' ? timezone : 5.5;
+    const zodiacName = zodiac.toLowerCase();
+
+    switch (type.toLowerCase()) {
+        case 'daily':
+            endpoint = `/sun_sign_prediction/daily/next/${zodiacName}`;
+            break;
+        case 'weekly':
+            endpoint = `/horoscope_prediction/weekly/${zodiacName}`;
+            break;
+        case 'monthly':
+            endpoint = `/horoscope_prediction/monthly/${zodiacName}`;
+            break;
+        default:
+            throw new Error('Invalid horoscope type. Choose daily, weekly, or monthly.');
+    }
+
+    const finalUrl = `${config.baseUrl}${endpoint}`;
+
+    console.log(`[Horoscope Service] Calling ${finalUrl} | timezone: ${tz}`);
+
+    try {
+        const response = await axios.post(
+            finalUrl,
+            { timezone: tz },
+            {
+                headers: {
+                    'x-astrologyapi-key': config.accessToken,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        console.log(`[Service Success] Fetched data for zodiac: ${zodiacName}`);
+        return response.data;
+
+    } catch (error) {
+        console.error(`[Service Error] Astrology API Failed!`);
+        if (error.response) {
+            console.error(`Status: ${error.response.status}`);
+            console.error(`Response Data:`, JSON.stringify(error.response.data));
+        } else {
+            console.error(`Error Message: ${error.message}`);
+        }
+        throw new Error(error.response?.data?.message || 'Failed to fetch horoscope data');
+    }
+};
 module.exports = { getMatchMakingReport,getAstrologyData,getPdfReport,getFestivalData ,getTithiEvent,
     daysInMonth,
     pad,
     buildDate,
   getHoroscopeData,
-    validZodiacSigns };
+    validZodiacSigns,
+getDetailedHoroscopeData };

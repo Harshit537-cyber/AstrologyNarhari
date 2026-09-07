@@ -1,7 +1,7 @@
 const User = require('../../models/User');
 const { getMatchMakingReport, getAstrologyData, getPdfReport,getFestivalData,getTithiEvent,
     daysInMonth,
-    buildDate ,getHoroscopeData, validZodiacSigns } = require('../../utils/astrologyService');
+    buildDate ,getHoroscopeData, validZodiacSigns,getDetailedHoroscopeData } = require('../../utils/astrologyService');
 
 exports.checkCompatibility = async (req, res) => {
     try {
@@ -323,6 +323,84 @@ exports.getWeeklyHoroscope = async (req, res) => {
     }
 };
 
+exports.getYearlyHoroscope = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('zodiac');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        
+        if (!user.zodiac) {
+            return res.status(400).json({
+                success: false,
+                message: "Zodiac sign not set on user profile"
+            });
+        }
+
+        const zodiacName = user.zodiac.toLowerCase();
+
+        if (!validZodiacSigns.includes(zodiacName)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid zodiac sign stored on user profile"
+            });
+        }
+
+        const { timezone } = req.body;
+
+        if (timezone === undefined || timezone === null || timezone === '') {
+            return res.status(400).json({
+                success: false,
+                message: "timezone is required for yearly horoscope"
+            });
+        }
+
+        const tz = parseFloat(timezone);
+
+        if (Number.isNaN(tz)) {
+            return res.status(400).json({
+                success: false,
+                message: "timezone must be a valid number"
+            });
+        }
+
+        const result = await getHoroscopeData(
+            `horoscope_prediction/yearly/${zodiacName}`,
+            { timezone: tz }
+        );
+
+        if (!result.ok) {
+            return res.status(502).json({
+                success: false,
+                message: "Upstream yearly horoscope request failed",
+                error: {
+                    status: result.status,
+                    data: result.data
+                }
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            zodiacName,
+            horoscope: result.data
+        });
+
+    } catch (error) {
+        console.error("Yearly Horoscope Error:", error.message);
+
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.getMonthlyHoroscope = async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('zodiac');
@@ -359,6 +437,7 @@ exports.getMonthlyHoroscope = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
 exports.getUserKundli = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -399,6 +478,56 @@ exports.getUserKundli = async (req, res) => {
         });
 
     } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.getDetailedHoroscope = async (req, res) => {
+    try {
+        const { type } = req.params;
+        const { timezone } = req.query; // <-- was req.body
+
+        if (!req.user) {
+            console.error("[Controller Error] No user object found in request. Check your verifyToken middleware.");
+            return res.status(401).json({ success: false, message: "Unauthorized: User not found." });
+        }
+
+        const userId = req.user._id || req.user.id;
+        const userData = await User.findById(userId);
+
+        console.log(`[Horoscope Controller] Processing request for User: ${userId}, Zodiac Found: ${userData?.zodiac}`);
+
+        const userZodiac = userData?.zodiac;
+
+        if (!userZodiac || userZodiac === "Auto-calculated") {
+            return res.status(400).json({
+                success: false,
+                message: "Zodiac sign is missing from your profile. Please update your profile first."
+            });
+        }
+
+        const allowedTypes = ['daily', 'weekly', 'monthly'];
+        if (!type || !allowedTypes.includes(type.toLowerCase())) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid prediction type. Use daily, weekly, or monthly."
+            });
+        }
+
+        const data = await getDetailedHoroscopeData(type, userZodiac, timezone);
+
+        return res.status(200).json({
+            success: true,
+            predictionType: type,
+            zodiacUsed: userZodiac,
+            data: data
+        });
+
+    } catch (error) {
+        console.error(`[Controller Error] API Error: ${error.message}`);
         return res.status(500).json({
             success: false,
             message: error.message
