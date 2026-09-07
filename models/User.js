@@ -22,7 +22,9 @@ const userSchema = new mongoose.Schema({
     timeOfBirth: { type: String, default: null },
     placeOfBirth: { type: String, default: null },
     walletBalance: { type: Number, default: 0 },
-    fcmToken: { type: String, default: null }
+    fcmToken: { type: String, default: null },
+   firebaseUid: { type: String, unique: true, sparse: true, default: null }, 
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

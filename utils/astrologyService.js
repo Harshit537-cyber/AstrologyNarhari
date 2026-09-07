@@ -153,7 +153,7 @@ const buildAuthHeader = () => {
             throw new Error('Invalid horoscope type. Choose daily, weekly, or monthly.');
     }
 
-    const finalUrl = `${config.baseUrl}${endpoint}`;
+    const finalUrl = `${config.HoroscopebaseUrl}${endpoint}`;
 
     console.log(`[Horoscope Service] Calling ${finalUrl} | timezone: ${tz}`);
 

@@ -5,5 +5,5 @@ module.exports = {
     apiKey: process.env.ASTROLOGY_API_PASSWORD,
     baseUrl: process.env.ASTROLOGY_API_BASE_URL,
     accessToken: process.env.ASTROLOGY_ACCESS_TOKEN,
-      baseUrl: 'https://json.astrologyapi.com/v1',
+    HoroscopebaseUrl: 'https://json.astrologyapi.com/v1',
 };
