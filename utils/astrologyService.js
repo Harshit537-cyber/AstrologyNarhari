@@ -133,7 +133,7 @@ const buildAuthHeader = () => {
     const raw = `${userId}:${apiKey}`;
     return `Basic ${Buffer.from(raw).toString('base64')}`;
 };
-
+// getDetailedData
  const getDetailedHoroscopeData = async (type, zodiac, timezone) => {
     let endpoint = '';
     const tz = timezone !== undefined && timezone !== null && timezone !== '' ? timezone : 5.5;
