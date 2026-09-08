@@ -171,7 +171,7 @@ const toggleBannerStatus = async (req, res) => {
                 message: "Banner not found"
             });
         }
-
+  
         banner.isActive = !banner.isActive;
         await banner.save();
 
@@ -212,6 +212,8 @@ const deleteBanner = async (req, res) => {
         });
     }
 };
+
+
 
 module.exports = {
     addBanner,
