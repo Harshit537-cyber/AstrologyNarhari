@@ -1,4 +1,6 @@
 const Banner = require("../../models/Banner/Banner");
+
+
 const getUserBanners = async (req, res) => {
     try {
         const banners = await Banner.find({
@@ -48,7 +50,7 @@ const Card = require("../../models/Banner/Card");
 // Get All Cards (User)
 const getAllCards = async (req, res) => {
     try {
-        const cards = await Card.find().sort({ createdAt: -1 });
+        const cards = await Card.find().sort({ createdAt: -1 });    
 
         return res.status(200).json({
             success: true,

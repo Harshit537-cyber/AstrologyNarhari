@@ -21,8 +21,8 @@ const sessionRoutes = require("./routes/sessionRoutes/sessionRoutes");
 const app = express();
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb',extended: true }));
 app.use(cookieParser());
 
 app.use("/api/user", userAuthRoutes);
@@ -47,6 +47,9 @@ app.use("/api/order", require("./routes/UserRoutes/orderRoutes"));
 app.use("/api/rituals", require("./routes/Rituals/RitualsRoutes"));
 app.use("/api/shipping", require("./routes/UserRoutes/addressRoutes"));
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/palm", require("./routes/palm/palmRoutes"));
+
+app.use("/article", require("./routes/AdminRoutes/blogRoutes"));
 
 app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/notifications", adminNotificationRoutes);
@@ -54,6 +57,7 @@ app.use("/api/admin/banner", bannerRoutes);
 app.use("/api/admin/product-category", productCategoryRoutes);
 app.use("/api/admin/product", productRoutes);
 app.use("/api/admin/coupon", couponRoutes);
+app.use("/api/admin/insights", require("./routes/AdminRoutes/adminInsightsRoutes"));
 
 app.use("/api/v1/calls", require("./routes/callWebhookRoutes/callWebhookRoutes"));
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
@@ -64,6 +68,9 @@ app.use("/api/admin/pandit", require("./routes/AdminRoutes/panditJiRoutes"));
 app.use("/api/gift", require("./routes/gift/giftRoutes"));
 app.use("/api/admin/commission", require("./routes/AdminRoutes/adminCommisionRoutes"));
 app.use("/api/admin/restrictKeyword", require("./routes/AdminRoutes/adminRestrictKeyWordRoutes"));
+app.use("/api/video/call", require("./routes/agora/videoCallRoutes"));
+app.use("/api/contact", require("./routes/contact/contactRoutes"));
+app.use("/api/video-blogs", require("./routes/Articles/videoBlogRoutes"))
 
 app.get("/", (req, res) => {
     res.status(200).json({

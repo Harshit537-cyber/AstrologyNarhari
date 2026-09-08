@@ -106,6 +106,8 @@ const partnerSchema = new mongoose.Schema({
         status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
         uploadedAt: { type: Date, default: null }
     },
+    isAcceptingRequests: { type: Boolean, default: true },
+
     addressProof: {
         url: { type: String, default: null },
         status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
@@ -114,6 +116,12 @@ const partnerSchema = new mongoose.Schema({
     isOnline: { type: Boolean, default: false },
     isBusy: { type: Boolean, default: false },
     fcmToken: { type: String, default: null },
+    firebaseUid: { 
+    type: String, 
+    default: null, 
+    unique: true, 
+    sparse: true  
+},
     walletBalance: { 
         type: Number, 
         default: 0 

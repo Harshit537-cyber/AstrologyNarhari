@@ -27,7 +27,7 @@ const bookingSchema = new mongoose.Schema({
     mode: {
         type: String,
         required: true,
-        enum: ['Chat', 'Voice Call']
+        enum: ['Chat', 'Voice Call', 'Video Call']
     },
     ratePerMinute: {
         type: Number,

@@ -20,7 +20,8 @@ const {
     getPartnerReviews,
     updateMinRate,
     getMinRate,
-    logoutPartner
+    logoutPartner,
+    deletePartnerByMobile
 } = require('../../controllers/Patner/partnerAuth');
 
 const { dutyOn, dutyOff, getDutyStatus } = require('../../controllers/Patner/partnerDuty');
@@ -184,6 +185,9 @@ router.get(
     getKycStatus
 );
 
+
+
+router.delete("/delete-by-mobile", deletePartnerByMobile);
 
 router.patch('/update-fcm', verifyToken, isPartner, updateFCMToken);
 router.post("/logout", verifyToken, isPartner, logoutPartner)

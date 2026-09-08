@@ -1,6 +1,6 @@
 const express = require("express");
 const { verifyToken , isAdmin, isUser, isPartner} = require("../../middleware/auth");
-const { addGift, sendGiftInLive,getActiveGifts ,getGiftById,getGiftDetails,editGift, deleteGift,getAllGiftsForAdmin,getReceivedGifts,getSessionEarnings,getPartnerGiftSummary} = require("../../controllers/gift/adminGiftController");
+const { addGift, sendGiftInLive,getActiveGifts ,getGiftById,getGiftDetails,editGift, getMyGiftHistory,deleteGift,getAllGiftsForAdmin,getReceivedGifts,getSessionEarnings,getPartnerGiftSummary} = require("../../controllers/gift/adminGiftController");
 const router = express.Router();
 const upload = require("../../middleware/upload");
 
@@ -14,7 +14,8 @@ router.delete("/admin/gift/delete/:id",  verifyToken, isAdmin,deleteGift )
 //user routes
 router.post("/send-live-gifts", verifyToken, isUser, sendGiftInLive );
 router.get("/get-active-gifts",verifyToken, isUser,getActiveGifts);
-router.get("/activeGift-by-id/:id",verifyToken, isUser,getGiftDetails )
+router.get("/activeGift-by-id/:id",verifyToken, isUser,getGiftDetails );
+router.get("/my-gift-history", verifyToken, isUser, getMyGiftHistory)
 
 // partner routes
 router.get('/partner/received-gifts', verifyToken, isPartner,getReceivedGifts);

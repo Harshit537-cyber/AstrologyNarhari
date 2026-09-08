@@ -36,7 +36,8 @@ router.post(
     upload.fields([
         { name: 'thumbnail', maxCount: 1 },
         { name: 'bannerImage', maxCount: 1 },
-        { name: 'authorProfilePic', maxCount: 1 }
+        { name: 'authorProfilePic', maxCount: 1 },
+          { name: "video", maxCount: 1 }, 
     ]), 
     createArticle
 );
@@ -48,7 +49,8 @@ router.put(
     upload.fields([
         { name: 'thumbnail', maxCount: 1 },
         { name: 'bannerImage', maxCount: 1 },
-        { name: 'authorProfilePic', maxCount: 1 }
+        { name: 'authorProfilePic', maxCount: 1 },
+          { name: "video", maxCount: 1 }, 
     ]), 
     updateArticle
 );

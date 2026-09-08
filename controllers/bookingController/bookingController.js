@@ -7,6 +7,7 @@ const { validateBookingTime } = require('../../utils/dateValidator');
 const sendPushNotification = require("../../utils/notificationService");
 const CommissionConfig = require('../../models/Partner/CommissionConfig');
 
+
 const scheduleBooking = async (req, res) => {
     try {
         const { partnerId, date, timeSlot, duration, mode } = req.body;

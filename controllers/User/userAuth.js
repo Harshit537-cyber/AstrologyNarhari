@@ -11,10 +11,11 @@ const verifyOTP = async (req, res) => {
     try {
         const { idToken, mobile: bodyMobile } = req.body;
         let mobile;
-
+let firebaseUid = null; 
         if (idToken) {
             const decodedToken = await admin.auth().verifyIdToken(idToken);
             mobile = decodedToken.phone_number;
+             firebaseUid = decodedToken.uid;
         } else if (bodyMobile) {
             mobile = bodyMobile;
         }
@@ -31,6 +32,7 @@ const verifyOTP = async (req, res) => {
         if (!user) {
             user = await User.create({
                 mobile,
+                  firebaseUid, 
                 role: 'user',
                 isVerified: true
             });
@@ -40,6 +42,9 @@ const verifyOTP = async (req, res) => {
                     success: false,
                     message: 'Account deactivated by admin. Please contact support.'
                 });
+            }
+            if (firebaseUid) {
+                user.firebaseUid = firebaseUid;
             }
 
             user.isVerified = true;
@@ -68,6 +73,7 @@ const verifyOTP = async (req, res) => {
                 id: user._id,
                 mobile: user.mobile,
                 isProfileComplete: Boolean(user.fullName),
+                  firebaseUid: user.firebaseUid,
                 isActive: true
             }
         });
@@ -192,7 +198,7 @@ const getAllPartnersForUser = async (req, res) => {
             isProfileComplete: true,
             profileApprovalStatus: 'Approved'
         })
-        .select('fullName profilePic specialties languages experience minRate averageRating totalReviews isOnline')
+        .select('fullName mobile profilePic specialties languages experience minRate averageRating totalReviews isOnline firebaseUid')
         .lean();
 
         return res.status(200).json({ success: true, data: partners });
