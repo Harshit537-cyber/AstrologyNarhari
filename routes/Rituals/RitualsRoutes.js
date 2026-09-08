@@ -14,21 +14,12 @@ router.post(
     adminRitualController.addRitual
 );
 
-router.get(
-    '/admin/rituals/bookings', 
-    verifyToken, 
-    isAdmin, 
-    adminRitualController.getAllRitualBookingsForAdmin
-);
+router.put('/:id', verifyToken,isAdmin,upload.single('image'),  adminRitualController.updateRitual);
 
-router.get(
-    '/admin/rituals/booking/:id', 
-    verifyToken, 
-    isAdmin, 
-    adminRitualController.getRitualBookingByIdForAdmin
-);
 
 router.get('/rituals', verifyToken, ritualController.getRituals);
+
+
 
 router.get('/rituals/search', verifyToken, ritualController.searchRituals);
 

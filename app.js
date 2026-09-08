@@ -63,6 +63,7 @@ app.use("/api/partner/rating", require("./routes/PatnerRoutes/partnerRatingRoute
 app.use("/api/admin/pandit", require("./routes/AdminRoutes/panditJiRoutes"));
 app.use("/api/gift", require("./routes/gift/giftRoutes"));
 app.use("/api/admin/commission", require("./routes/AdminRoutes/adminCommisionRoutes"));
+app.use("/api/admin/restrictKeyword", require("./routes/AdminRoutes/adminRestrictKeyWordRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({

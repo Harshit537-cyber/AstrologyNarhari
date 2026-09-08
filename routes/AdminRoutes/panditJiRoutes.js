@@ -18,10 +18,6 @@ const { verifyToken, isAdmin } = require("../../middleware/auth");
 const upload = require("../../middleware/upload");
 
 
-// =====================================================
-// CREATE PANDIT
-// =====================================================
-
 router.post(
     "/create-pandit",
     verifyToken,
@@ -31,9 +27,7 @@ router.post(
 );
 
 
-// =====================================================
-// GET ALL PANDITS
-// =====================================================
+
 
 router.get(
     "/get-pandits",
@@ -43,9 +37,7 @@ router.get(
 );
 
 
-// =====================================================
-// GET SINGLE PANDIT
-// =====================================================
+
 
 router.get(
     "/get-pandit/:id",
@@ -55,9 +47,7 @@ router.get(
 );
 
 
-// =====================================================
-// UPDATE PANDIT
-// =====================================================
+
 
 router.put(
     "/update-pandit/:id",
@@ -68,9 +58,7 @@ router.put(
 );
 
 
-// =====================================================
-// DELETE PANDIT
-// =====================================================
+
 
 router.delete(
     "/delete-pandit/:id",
@@ -81,9 +69,7 @@ router.delete(
 );
 
 
-// =====================================================
-// UPDATE APPROVAL STATUS
-// =====================================================
+
 
 router.patch(
     "/update-approval-status/:id",
@@ -92,10 +78,6 @@ router.patch(
     updatePanditApprovalStatus
 );
 
-
-// =====================================================
-// UPDATE VERIFICATION
-// =====================================================
 
 router.patch(
     "/update-verification/:id",

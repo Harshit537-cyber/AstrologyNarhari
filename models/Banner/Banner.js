@@ -18,6 +18,10 @@ const bannerSchema = new mongoose.Schema(
       default: "home"
     },
 
+    slug:{
+      type:String,
+    },
+
     bannerFor:{
       type:String,
       enum:["user", "partner"],

@@ -131,3 +131,69 @@ exports.updateCommission = async (req, res) => {
         res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
     }
 };
+
+
+exports.getAllPartnersForCommission = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1; 
+        const limit = parseInt(req.query.limit) || 10; 
+        const skip = (page - 1) * limit;
+
+        const searchQuery = req.query.search ? {
+            fullName: { $regex: req.query.search, $options: 'i' }
+        } : {};
+
+        const totalPartners = await Partner.countDocuments(searchQuery);
+
+        const partners = await Partner.find(searchQuery)
+            .select('fullName mobile walletBalance isVerified kycStatus profileApprovalStatus createdAt')
+            .sort({ createdAt: -1 }) 
+            .skip(skip)
+            .limit(limit);
+
+        res.status(200).json({
+            success: true,
+            count: partners.length,
+            totalPages: Math.ceil(totalPartners / limit),
+            currentPage: page,
+            totalPartners,
+            data: partners
+        });
+
+    } catch (error) {
+        console.error("Get All Partners Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch partners",
+            error: error.message
+        });
+    }
+};
+
+exports.getPartnerByIdForCommission = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const partner = await Partner.findById(id);
+
+        if (!partner) {
+            return res.status(404).json({
+                success: false,
+                message: "Partner not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: partner
+        });
+
+    } catch (error) {
+        console.error("Get Partner By ID Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch partner details",
+            error: error.message
+        });
+    }
+};

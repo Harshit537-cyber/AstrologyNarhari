@@ -20,6 +20,7 @@ const addBanner = async (req, res) => {
             type: req.body.type,
             bannerFor: req.body.bannerFor,
             redirectType: req.body.redirectType,
+            slug: req.body.slug,
             redirectId: req.body.redirectId || null,
             redirectUrl: req.body.redirectUrl || null,
             isActive: req.body.isActive !== undefined ? req.body.isActive === "true" || req.body.isActive === true : true,
@@ -113,6 +114,7 @@ const updateBanner = async (req, res) => {
 
         if (req.body.title !== undefined) updateData.title = req.body.title;
         if (req.body.type !== undefined) updateData.type = req.body.type;
+        if (req.body.slug !== undefined) updateData.slug = req.body.slug;
         if (req.body.bannerFor !== undefined) updateData.bannerFor = req.body.bannerFor;
         if (req.body.redirectType !== undefined) updateData.redirectType = req.body.redirectType;
         if (req.body.redirectId !== undefined) updateData.redirectId = req.body.redirectId || null;
