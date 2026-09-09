@@ -49,6 +49,10 @@ const initiateSessionRequest = async (req, res) => {
         if (partner.fcmToken) {
             admin.messaging().send({
                 token: partner.fcmToken,
+                notification: {
+                    title: type === 'chat' ? 'Incoming Chat Request' : 'Incoming Call Request',
+                    body: `${user.fullName || 'User'} is requesting a ${type} session.`
+                },
                 data: {
                     type: 'INCOMING_SESSION_REQUEST',
                     requestId: sessionRequest._id.toString(),
@@ -56,8 +60,29 @@ const initiateSessionRequest = async (req, res) => {
                     durationMinutes: durationMinutes.toString(),
                     userName: user.fullName || 'User',
                     userPic: user.profilePic || '',
+                    sound: 'default'
                 },
-                android: { priority: 'high' }
+                android: {
+                    priority: 'high',
+                    notification: {
+                        sound: 'default',
+                        defaultSound: true,
+                        priority: 'max',
+                        visibility: 'public',
+                        channelId: 'call_notification_channel'
+                    }
+                },
+                apns: {
+                    headers: {
+                        'apns-priority': '10'
+                    },
+                    payload: {
+                        aps: {
+                            sound: 'default',
+                            contentAvailable: true
+                        }
+                    }
+                }
             }).catch(err => console.error("FCM Error:", err.message));
         }
 
@@ -146,9 +171,28 @@ const respondToSessionRequest = async (req, res) => {
             if (sessionReq.user && sessionReq.user.fcmToken) {
                 admin.messaging().send({
                     token: sessionReq.user.fcmToken,
+                    notification: {
+                        title: 'Request Declined',
+                        body: `${sessionReq.partner.name || 'Astrologer'} declined your request.`
+                    },
                     data: { 
                         type: 'REQUEST_REJECTED', 
                         message: 'Astrologer declined your request.' 
+                    },
+                    android: {
+                        priority: 'high',
+                        notification: {
+                            sound: 'default',
+                            defaultSound: true,
+                            channelId: 'general_notification_channel'
+                        }
+                    },
+                    apns: {
+                        payload: {
+                            aps: {
+                                sound: 'default'
+                            }
+                        }
                     }
                 }).catch(err => console.error("FCM Error:", err.message));
             }
@@ -175,10 +219,31 @@ const respondToSessionRequest = async (req, res) => {
                 if (sessionReq.user && sessionReq.user.fcmToken) {
                     admin.messaging().send({
                         token: sessionReq.user.fcmToken,
+                        notification: {
+                            title: 'Request Accepted',
+                            body: `${sessionReq.partner.name || 'Astrologer'} accepted your chat request.`
+                        },
                         data: { 
                             type: 'REQUEST_ACCEPTED', 
                             sessionType: 'chat',
-                            chatRoomId: chatRoomId 
+                            chatRoomId: chatRoomId,
+                            requestId: sessionReq._id.toString()
+                        },
+                        android: {
+                            priority: 'high',
+                            notification: {
+                                sound: 'default',
+                                defaultSound: true,
+                                priority: 'high',
+                                channelId: 'general_notification_channel'
+                            }
+                        },
+                        apns: {
+                            payload: {
+                                aps: {
+                                    sound: 'default'
+                                }
+                            }
                         }
                     }).catch(err => console.error("FCM Error:", err.message));
                 }
@@ -226,7 +291,31 @@ const respondToSessionRequest = async (req, res) => {
                 if (sessionReq.user && sessionReq.user.fcmToken) {
                     admin.messaging().send({
                         token: sessionReq.user.fcmToken,
-                        data: { type: 'REQUEST_ACCEPTED', sessionType: 'call' }
+                        notification: {
+                            title: 'Call Connecting',
+                            body: `${sessionReq.partner.name || 'Astrologer'} accepted your call. Connecting now.`
+                        },
+                        data: { 
+                            type: 'REQUEST_ACCEPTED', 
+                            sessionType: 'call',
+                            requestId: sessionReq._id.toString()
+                        },
+                        android: {
+                            priority: 'high',
+                            notification: {
+                                sound: 'default',
+                                defaultSound: true,
+                                priority: 'high',
+                                channelId: 'general_notification_channel'
+                            }
+                        },
+                        apns: {
+                            payload: {
+                                aps: {
+                                    sound: 'default'
+                                }
+                            }
+                        }
                     }).catch(err => console.error("FCM Error:", err.message));
                 }
 

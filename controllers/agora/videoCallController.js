@@ -5,7 +5,7 @@ const User = require('../../models/User');
 const AdminEarning = require('../../models/Agora/AdminEarning');
 const { generateAgoraTokens } = require('../../services/agoraService');
 const moment = require('moment-timezone');
-const sendPushNotification = require("../../utils/notificationService")
+const sendPushNotification = require('../../utils/notificationService');
 
 exports.initiateVideoCall = async (req, res) => {
     try {
@@ -25,15 +25,11 @@ exports.initiateVideoCall = async (req, res) => {
             return res.status(400).json({ success: false, message: `Invalid booking status: ${booking.status}` });
         }
 
-        const now = moment().tz("Asia/Kolkata");
-        const bookingStart = moment(booking.startTime).tz("Asia/Kolkata");
-        const bookingEnd = moment(booking.endTime).tz("Asia/Kolkata");
-
-       
         const channelName = bookingId.toString();
         const roleUid = req.user.role === 'user' ? 1 : 2;
         const tokens = generateAgoraTokens(channelName, roleUid);
-try {
+
+        try {
             const isUserCalling = booking.user._id.toString() === userId;
             const recipient = isUserCalling ? booking.partner : booking.user;
             const callerName = isUserCalling ? (booking.user.fullName || "User") : (booking.partner.name || "Partner");
@@ -42,15 +38,21 @@ try {
                 const notificationData = {
                     bookingId: bookingId.toString(),
                     type: "VIDEO_CALL_START",
-                    channelName: channelName
+                    channelName: channelName,
+                    callerName: callerName,
+                    sound: "default",
+                    priority: "high"
                 };
 
                 const notificationContent = {
                     title: "Incoming Video Call",
-                    body: `${callerName} is requesting to start the video call.`
+                    body: `${callerName} is requesting to start the video call.`,
+                    sound: "default",
+                    channelId: "call_notification_channel",
+                    priority: "high"
                 };
 
-                sendPushNotification(recipient.fcmToken, notificationData, notificationContent);
+                await sendPushNotification(recipient.fcmToken, notificationData, notificationContent);
             }
         } catch (pushError) {
             console.error("Push Notification Error:", pushError.message);
@@ -68,7 +70,6 @@ try {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
 
 exports.terminateVideoCall = async (req, res) => {
     const session = await mongoose.startSession();
@@ -136,9 +137,8 @@ exports.terminateVideoCall = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-try {
+        try {
             const isUserTerminating = booking.user._id.toString() === userId;
-            
             const recipientToken = isUserTerminating ? partner.fcmToken : booking.user.fcmToken;
 
             if (recipientToken) {
@@ -149,10 +149,11 @@ try {
 
                 const notificationContent = {
                     title: "Call Ended",
-                    body: "The video call has been terminated and settled."
+                    body: "The video call has been terminated and settled.",
+                    sound: "default"
                 };
 
-                sendPushNotification(recipientToken, notificationData, notificationContent);
+                await sendPushNotification(recipientToken, notificationData, notificationContent);
             }
         } catch (pushError) {
             console.error("Termination Notification Error:", pushError.message);
@@ -198,10 +199,7 @@ exports.completeAndSettleCall = async (req, res) => {
 
         const finalDuration = actualDuration || booking.duration;
         const totalActualFee = finalDuration * booking.ratePerMinute;
-
-
         const adminAmt = parseFloat(((totalActualFee * booking.commissionPercentage) / 100).toFixed(2));
-
         const earnings = parseFloat((totalActualFee - adminAmt).toFixed(2));
 
         booking.status = 'completed';
@@ -213,7 +211,6 @@ exports.completeAndSettleCall = async (req, res) => {
         booking.endTime = new Date();
 
         await booking.save({ session });
-
 
         const partner = await Partner.findById(booking.partner).session(session);
         if (!partner) throw new Error("Partner not found");
@@ -256,7 +253,6 @@ exports.completeAndSettleCall = async (req, res) => {
         res.status(500).json({ success: false, message: "Settlement failed", error: error.message });
     }
 };
-
 
 exports.cancelVideoAndRefund = async (req, res) => {
     const session = await mongoose.startSession();
@@ -327,7 +323,6 @@ exports.joinCallSession = async (req, res) => {
         const now = moment().tz("Asia/Kolkata");
         const bookingEnd = moment(booking.endTime).tz("Asia/Kolkata");
 
-
         if (now.isAfter(bookingEnd)) {
             return res.status(400).json({ success: false, message: "This session has already expired" });
         }
@@ -336,7 +331,8 @@ exports.joinCallSession = async (req, res) => {
 
         const channelName = bookingId.toString();
         const tokens = generateAgoraTokens(channelName, 2);
-try {
+
+        try {
             if (booking.user && booking.user.fcmToken) {
                 const notificationData = {
                     bookingId: bookingId.toString(),
@@ -346,14 +342,16 @@ try {
 
                 const notificationContent = {
                     title: "Partner Joined",
-                    body: "The partner has joined the call. You can start the conversation now."
+                    body: "The partner has joined the call. You can start the conversation now.",
+                    sound: "default"
                 };
 
-                sendPushNotification(booking.user.fcmToken, notificationData, notificationContent);
+                await sendPushNotification(booking.user.fcmToken, notificationData, notificationContent);
             }
         } catch (pushError) {
             console.error("Join Notification Error:", pushError.message);
         }
+
         res.status(200).json({
             success: true,
             message: "Call joined successfully",
