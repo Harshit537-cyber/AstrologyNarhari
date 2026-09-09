@@ -59,17 +59,16 @@ const initiateSessionRequest = async (req, res) => {
                     sessionType: type,
                     durationMinutes: durationMinutes.toString(),
                     userName: user.fullName || 'User',
-                    userPic: user.profilePic || '',
-                    sound: 'default'
+                    userPic: user.profilePic || ''
                 },
                 android: {
                     priority: 'high',
                     notification: {
                         sound: 'default',
                         defaultSound: true,
+                        defaultVibrateTimings: true,
                         priority: 'max',
-                        visibility: 'public',
-                        channelId: 'call_notification_channel'
+                        visibility: 'public'
                     }
                 },
                 apns: {
@@ -184,7 +183,8 @@ const respondToSessionRequest = async (req, res) => {
                         notification: {
                             sound: 'default',
                             defaultSound: true,
-                            channelId: 'general_notification_channel'
+                            defaultVibrateTimings: true,
+                            priority: 'high'
                         }
                     },
                     apns: {
@@ -234,8 +234,8 @@ const respondToSessionRequest = async (req, res) => {
                             notification: {
                                 sound: 'default',
                                 defaultSound: true,
-                                priority: 'high',
-                                channelId: 'general_notification_channel'
+                                defaultVibrateTimings: true,
+                                priority: 'high'
                             }
                         },
                         apns: {
@@ -305,8 +305,8 @@ const respondToSessionRequest = async (req, res) => {
                             notification: {
                                 sound: 'default',
                                 defaultSound: true,
-                                priority: 'high',
-                                channelId: 'general_notification_channel'
+                                defaultVibrateTimings: true,
+                                priority: 'high'
                             }
                         },
                         apns: {
