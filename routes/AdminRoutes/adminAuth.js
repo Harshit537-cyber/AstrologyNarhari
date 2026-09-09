@@ -16,6 +16,7 @@ const {
   activateUser,
   deactivatePartner,
   activatePartner,
+  togglePartnerStatus,
   getUserById,
   deleteUserById,
   deletePartner,
@@ -23,11 +24,10 @@ const {
   getPendingKycPartners,
   approveMinRateUpdate,
   getPendingMinRatePartners,
-   getUsersStatusList,
+  getUsersStatusList,
   getPartnersStatusList,
   getPartnerStatusById,
-  getAllPartnersStatus
-
+  getAllPartnersStatus,
 } = require("../../controllers/admin/adminAuth");
 
 const { verifyToken, isAdmin } = require("../../middleware/auth");
@@ -46,7 +46,9 @@ router.put("/test-upload", upload.single("profilePic"), (req, res) => {
 router.get("/dashboard/stats", verifyToken, isAdmin, getDashboardStats);
 router.get("/dashboard/recent-users", verifyToken, isAdmin, getRecentUsers);
 router.get("/dashboard/user-analytics", verifyToken, isAdmin, getUserAnalytics);
+
 router.get("/dashboard/all-users", verifyToken, isAdmin, getAllUsers);
+router.get("/dashboard/users-status-list", verifyToken, isAdmin, getUsersStatusList);
 router.get("/dashboard/user/:id", verifyToken, isAdmin, getUserById);
 router.delete("/dashboard/user/:id", verifyToken, isAdmin, deleteUserById);
 router.put(
@@ -65,6 +67,9 @@ router.put(
 router.put("/dashboard/users/:id/activate", verifyToken, isAdmin, activateUser);
 
 router.get("/dashboard/all-partners", verifyToken, isAdmin, getAllPartners);
+router.get("/dashboard/all-partners-status", verifyToken, isAdmin, getAllPartnersStatus);
+router.get("/dashboard/partners-status-list", verifyToken, isAdmin, getPartnersStatusList);
+
 router.get(
   "/dashboard/partners/pending-kyc-partners",
   verifyToken,
@@ -78,6 +83,7 @@ router.get(
   getPendingMinRatePartners,
 );
 
+router.get("/dashboard/partners/:id/status", verifyToken, isAdmin, getPartnerStatusById);
 router.get("/dashboard/partners/:id", verifyToken, isAdmin, getPartnerById);
 router.put(
   "/dashboard/partners/:id",
@@ -104,6 +110,12 @@ router.put(
   isAdmin,
   activatePartner,
 );
+router.patch(
+  "/dashboard/partners/:id/toggle-status",
+  verifyToken,
+  isAdmin,
+  togglePartnerStatus,
+);
 router.delete("/dashboard/partners/:id", verifyToken, isAdmin, deletePartner);
 
 router.put(
@@ -118,13 +130,5 @@ router.put(
   isAdmin,
   approveMinRateUpdate,
 );
-
-router.get("/dashboard/users-status-list", verifyToken, isAdmin, getUsersStatusList);
-router.get("/dashboard/partners-status-list", verifyToken, isAdmin, getPartnersStatusList);
-
-router.get("/dashboard/partners/:id/status", verifyToken, isAdmin, getPartnerStatusById);
-
-
-router.get("/dashboard/all-partners-status", verifyToken, isAdmin, getAllPartnersStatus);
 
 module.exports = router;

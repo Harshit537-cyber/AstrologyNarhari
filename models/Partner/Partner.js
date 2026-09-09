@@ -83,9 +83,14 @@ const partnerSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
-    averageRating: { type: Number, default: 0 },
-    totalReviews: { type: Number, default: 0 },
-
+    averageRating: { 
+        type: Number, 
+        default: 0 
+    },
+    totalReviews: { 
+        type: Number, 
+        default: 0 
+    },
     kycStatus: {
         type: String,
         enum: ['Not Submitted', 'Pending', 'Approved', 'Rejected'],
@@ -106,22 +111,62 @@ const partnerSchema = new mongoose.Schema({
         status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
         uploadedAt: { type: Date, default: null }
     },
-    isAcceptingRequests: { type: Boolean, default: true },
-
+    isAcceptingRequests: { 
+        type: Boolean, 
+        default: true 
+    },
     addressProof: {
         url: { type: String, default: null },
         status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
         uploadedAt: { type: Date, default: null }
     },
-    isOnline: { type: Boolean, default: false },
-    isBusy: { type: Boolean, default: false },
-    fcmToken: { type: String, default: null },
+    isOnline: { 
+        type: Boolean, 
+        default: false 
+    },
+    isBusy: { 
+        type: Boolean, 
+        default: false 
+    },
+    isActive: {
+        type: Boolean,
+        default: true
+    },
+    deactivatedBy: {
+        type: String,
+        enum: ['self', 'admin', null],
+        default: null
+    },
+    deactivatedAt: {
+        type: Date,
+        default: null
+    },
+    reactivateAt: {
+        type: Date,
+        default: null
+    },
+    deactivationReason: {
+        type: String,
+        default: null
+    },
+    deactivationReasonNote: {
+        type: String,
+        default: null
+    },
+    deactivationDuration: {
+        type: Number,
+        default: null
+    },
+    fcmToken: { 
+        type: String, 
+        default: null 
+    },
     firebaseUid: { 
-    type: String, 
-    default: null, 
-    unique: true, 
-    sparse: true  
-},
+        type: String, 
+        default: null, 
+        unique: true, 
+        sparse: true  
+    },
     walletBalance: { 
         type: Number, 
         default: 0 
@@ -137,7 +182,6 @@ const partnerSchema = new mongoose.Schema({
             'BUSINESS & WEALTH'
         ]
     }],
-
     ritualEarningsHistory: [{
         userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         userName: String,      

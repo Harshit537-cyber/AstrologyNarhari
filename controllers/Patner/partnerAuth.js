@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const fs = require("fs");
+const mongoose = require("mongoose");
 const Partner = require("../../models/Partner/Partner");
 const User = require("../../models/User");
 const cloudinary = require("../../config/cloudinary");
@@ -9,7 +10,6 @@ const {
   DEACTIVATION_REASONS,
   ALLOWED_DURATIONS,
 } = require("../../utils/deactivationReasons");
-const mongoose = require("mongoose");
 
 const uploadToCloudinary = async (filePath, folder) => {
   try {
@@ -40,7 +40,6 @@ const cleanUploadedFiles = (files) => {
 
 const verifyOtp = async (req, res) => {
   try {
-    // Request body se role bhi accept kar rahe hain
     const {
       idToken,
       mobile: bodyMobile,
@@ -50,7 +49,6 @@ const verifyOtp = async (req, res) => {
     let mobile;
     let firebaseUid = bodyUid;
 
-    // Firebase Token verification
     if (idToken) {
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       mobile = decodedToken.phone_number;
@@ -67,12 +65,9 @@ const verifyOtp = async (req, res) => {
     }
 
     let partner = await Partner.findOne({ mobile });
-
-    // User role set karna (request body se ya default 'partner')
     const assignedRole = role || (partner ? partner.role : "partner");
 
     if (!partner) {
-      // New Partner Creation
       partner = await Partner.create({
         mobile,
         role: assignedRole,
@@ -80,10 +75,19 @@ const verifyOtp = async (req, res) => {
         firebaseUid: firebaseUid,
       });
     } else {
-      // Update Existing Partner
+      if (!partner.isActive && partner.reactivateAt && new Date() >= new Date(partner.reactivateAt)) {
+        partner.isActive = true;
+        partner.deactivatedBy = null;
+        partner.deactivatedAt = null;
+        partner.reactivateAt = null;
+        partner.deactivationReason = null;
+        partner.deactivationReasonNote = null;
+        partner.deactivationDuration = null;
+      }
+
       partner.isVerified = true;
       if (role) {
-        partner.role = role; // Agar request me role bheja gaya hai to update karein
+        partner.role = role;
       }
       if (firebaseUid) {
         partner.firebaseUid = firebaseUid;
@@ -91,14 +95,12 @@ const verifyOtp = async (req, res) => {
       await partner.save();
     }
 
-    // Generate JWT Token
     const token = jwt.sign(
       { id: partner._id, role: partner.role },
       process.env.JWT_SECRET || "SECRET_KEY_123",
       { expiresIn: "7d" },
     );
 
-    // Success Response
     return res.status(200).json({
       success: true,
       message: "Authentication successful",
@@ -106,10 +108,12 @@ const verifyOtp = async (req, res) => {
       data: {
         id: partner._id,
         mobile: partner.mobile,
-        role: partner.role, // Response me role include kiya gaya hai
+        role: partner.role,
         isProfileComplete: partner.isProfileComplete,
         profileApprovalStatus: partner.profileApprovalStatus,
         isActive: partner.isActive,
+        deactivatedBy: partner.deactivatedBy,
+        reactivateAt: partner.reactivateAt,
         firebaseUid: partner.firebaseUid,
       },
     });
@@ -163,10 +167,7 @@ const register = async (req, res) => {
         uploadToCloudinary(file.path, "partners/gallery"),
       );
       const uploadedUrls = await Promise.all(uploadPromises);
-      additionalPhotosUrls = [...additionalPhotosUrls, ...uploadedUrls].slice(
-        0,
-        4,
-      );
+      additionalPhotosUrls = [...additionalPhotosUrls, ...uploadedUrls].slice(0, 4);
     }
 
     partner.fullName = fullName;
@@ -207,15 +208,12 @@ const updateProfile = async (req, res) => {
 
   try {
     const partnerId = req.user.id;
-    const { fullName, specialties, languages, experience, minRate, bio } =
-      req.body;
+    const { fullName, specialties, languages, experience, minRate, bio } = req.body;
 
     let partner = await Partner.findById(partnerId);
     if (!partner) {
       if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res
-        .status(404)
-        .json({ success: false, message: "Partner not found" });
+      return res.status(404).json({ success: false, message: "Partner not found" });
     }
 
     if (fullName !== undefined) partner.fullName = fullName;
@@ -260,15 +258,25 @@ const updateProfile = async (req, res) => {
   }
 };
 
-
 const getProfile = async (req, res) => {
   try {
-    const partner = await Partner.findById(req.user.id);
+    let partner = await Partner.findById(req.user.id);
 
     if (!partner) {
       return res
         .status(404)
         .json({ success: false, message: "Partner not found" });
+    }
+
+    if (!partner.isActive && partner.reactivateAt && new Date() >= new Date(partner.reactivateAt)) {
+      partner.isActive = true;
+      partner.deactivatedBy = null;
+      partner.deactivatedAt = null;
+      partner.reactivateAt = null;
+      partner.deactivationReason = null;
+      partner.deactivationReasonNote = null;
+      partner.deactivationDuration = null;
+      await partner.save();
     }
 
     return res.status(200).json({
@@ -331,6 +339,7 @@ const deactivateAccount = async (req, res) => {
 
     const now = new Date();
     partner.isActive = false;
+    partner.isOnline = false;
     partner.deactivatedBy = "self";
     partner.deactivatedAt = now;
     partner.deactivationReason = reason;
@@ -342,13 +351,19 @@ const deactivateAccount = async (req, res) => {
 
     await partner.save();
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message: "Account deactivated successfully",
-        data: partner,
-      });
+    return res.status(200).json({
+      success: true,
+      message: "Account deactivated successfully",
+      data: {
+        isActive: partner.isActive,
+        deactivatedBy: partner.deactivatedBy,
+        deactivatedAt: partner.deactivatedAt,
+        reactivateAt: partner.reactivateAt,
+        deactivationReason: partner.deactivationReason,
+        deactivationReasonNote: partner.deactivationReasonNote,
+        deactivationDuration: partner.deactivationDuration,
+      },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -364,12 +379,10 @@ const activateAccount = async (req, res) => {
     }
 
     if (partner.deactivatedBy === "admin") {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "Account deactivated by admin. Contact support.",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "Account deactivated by admin. Contact support.",
+      });
     }
 
     partner.isActive = true;
@@ -382,9 +395,58 @@ const activateAccount = async (req, res) => {
 
     await partner.save();
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Account reactivated successfully" });
+    return res.status(200).json({
+      success: true,
+      message: "Account reactivated successfully",
+      data: {
+        isActive: partner.isActive,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getAccountStatus = async (req, res) => {
+  try {
+    let partner = await Partner.findById(req.user.id);
+    if (!partner) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Partner not found" });
+    }
+
+    if (!partner.isActive && partner.reactivateAt && new Date() >= new Date(partner.reactivateAt)) {
+      partner.isActive = true;
+      partner.deactivatedBy = null;
+      partner.deactivatedAt = null;
+      partner.reactivateAt = null;
+      partner.deactivationReason = null;
+      partner.deactivationReasonNote = null;
+      partner.deactivationDuration = null;
+      await partner.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        partnerId: partner._id,
+        fullName: partner.fullName,
+        isActive: partner.isActive,
+        isOnline: partner.isOnline,
+        isBusy: partner.isBusy,
+        isVerified: partner.isVerified,
+        isProfileComplete: partner.isProfileComplete,
+        profileApprovalStatus: partner.profileApprovalStatus,
+        kycStatus: partner.kycStatus,
+        deactivatedBy: partner.deactivatedBy,
+        deactivatedAt: partner.deactivatedAt,
+        reactivateAt: partner.reactivateAt,
+        deactivationReason: partner.deactivationReason,
+        deactivationReasonNote: partner.deactivationReasonNote,
+        deactivationDuration: partner.deactivationDuration,
+      },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -393,6 +455,7 @@ const activateAccount = async (req, res) => {
 const getLiveAstrologers = async (req, res) => {
   try {
     let query = {
+      isActive: true,
       isVerified: true,
       isProfileComplete: true,
       profileApprovalStatus: "Approved",
@@ -436,13 +499,11 @@ const getLiveAstrologers = async (req, res) => {
       data: astrologers,
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error fetching live astrologers",
-        error: error.message,
-      });
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching live astrologers",
+      error: error.message,
+    });
   }
 };
 
@@ -479,12 +540,10 @@ const updateFCMToken = async (req, res) => {
         .json({ success: false, message: "User/Partner not found" });
     }
 
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: `FCM Token updated successfully for ${role}`,
-      });
+    res.status(200).json({
+      success: true,
+      message: `FCM Token updated successfully for ${role}`,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
@@ -512,6 +571,7 @@ const logoutPartner = async (req, res) => {
 const getTopAstrologers = async (req, res) => {
   try {
     let query = {
+      isActive: true,
       profileApprovalStatus: "Approved",
       isVerified: true,
       isProfileComplete: true,
@@ -661,7 +721,6 @@ const getAstrologerById = async (req, res) => {
       data: astrologer,
     });
   } catch (error) {
-    console.error("Error fetching astrologer:", error);
     res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -831,8 +890,6 @@ const deletePartnerByMobile = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Delete Partner Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to delete partner account",
@@ -849,6 +906,7 @@ module.exports = {
   deleteAccount,
   deactivateAccount,
   activateAccount,
+  getAccountStatus,
   getLiveAstrologers,
   updateFCMToken,
   getTopAstrologers,
@@ -860,5 +918,5 @@ module.exports = {
   updateMinRate,
   getMinRate,
   logoutPartner,
-  deletePartnerByMobile
+  deletePartnerByMobile,
 };
