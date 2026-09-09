@@ -193,15 +193,15 @@ const startChat = async (req, res) => {
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
         if (!partner) return res.status(404).json({ success: false, message: "Partner not found" });
 
-        // Check if partner is already busy
+        
         if (partner.isBusy) {
             return res.status(400).json({ success: false, message: "Astrologer is busy with someone else" });
         }
 
-        // Partner ka minimum rate per minute
+       
         const minRate = partner.minRate || 25;
 
-        // User ke paas kam se kam 1 minute ke paise hone chahiye
+       
         if ((user.walletBalance || 0) < minRate) {
             return res.status(400).json({
                 success: false,
@@ -209,7 +209,7 @@ const startChat = async (req, res) => {
             });
         }
 
-        // Active chat session create karo
+      
         const session = await ChatSession.create({
             userId,
             partnerId,
@@ -218,7 +218,7 @@ const startChat = async (req, res) => {
             status: 'active'
         });
 
-        // Partner ko busy mark kar do
+       
         partner.isBusy = true;
         await partner.save();
 
@@ -266,40 +266,40 @@ const endChat = async (req, res) => {
             return res.status(400).json({ success: false, message: "This chat session has already ended" });
         }
 
-        // Time calculate karo (Minutes me)
+      
         const endTime = new Date();
         const diffSeconds = Math.max(1, Math.round((endTime.getTime() - new Date(chat.startTime).getTime()) / 1000));
         
-        // 60 sec se upar jate hi agla minute count hoga
+       
         const billedMinutes = Math.max(1, Math.ceil(diffSeconds / 60));
         let totalDeduct = billedMinutes * chat.ratePerMinute;
 
         const user = await User.findById(userId).session(session);
         const partner = await Partner.findById(chat.partnerId).session(session);
 
-        // Balance cap
+       
         if (user.walletBalance < totalDeduct) {
             totalDeduct = user.walletBalance > 0 ? user.walletBalance : 0;
         }
 
-        // 1. User se paise cut karo
+      
         user.walletBalance -= totalDeduct;
 
-        // 2. Partner ke wallet me credit karo
+      
         partner.walletBalance = (partner.walletBalance || 0) + totalDeduct;
-        partner.isBusy = false; // Astrologer free ho gaya
+        partner.isBusy = false; 
 
         await user.save({ session });
         await partner.save({ session });
 
-        // 3. Chat Session close karo
+      
         chat.endTime = endTime;
         chat.totalMinutes = billedMinutes;
         chat.totalAmount = totalDeduct;
         chat.status = 'completed';
         await chat.save({ session });
 
-        // 4. User debit history create karo
+       
         await Transaction.create([{
             user: userId,
             amount: totalDeduct,
