@@ -924,6 +924,240 @@ const getPendingMinRatePartners = async (req, res) => {
     }
 };
 
+
+const getUsersStatusList = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10, search = "" } = req.query;
+
+    const [totalUsers, deactiveUsersCount] = await Promise.all([
+      User.countDocuments({ role: "user" }),
+      User.countDocuments({ role: "user", isActive: false })
+    ]);
+
+    const activeUsersCount = totalUsers - deactiveUsersCount;
+
+    const filter = { role: "user" };
+
+    if (status === "active") {
+      filter.isActive = { $ne: false };
+    } else if (status === "inactive" || status === "deactive") {
+      filter.isActive = false;
+    }
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } }
+      ];
+    }
+
+    const users = await User.find(filter)
+      .select("name mobile email isActive deactivationReason deactivatedAt createdAt")
+      .sort({ createdAt: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .lean();
+
+    const formattedUsers = users.map((user) => ({
+      ...user,
+      isActive: user.isActive !== false
+    }));
+
+    const totalFiltered = await User.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        totalUsers,
+        activeUsers: activeUsersCount,
+        deactiveUsers: deactiveUsersCount
+      },
+      pagination: {
+        total: totalFiltered,
+        page: Number(page),
+        totalPages: Math.ceil(totalFiltered / Number(limit))
+      },
+      data: formattedUsers
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 2. Partners Status Overview (Active + Deactive dono ek sath + Counts)
+const getPartnersStatusList = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10, search = "" } = req.query;
+
+    // Counts: jo 'false' nahi hai, wo sabhi ACTIVE maane jayenge
+    const [totalPartners, deactivePartnersCount] = await Promise.all([
+      Partner.countDocuments(),
+      Partner.countDocuments({ isActive: false })
+    ]);
+
+    const activePartnersCount = totalPartners - deactivePartnersCount;
+
+    const filter = {};
+
+    // Filter logic
+    if (status === "active") {
+      filter.isActive = { $ne: false }; // undefined ya true dono active hain
+    } else if (status === "inactive" || status === "deactive") {
+      filter.isActive = false;
+    }
+
+    if (search) {
+      filter.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } }
+      ];
+    }
+
+    // .lean() use karne se hum response me field manually fix kar sakte hain
+    const partners = await Partner.find(filter)
+      .select("fullName mobile email profileApprovalStatus kycStatus isActive deactivationReason deactivatedAt createdAt")
+      .sort({ createdAt: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .lean();
+
+    // Har partner me explicitly isActive: true ya false dikhega
+    const formattedPartners = partners.map((partner) => ({
+      ...partner,
+      isActive: partner.isActive !== false // agar undefined/null/true hai to 'true' dikhega
+    }));
+
+    const totalFiltered = await Partner.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        totalPartners,
+        activePartners: activePartnersCount,
+        deactivePartners: deactivePartnersCount
+      },
+      pagination: {
+        total: totalFiltered,
+        page: Number(page),
+        totalPages: Math.ceil(totalFiltered / Number(limit))
+      },
+      data: formattedPartners
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getPartnerStatusById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const partner = await Partner.findById(id)
+      .select("fullName mobile email isActive deactivationReason deactivationReasonNote deactivatedAt deactivatedBy profileApprovalStatus kycStatus createdAt")
+      .lean();
+
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        message: "Partner not found",
+      });
+    }
+
+    // Agar isActive database me undefined hai to usey true maana jayega
+    const isActive = partner.isActive !== false;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        partnerId: partner._id,
+        fullName: partner.fullName || "N/A",
+        mobile: partner.mobile,
+        email: partner.email || "N/A",
+        status: isActive ? "Active" : "Inactive",
+        isActive: isActive,
+        // Agar inactive hai to ye details bhi dikhengi:
+        deactivationDetails: !isActive
+          ? {
+              reason: partner.deactivationReason || "N/A",
+              note: partner.deactivationReasonNote || "N/A",
+              deactivatedAt: partner.deactivatedAt,
+              deactivatedBy: partner.deactivatedBy,
+            }
+          : null,
+        profileApprovalStatus: partner.profileApprovalStatus,
+        kycStatus: partner.kycStatus,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+// Get ALL Partners with their Active / Inactive Status
+const getAllPartnersStatus = async (req, res) => {
+  try {
+    // Database se bina kisi limit ke sare partners fetch honge
+    const partners = await Partner.find()
+      .select("fullName mobile email isActive deactivationReason deactivationReasonNote deactivatedAt profileApprovalStatus kycStatus createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let activeCount = 0;
+    let inactiveCount = 0;
+
+    // Har partner ka status format karna
+    const formattedPartners = partners.map((partner) => {
+      // Agar isActive explicitly false nahi hai to wo 'Active' hai
+      const isCurrentActive = partner.isActive !== false;
+
+      if (isCurrentActive) {
+        activeCount++;
+      } else {
+        inactiveCount++;
+      }
+
+      return {
+        partnerId: partner._id,
+        fullName: partner.fullName || "N/A",
+        mobile: partner.mobile,
+        email: partner.email || "N/A",
+        status: isCurrentActive ? "Active" : "Inactive",
+        isActive: isCurrentActive,
+        deactivationDetails: !isCurrentActive
+          ? {
+              reason: partner.deactivationReason || "N/A",
+              note: partner.deactivationReasonNote || "N/A",
+              deactivatedAt: partner.deactivatedAt || null,
+            }
+          : null,
+        kycStatus: partner.kycStatus || "Not Submitted",
+        profileApprovalStatus: partner.profileApprovalStatus || "Pending",
+        joinedDate: partner.createdAt,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      totalPartners: partners.length,
+      activePartners: activeCount,
+      inactivePartners: inactiveCount,
+      data: formattedPartners,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
 module.exports = {
   verifyOtp,
   register,
@@ -946,6 +1180,10 @@ module.exports = {
   approvePartnerProfile,
   getPendingKycPartners,
   approveMinRateUpdate,
-  getPendingMinRatePartners
+  getPendingMinRatePartners,
+  getUsersStatusList,
+  getPartnersStatusList,
+  getPartnerStatusById,
+  getAllPartnersStatus
 };
 
