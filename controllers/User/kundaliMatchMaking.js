@@ -1,4 +1,5 @@
 const User = require('../../models/User');
+const Kundli = require('../../models/kundali/Kundali');
 const { getMatchMakingReport, getAstrologyData, getPdfReport,getFestivalData,getTithiEvent,
     daysInMonth,
     buildDate ,getHoroscopeData, validZodiacSigns,getDetailedHoroscopeData } = require('../../utils/astrologyService');
@@ -314,7 +315,8 @@ exports.getWeeklyHoroscope = async (req, res) => {
         if (!result.ok) {
             return res.status(502).json({ success: false, message: "Upstream weekly horoscope request failed", error: { status: result.status, data: result.data } });
         }
-
+ 
+        
         res.status(200).json({ success: true, zodiacName, horoscope: result.data });
 
     } catch (error) {
@@ -485,10 +487,12 @@ exports.getUserKundli = async (req, res) => {
     }
 };
 
+
+
 exports.getDetailedHoroscope = async (req, res) => {
     try {
         const { type } = req.params;
-        const { timezone } = req.query; // <-- was req.body
+        const { timezone } = req.query;
 
         if (!req.user) {
             console.error("[Controller Error] No user object found in request. Check your verifyToken middleware.");
@@ -531,6 +535,144 @@ exports.getDetailedHoroscope = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: error.message
+        });
+    }
+};
+
+exports.generateMyOwnKundli =  async (req, res) => {
+    try {
+        const userId = req.user.id || req.user._id  ; 
+
+        const { lat, lon, timezone } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const { firebaseUid, dateOfBirth, timeOfBirth, fullName, gender } = user;
+        
+        const dobDate = new Date(dateOfBirth);
+        const [hour, min] = timeOfBirth.split(':');
+
+        const payload = {
+            day: dobDate.getDate(),
+            month: dobDate.getMonth() + 1,
+            year: dobDate.getFullYear(),
+            hour: parseInt(hour),
+            min: parseInt(min),
+            lat: parseFloat(lat),
+            lon: parseFloat(lon),
+            tzone: parseFloat(timezone || 5.5)
+        };
+
+        const pdfPayload = {
+            ...payload,
+            name: fullName,
+            gender: gender,
+            language: "hi",
+            chart_style: "NORTH_INDIAN",
+            footer_link: "https://yourwebsite.com",
+            logo_url: "https://yourwebsite.com/logo.png",
+            company_name: "Astro App",
+            company_info: "Online Astrology Consultation"
+        };
+
+        const [
+            planets,       
+            astro,         
+            panchang,       
+            vDasha,         
+            manglik,       
+            pdfData         
+        ] = await Promise.all([
+            getAstrologyData('planets', payload).catch(e => null),
+            getAstrologyData('astro_details', payload).catch(e => null),
+            getAstrologyData('basic_panchang', payload).catch(e => null),
+            getAstrologyData('major_vdasha', payload).catch(e => null),
+            getAstrologyData('manglik', payload).catch(e => null),
+            getPdfReport('basic_horoscope_pdf', pdfPayload).catch(e => null)
+        ]);
+
+        const pdfUrl = pdfData ? pdfData.pdf_url : "PDF limit reached or endpoint not allowed";
+
+        const responseData = {
+            user_profile: { fullName, gender },
+            panchang: panchang,
+            astrological_details: astro,
+            planetary_positions: planets,
+            dasha: vDasha,
+            doshas: {
+                manglik: manglik,
+            }
+        };
+
+        const updatedKundli = await Kundli.findOneAndUpdate(
+            { firebaseUid: firebaseUid }, 
+            {
+                userId: user._id,
+                firebaseUid: firebaseUid,
+                fullName: fullName,
+                gender: gender,
+                dob: dobDate,
+                tob: timeOfBirth,
+                lat: parseFloat(lat),
+                lon: parseFloat(lon),
+                timezone: parseFloat(timezone || 5.5),
+                pdf_link: pdfUrl,
+                data: responseData 
+            },
+            { upsert: true, new: true } 
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Complete Kundli Data Generated and Saved",
+            userId: updatedKundli.userId,
+            pdf_link: pdfUrl,
+            data: updatedKundli.data 
+        });
+
+    } catch (error) {
+        console.error("Main Controller Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getKundliByUid = async (req, res) => {
+    try {
+        const { firebaseUid } = req.params;
+
+        const kundli = await Kundli.findOne({ firebaseUid: firebaseUid });
+
+        if (!kundli) {
+            return res.status(404).json({
+                success: false,
+                message: "No Kundli found for this user."
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Kundli Data Fetched Successfully",
+            userId: kundli.userId,       
+            firebaseUid: kundli.firebaseUid,
+            fullName: kundli.fullName,
+            gender: kundli.gender,
+            dob: kundli.dob,
+            tob: kundli.tob,
+            lat: kundli.lat,
+            lon: kundli.lon,
+            pdf_link: kundli.pdf_link,
+            data: kundli.data 
+        });
+
+    } catch (error) {
+        console.error("Get Kundli Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal Server Error",
+            error: error.message
         });
     }
 };

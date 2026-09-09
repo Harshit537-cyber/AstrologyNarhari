@@ -5,6 +5,8 @@ const { verifyToken ,isUser} = require('../../middleware/auth');
 
 router.post('/check-compatibility', verifyToken, isUser, matchController.checkCompatibility);
 router.post("/generate-kundali", verifyToken, isUser, matchController.generateKundli);
+router.post("/generate-my-own-kundali", verifyToken, isUser, matchController.generateMyOwnKundli);
+router.get("/kundaliByUid/:firebaseUid", matchController.getKundliByUid);
 router.post("/festivals", verifyToken, isUser, matchController.getFestivalCalendar);
 router.get("/get-daily-horoscope", verifyToken, isUser, matchController.getDailyBasisDashboardHoroscope);
 router.get(

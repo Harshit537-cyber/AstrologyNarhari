@@ -260,6 +260,7 @@ const updateProfile = async (req, res) => {
   }
 };
 
+
 const getProfile = async (req, res) => {
   try {
     const partner = await Partner.findById(req.user.id);
