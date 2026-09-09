@@ -1,9 +1,25 @@
 const User = require('../../models/User');
+const Partner = require('../../models/Partner/Partner');
 const razorpayInstance = require('../../config/razorpay');
 const Transaction = require('../../models/Transaction/Transaction');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 
+// Schema for tracking Chat Session Billing
+const chatSessionSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Partner', required: true },
+    ratePerMinute: { type: Number, required: true },
+    startTime: { type: Date, default: Date.now },
+    endTime: { type: Date },
+    totalMinutes: { type: Number, default: 0 },
+    totalAmount: { type: Number, default: 0 },
+    status: { type: String, enum: ['active', 'completed', 'cancelled'], default: 'active' }
+}, { timestamps: true });
+
+const ChatSession = mongoose.models.ChatSession || mongoose.model('ChatSession', chatSessionSchema);
+
+// 1. ADD MONEY
 const addMoney = async (req, res) => {
     try {
         const { amount } = req.body;
@@ -31,6 +47,7 @@ const addMoney = async (req, res) => {
     }
 };
 
+// 2. GET BALANCE
 const getBalance = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -48,31 +65,8 @@ const getBalance = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-exports.getWalletBalance = async (req, res) => {
-    try {
-        const userId = req.user.id;
 
-        const user = await User.findById(userId).select("walletBalance");
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            walletBalance: user.walletBalance || 0,
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message,
-        });
-    }
-};
-
+// 3. CREATE RAZORPAY ORDER
 const createOrder = async (req, res) => {
     try {
         const { amount, userId } = req.body;
@@ -111,6 +105,7 @@ const createOrder = async (req, res) => {
     }
 };
 
+// 4. VERIFY RAZORPAY PAYMENT
 const verifyPayment = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -180,52 +175,166 @@ const verifyPayment = async (req, res) => {
     }
 };
 
-
-exports.requestWithdrawal = async (req, res) => {
+// 5. START CHAT (Timer shuru hoga, balance check hoga)
+const startChat = async (req, res) => {
     try {
-        const { partnerId, amount } = req.body;
+        const userId = req.user.id;
+        const { partnerId } = req.body;
 
-        const partner = await Partner.findById(partnerId);
-
-        if (partner.walletBalance < amount) {
-            return res.status(400).json({ message: "Insuifficient balance!" });
+        if (!partnerId) {
+            return res.status(400).json({ success: false, message: "partnerId is required" });
         }
 
-        const request = await Withdrawal.create({
+        const [user, partner] = await Promise.all([
+            User.findById(userId),
+            Partner.findById(partnerId)
+        ]);
+
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+        if (!partner) return res.status(404).json({ success: false, message: "Partner not found" });
+
+        // Check if partner is already busy
+        if (partner.isBusy) {
+            return res.status(400).json({ success: false, message: "Astrologer is busy with someone else" });
+        }
+
+        // Partner ka minimum rate per minute
+        const minRate = partner.minRate || 25;
+
+        // User ke paas kam se kam 1 minute ke paise hone chahiye
+        if ((user.walletBalance || 0) < minRate) {
+            return res.status(400).json({
+                success: false,
+                message: `Insufficient balance! You need at least ₹${minRate} to start chat.`
+            });
+        }
+
+        // Active chat session create karo
+        const session = await ChatSession.create({
+            userId,
             partnerId,
-            amount,
-            bankDetails: {}
+            ratePerMinute: minRate,
+            startTime: new Date(),
+            status: 'active'
         });
 
-        partner.walletBalance -= amount;
+        // Partner ko busy mark kar do
+        partner.isBusy = true;
         await partner.save();
 
-        res.status(200).json({ success: true, message: "Request sent to Admin." });
+        const maxMinutesAllowed = Math.floor(user.walletBalance / minRate);
+
+        return res.status(200).json({
+            success: true,
+            message: "Chat session started",
+            data: {
+                sessionId: session._id,
+                partnerName: partner.fullName,
+                ratePerMinute: minRate,
+                startTime: session.startTime,
+                walletBalance: user.walletBalance,
+                maxMinutesAllowed
+            }
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
+// 6. END CHAT (Time count hoga, user se cut hoga aur partner me add hoga)
+const endChat = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-exports.approveWithdrawal = async (req, res) => {
     try {
-        const { withdrawalId, adminTransactionId } = req.body; 
+        const { sessionId } = req.body;
+        const userId = req.user.id;
 
-        const request = await Withdrawal.findById(withdrawalId);
-        if (!request || request.status !== 'Pending') {
-            return res.status(400).json({ message: "Invalid request" });
+        if (!sessionId) {
+            await session.abortTransaction();
+            return res.status(400).json({ success: false, message: "sessionId is required" });
         }
 
-        request.status = 'Approved';
-        request.adminTransactionId = adminTransactionId;
-        await request.save();
+        const chat = await ChatSession.findById(sessionId).session(session);
+        if (!chat) {
+            await session.abortTransaction();
+            return res.status(404).json({ success: false, message: "Chat session not found" });
+        }
 
-        res.status(200).json({ success: true, message: "Withdrawal marked as Success." });
+        if (chat.status !== 'active') {
+            await session.abortTransaction();
+            return res.status(400).json({ success: false, message: "This chat session has already ended" });
+        }
+
+        // Time calculate karo (Minutes me)
+        const endTime = new Date();
+        const diffSeconds = Math.max(1, Math.round((endTime.getTime() - new Date(chat.startTime).getTime()) / 1000));
+        
+        // 60 sec se upar jate hi agla minute count hoga
+        const billedMinutes = Math.max(1, Math.ceil(diffSeconds / 60));
+        let totalDeduct = billedMinutes * chat.ratePerMinute;
+
+        const user = await User.findById(userId).session(session);
+        const partner = await Partner.findById(chat.partnerId).session(session);
+
+        // Balance cap
+        if (user.walletBalance < totalDeduct) {
+            totalDeduct = user.walletBalance > 0 ? user.walletBalance : 0;
+        }
+
+        // 1. User se paise cut karo
+        user.walletBalance -= totalDeduct;
+
+        // 2. Partner ke wallet me credit karo
+        partner.walletBalance = (partner.walletBalance || 0) + totalDeduct;
+        partner.isBusy = false; // Astrologer free ho gaya
+
+        await user.save({ session });
+        await partner.save({ session });
+
+        // 3. Chat Session close karo
+        chat.endTime = endTime;
+        chat.totalMinutes = billedMinutes;
+        chat.totalAmount = totalDeduct;
+        chat.status = 'completed';
+        await chat.save({ session });
+
+        // 4. User debit history create karo
+        await Transaction.create([{
+            user: userId,
+            amount: totalDeduct,
+            status: 'success',
+            type: 'debit',
+            description: `Chat session fee for ${billedMinutes} minute(s)`
+        }], { session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        return res.status(200).json({
+            success: true,
+            message: "Chat ended successfully and amount deducted",
+            data: {
+                totalSeconds: diffSeconds,
+                billedMinutes: billedMinutes,
+                ratePerMinute: chat.ratePerMinute,
+                totalDeducted: totalDeduct,
+                userRemainingBalance: user.walletBalance,
+                partnerUpdatedBalance: partner.walletBalance
+            }
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
-
-
-module.exports = { addMoney, getBalance,createOrder,verifyPayment };
+module.exports = { 
+    addMoney, 
+    getBalance, 
+    createOrder, 
+    verifyPayment,
+    startChat,
+    endChat
+};
