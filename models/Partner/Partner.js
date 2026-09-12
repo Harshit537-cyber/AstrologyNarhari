@@ -1,195 +1,239 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const partnerSchema = new mongoose.Schema({
+const partnerSchema = new mongoose.Schema(
+  {
     mobile: {
-        type: String,
-        required: true,
-        unique: true
+      type: String,
+      required: true,
+      unique: true,
     },
     role: {
-        type: String,
-        default: 'partner'
+      type: String,
+      default: "partner",
     },
     otp: {
-        type: String
+      type: String,
     },
     otpExpiry: {
-        type: Date
+      type: Date,
     },
     isVerified: {
-        type: Boolean,
-        default: false
+      type: Boolean,
+      default: false,
     },
     isProfileComplete: {
-        type: Boolean,
-        default: false
+      type: Boolean,
+      default: false,
     },
     profileApprovalStatus: {
-        type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
-        default: 'Pending'
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
     },
     fullName: {
-        type: String,
-        trim: true
+      type: String,
+      trim: true,
     },
     profilePic: {
-        type: String
+      type: String,
     },
     dateOfBirth: {
-        type: Date
+      type: Date,
     },
     gender: {
-        type: String,
-        enum: ['Male', 'Female', 'Other']
+      type: String,
+      enum: ["Male", "Female", "Other"],
     },
     city: {
-        type: String,
-        trim: true
+      type: String,
+      trim: true,
     },
-    specialties: [{
-        type: String
-    }],
-    languages: [{
-        type: String
-    }],
+    specialties: [
+      {
+        type: String,
+      },
+    ],
+    languages: [
+      {
+        type: String,
+      },
+    ],
     experience: {
-        type: Number
+      type: Number,
     },
     qualification: {
-        type: String,
-        trim: true
+      type: String,
+      trim: true,
     },
     expectedSalary: {
-        type: Number
+      type: Number,
     },
     minRate: {
-        type: Number,
-        default: 25
+      type: Number,
+      default: 25,
     },
     requestedMinRate: {
-        type: Number,
-        default: null
+      type: Number,
+      default: null,
     },
     minRateApprovalStatus: {
-        type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
-        default: null
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: null,
     },
-    additionalPhotos: [{
-        type: String
-    }],
+    additionalPhotos: [
+      {
+        type: String,
+      },
+    ],
     bio: {
-        type: String,
-        trim: true
+      type: String,
+      trim: true,
     },
-    averageRating: { 
-        type: Number, 
-        default: 0 
+    averageRating: {
+      type: Number,
+      default: 0,
     },
-    totalReviews: { 
-        type: Number, 
-        default: 0 
+    totalReviews: {
+      type: Number,
+      default: 0,
     },
     kycStatus: {
-        type: String,
-        enum: ['Not Submitted', 'Pending', 'Approved', 'Rejected'],
-        default: 'Not Submitted'
+      type: String,
+      enum: ["Not Submitted", "Pending", "Approved", "Rejected"],
+      default: "Not Submitted",
     },
     selfie: {
-        url: { type: String, default: null },
-        status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-        uploadedAt: { type: Date, default: null }
+      url: { type: String, default: null },
+      status: {
+        type: String,
+        enum: ["Pending", "Approved", "Rejected"],
+        default: "Pending",
+      },
+      uploadedAt: { type: Date, default: null },
     },
     nationalId: {
-        url: { type: String, default: null },
-        status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-        uploadedAt: { type: Date, default: null }
+      url: { type: String, default: null },
+      status: {
+        type: String,
+        enum: ["Pending", "Approved", "Rejected"],
+        default: "Pending",
+      },
+      uploadedAt: { type: Date, default: null },
     },
     astrologyCertificate: {
-        url: { type: String, default: null },
-        status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-        uploadedAt: { type: Date, default: null }
+      url: { type: String, default: null },
+      status: {
+        type: String,
+        enum: ["Pending", "Approved", "Rejected"],
+        default: "Pending",
+      },
+      uploadedAt: { type: Date, default: null },
     },
-    isAcceptingRequests: { 
-        type: Boolean, 
-        default: true 
+    isAcceptingRequests: {
+      type: Boolean,
+      default: true,
     },
     addressProof: {
-        url: { type: String, default: null },
-        status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-        uploadedAt: { type: Date, default: null }
+      url: { type: String, default: null },
+      status: {
+        type: String,
+        enum: ["Pending", "Approved", "Rejected"],
+        default: "Pending",
+      },
+      uploadedAt: { type: Date, default: null },
     },
-    isOnline: { 
-        type: Boolean, 
-        default: false 
+    isOnline: {
+      type: Boolean,
+      default: false,
     },
-    isBusy: { 
-        type: Boolean, 
-        default: false 
+    isBusy: {
+      type: Boolean,
+      default: false,
     },
     isActive: {
-        type: Boolean,
-        default: true
+      type: Boolean,
+      default: true,
     },
     deactivatedBy: {
-        type: String,
-        enum: ['self', 'admin', null],
-        default: null
+      type: String,
+      enum: ["self", "admin", null],
+      default: null,
     },
     deactivatedAt: {
-        type: Date,
-        default: null
+      type: Date,
+      default: null,
     },
     reactivateAt: {
-        type: Date,
-        default: null
+      type: Date,
+      default: null,
     },
     deactivationReason: {
-        type: String,
-        default: null
+      type: String,
+      default: null,
     },
     deactivationReasonNote: {
-        type: String,
-        default: null
+      type: String,
+      default: null,
     },
     deactivationDuration: {
-        type: Number,
-        default: null
+      type: Number,
+      default: null,
     },
-    fcmToken: { 
-        type: String, 
-        default: null 
+    fcmToken: {
+      type: String,
+      default: null,
     },
-    firebaseUid: { 
-        type: String, 
-        default: null, 
-        unique: true, 
-        sparse: true  
+    firebaseUid: {
+      type: String,
+      default: null,
+      unique: true,
+      sparse: true,
     },
-    walletBalance: { 
-        type: Number, 
-        default: 0 
+    walletBalance: {
+      type: Number,
+      default: 0,
     },
-    categories: [{
+    allowAudioCalls: {
+      type: Boolean,
+      default: true,
+    },
+    allowVideoCalls: {
+      type: Boolean,
+      default: true,
+    },
+    allowChat: {
+      type: Boolean,
+      default: true,
+    },
+    categories: [
+      {
         type: String,
-        uppercase: true, 
+        uppercase: true,
         enum: [
-            'LOVE & RELATIONSHIPS',
-            'CAREER & FINANCE',
-            'MARRIAGE & FAMILY',
-            'HEALTH & WELLNESS',
-            'BUSINESS & WEALTH'
-        ]
-    }],
-    ritualEarningsHistory: [{
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        userName: String,      
-        bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'RitualBooking' },
-        amount: Number,      
+          "LOVE & RELATIONSHIPS",
+          "CAREER & FINANCE",
+          "MARRIAGE & FAMILY",
+          "HEALTH & WELLNESS",
+          "BUSINESS & WEALTH",
+        ],
+      },
+    ],
+    ritualEarningsHistory: [
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        userName: String,
+        bookingId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "RitualBooking",
+        },
+        amount: Number,
         ritualName: String,
-        paymentDate: { type: Date, default: Date.now }
-    }],
-}, { timestamps: true });
+        paymentDate: { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { timestamps: true },
+);
 
-module.exports = mongoose.model('Partner', partnerSchema);
+module.exports = mongoose.model("Partner", partnerSchema);

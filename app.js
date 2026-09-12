@@ -16,18 +16,24 @@ const cartRoutes = require("./routes/UserRoutes/cartRoutes");
 const ticketRoutes = require("./routes/ticketRoutes/ticketRoutes");
 const razorpayInstance = require("./config/razorpay");
 
+// --- NEWLY ADDED ROUTES FOR COUPON WALLET BONUS ---
+const adminCouponRoutes = require("./routes/AdminRoutes/adminCouponRoutes");
+const userCouponBonusRoutes = require("./routes/UserRoutes/userCouponRoutes"); // User apply first-time coupon route
+
 const sessionRoutes = require("./routes/sessionRoutes/sessionRoutes");
+const partnerAvailabilityRoutes = require("./routes/PatnerRoutes/partnerRoutes");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb',extended: true }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
 app.use("/api/user", userAuthRoutes);
 app.use("/api/user/cart", cartRoutes);
 app.use("/api/partner", partnerAuthRoutes);
+app.use("/api/partner", partnerAvailabilityRoutes);
 app.use("/api/pandit", panditAuthRoutes);
 
 app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
@@ -40,6 +46,10 @@ app.use("/api/banner", require("./routes/UserRoutes/bannerRoutes"));
 app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
+
+// --- MOUNTED USER FIRST TIME COUPON/BONUS ROUTE ---
+app.use("/api/user/first-coupon", userCouponBonusRoutes); 
+// Endpoint ban jayega: POST /api/user/first-coupon/apply
 
 app.use("/api/session", sessionRoutes);
 
@@ -59,6 +69,10 @@ app.use("/api/admin/product", productRoutes);
 app.use("/api/admin/coupon", couponRoutes);
 app.use("/api/admin/insights", require("./routes/AdminRoutes/adminInsightsRoutes"));
 
+// --- MOUNTED ADMIN COUPON MANAGEMENT ROUTES ---
+app.use("/api/admin/consultation-coupons", adminCouponRoutes); 
+
+
 app.use("/api/v1/calls", require("./routes/callWebhookRoutes/callWebhookRoutes"));
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
 app.use("/api/admin/card", require("./routes/AdminRoutes/cardRoutes"));
@@ -70,7 +84,7 @@ app.use("/api/admin/commission", require("./routes/AdminRoutes/adminCommisionRou
 app.use("/api/admin/restrictKeyword", require("./routes/AdminRoutes/adminRestrictKeyWordRoutes"));
 app.use("/api/video/call", require("./routes/agora/videoCallRoutes"));
 app.use("/api/contact", require("./routes/contact/contactRoutes"));
-app.use("/api/video-blogs", require("./routes/Articles/videoBlogRoutes"))
+app.use("/api/video-blogs", require("./routes/Articles/videoBlogRoutes"));
 
 app.get("/", (req, res) => {
     res.status(200).json({

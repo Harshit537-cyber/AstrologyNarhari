@@ -189,7 +189,7 @@ const startChat = async (req, res) => {
             return res.status(400).json({ success: false, message: "Astrologer is busy with someone else" });
         }
 
-        const minRate = partner.minRate || 25;
+        const minRate = partner.minRate || 5;
 
         if ((user.walletBalance || 0) < minRate) {
             return res.status(400).json({
