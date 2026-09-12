@@ -5,7 +5,6 @@ const Transaction = require('../../models/Transaction/Transaction');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 
-// Schema for tracking Chat Session Billing
 const chatSessionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Partner', required: true },
@@ -19,7 +18,6 @@ const chatSessionSchema = new mongoose.Schema({
 
 const ChatSession = mongoose.models.ChatSession || mongoose.model('ChatSession', chatSessionSchema);
 
-// 1. ADD MONEY
 const addMoney = async (req, res) => {
     try {
         const { amount } = req.body;
@@ -47,7 +45,6 @@ const addMoney = async (req, res) => {
     }
 };
 
-// 2. GET BALANCE
 const getBalance = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -66,7 +63,6 @@ const getBalance = async (req, res) => {
     }
 };
 
-// 3. CREATE RAZORPAY ORDER
 const createOrder = async (req, res) => {
     try {
         const { amount, userId } = req.body;
@@ -105,7 +101,6 @@ const createOrder = async (req, res) => {
     }
 };
 
-// 4. VERIFY RAZORPAY PAYMENT
 const verifyPayment = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -135,7 +130,6 @@ const verifyPayment = async (req, res) => {
             .digest("hex");
 
         if (generated_signature !== razorpay_signature) {
-            console.error(`FRAUD ALERT: Signature mismatch for Order ${razorpay_order_id}`);
             transaction.status = 'failed';
             await transaction.save({ session });
             await session.commitTransaction();
@@ -170,12 +164,10 @@ const verifyPayment = async (req, res) => {
     } catch (error) {
         await session.abortTransaction();
         session.endSession();
-        console.error("CRITICAL: Payment Verification Error", error);
         res.status(500).json({ success: false, message: "An error occurred during verification" });
     }
 };
 
-// 5. START CHAT (Timer shuru hoga, balance check hoga)
 const startChat = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -193,15 +185,12 @@ const startChat = async (req, res) => {
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
         if (!partner) return res.status(404).json({ success: false, message: "Partner not found" });
 
-        
         if (partner.isBusy) {
             return res.status(400).json({ success: false, message: "Astrologer is busy with someone else" });
         }
 
-       
         const minRate = partner.minRate || 25;
 
-       
         if ((user.walletBalance || 0) < minRate) {
             return res.status(400).json({
                 success: false,
@@ -209,8 +198,7 @@ const startChat = async (req, res) => {
             });
         }
 
-      
-        const session = await ChatSession.create({
+        const chatSession = await ChatSession.create({
             userId,
             partnerId,
             ratePerMinute: minRate,
@@ -218,7 +206,6 @@ const startChat = async (req, res) => {
             status: 'active'
         });
 
-       
         partner.isBusy = true;
         await partner.save();
 
@@ -228,10 +215,10 @@ const startChat = async (req, res) => {
             success: true,
             message: "Chat session started",
             data: {
-                sessionId: session._id,
+                sessionId: chatSession._id,
                 partnerName: partner.fullName,
                 ratePerMinute: minRate,
-                startTime: session.startTime,
+                startTime: chatSession.startTime,
                 walletBalance: user.walletBalance,
                 maxMinutesAllowed
             }
@@ -241,7 +228,6 @@ const startChat = async (req, res) => {
     }
 };
 
-// 6. END CHAT (Time count hoga, user se cut hoga aur partner me add hoga)
 const endChat = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -266,42 +252,36 @@ const endChat = async (req, res) => {
             return res.status(400).json({ success: false, message: "This chat session has already ended" });
         }
 
-      
         const endTime = new Date();
         const diffSeconds = Math.max(1, Math.round((endTime.getTime() - new Date(chat.startTime).getTime()) / 1000));
         
-       
         const billedMinutes = Math.max(1, Math.ceil(diffSeconds / 60));
         let totalDeduct = billedMinutes * chat.ratePerMinute;
 
         const user = await User.findById(userId).session(session);
         const partner = await Partner.findById(chat.partnerId).session(session);
 
-       
         if (user.walletBalance < totalDeduct) {
             totalDeduct = user.walletBalance > 0 ? user.walletBalance : 0;
         }
 
-      
         user.walletBalance -= totalDeduct;
 
-      
         partner.walletBalance = (partner.walletBalance || 0) + totalDeduct;
         partner.isBusy = false; 
 
         await user.save({ session });
         await partner.save({ session });
 
-      
         chat.endTime = endTime;
         chat.totalMinutes = billedMinutes;
         chat.totalAmount = totalDeduct;
         chat.status = 'completed';
         await chat.save({ session });
 
-       
         await Transaction.create([{
             user: userId,
+            razorpay_order_id: `chat_debit_${sessionId}_${Date.now()}`,
             amount: totalDeduct,
             status: 'success',
             type: 'debit',
