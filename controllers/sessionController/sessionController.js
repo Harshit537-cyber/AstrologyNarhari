@@ -59,16 +59,17 @@ const initiateSessionRequest = async (req, res) => {
                     sessionType: type,
                     durationMinutes: durationMinutes.toString(),
                     userName: user.fullName || 'User',
-                    userPic: user.profilePic || ''
+                    userPic: user.profilePic || '',
+                    isRinging: "true"
                 },
                 android: {
                     priority: 'high',
                     notification: {
-                        sound: 'default',
-                        defaultSound: true,
+                        defaultSound: false,
                         defaultVibrateTimings: true,
                         priority: 'max',
-                        visibility: 'public'
+                        visibility: 'public',
+                        channelId: 'call_sound_v2'
                     }
                 },
                 apns: {
