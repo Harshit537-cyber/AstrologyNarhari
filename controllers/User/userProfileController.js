@@ -7,7 +7,7 @@ exports.createProfile = async (req, res) => {
     const filePath = req.file ? req.file.path : null;
 
     try {
-        const { fullName, gender, dateOfBirth, timeOfBirth, placeOfBirth } = req.body;
+        const { fullName, gender, dateOfBirth, timeOfBirth, placeOfBirth,zodiac } = req.body;
         const userId = req.user.id;
 
         let user = await User.findById(userId);
@@ -21,7 +21,6 @@ exports.createProfile = async (req, res) => {
             return res.status(400).json({ success: false, message: "Profile already exists" });
         }
 
-        const zodiacSign = dateOfBirth ? getZodiacSign(dateOfBirth) : null;
 
         let profilePicUrl = "";
         if (filePath && fs.existsSync(filePath)) {
@@ -39,8 +38,7 @@ exports.createProfile = async (req, res) => {
         user.timeOfBirth = timeOfBirth;
         user.placeOfBirth = placeOfBirth;
         user.profilePic = profilePicUrl;
-        if (zodiacSign) user.zodiac = zodiacSign;
-
+     if (zodiac) user.zodiac = zodiac;
         await user.save();
 
         return res.status(201).json({ 

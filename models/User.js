@@ -16,7 +16,7 @@ const userSchema = new mongoose.Schema({
     deactivationDuration: { type: Number, default: null },
     fullName: { type: String, trim: true, default: null },
     gender: { type: String, enum: ['Male', 'Female', 'Other', null], default: null },
-    zodiac: { type: String, default: "Auto-calculated" },
+    zodiac: { type: String, default: null },
     profilePic: { type: String, default: null },
     dateOfBirth: { type: Date, default: null },
     timeOfBirth: { type: String, default: null },
