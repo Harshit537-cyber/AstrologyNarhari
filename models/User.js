@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema({
     dateOfBirth: { type: Date, default: null },
     timeOfBirth: { type: String, default: null },
     placeOfBirth: { type: String, default: null },
+    hasClaimedFirstCoupon: { type: Boolean, default: false },
     walletBalance: { type: Number, default: 0 },
     fcmToken: { type: String, default: null },
    firebaseUid: { type: String, unique: true, sparse: true, default: null }, 

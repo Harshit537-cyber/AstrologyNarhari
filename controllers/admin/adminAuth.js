@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const fs = require("fs");
+const mongoose = require("mongoose");
 const User = require("../../models/User.js");
 const Partner = require("../../models/Partner/Partner");
 const cloudinary = require("../../config/cloudinary");
@@ -31,7 +32,7 @@ const verifyOtp = async (req, res) => {
       if (adminCount >= 10) {
         return res.status(400).json({
           success: false,
-          message: "Admin registration limit reached. Max 2 admin allowed.",
+          message: "Admin registration limit reached. Max 10 admins allowed.",
         });
       }
 
@@ -499,11 +500,11 @@ const updatePartner = async (req, res) => {
     }
 
     if (isVerified !== undefined) {
-      partner.isVerified = isVerified === "true";
+      partner.isVerified = isVerified === "true" || isVerified === true;
     }
 
     if (isProfileComplete !== undefined) {
-      partner.isProfileComplete = isProfileComplete === "true";
+      partner.isProfileComplete = isProfileComplete === "true" || isProfileComplete === true;
     }
 
     await partner.save();
@@ -676,7 +677,7 @@ const deactivateUser = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    if (!user.isActive) {
+    if (user.isActive === false) {
       return res
         .status(400)
         .json({ success: false, message: "User is already deactivated" });
@@ -695,6 +696,7 @@ const deactivateUser = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "User deactivated by admin",
+      data: user,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -712,7 +714,7 @@ const activateUser = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    if (user.isActive) {
+    if (user.isActive === true) {
       return res
         .status(400)
         .json({ success: false, message: "User is already active" });
@@ -731,6 +733,7 @@ const activateUser = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "User activated by admin",
+      data: user,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -756,13 +759,14 @@ const deactivatePartner = async (req, res) => {
         .json({ success: false, message: "Partner not found" });
     }
 
-    if (!partner.isActive) {
+    if (partner.isActive === false) {
       return res
         .status(400)
         .json({ success: false, message: "Partner is already deactivated" });
     }
 
     partner.isActive = false;
+    partner.isOnline = false;
     partner.deactivatedBy = "admin";
     partner.deactivatedAt = new Date();
     partner.deactivationReason = reason;
@@ -775,6 +779,15 @@ const deactivatePartner = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Partner deactivated by admin",
+      data: {
+        partnerId: partner._id,
+        fullName: partner.fullName,
+        isActive: partner.isActive,
+        deactivatedBy: partner.deactivatedBy,
+        deactivatedAt: partner.deactivatedAt,
+        deactivationReason: partner.deactivationReason,
+        deactivationReasonNote: partner.deactivationReasonNote,
+      },
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -792,7 +805,7 @@ const activatePartner = async (req, res) => {
         .json({ success: false, message: "Partner not found" });
     }
 
-    if (partner.isActive) {
+    if (partner.isActive === true) {
       return res
         .status(400)
         .json({ success: false, message: "Partner is already active" });
@@ -811,9 +824,80 @@ const activatePartner = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Partner activated by admin",
+      data: {
+        partnerId: partner._id,
+        fullName: partner.fullName,
+        isActive: partner.isActive,
+      },
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const togglePartnerStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason, reasonNote } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Partner ID format",
+      });
+    }
+
+    const partner = await Partner.findById(id);
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        message: "Partner not found",
+      });
+    }
+
+    const isCurrentlyActive = partner.isActive !== false;
+    const nextStatus = !isCurrentlyActive;
+
+    if (nextStatus === false) {
+      partner.isActive = false;
+      partner.isOnline = false;
+      partner.deactivatedBy = "admin";
+      partner.deactivatedAt = new Date();
+      partner.deactivationReason = reason || "Deactivated by admin";
+      partner.deactivationReasonNote = reasonNote || null;
+      partner.deactivationDuration = null;
+      partner.reactivateAt = null;
+    } else {
+      partner.isActive = true;
+      partner.deactivatedBy = null;
+      partner.deactivatedAt = null;
+      partner.reactivateAt = null;
+      partner.deactivationReason = null;
+      partner.deactivationReasonNote = null;
+      partner.deactivationDuration = null;
+    }
+
+    await partner.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Partner has been ${nextStatus ? "Activated" : "Deactivated"} successfully`,
+      data: {
+        partnerId: partner._id,
+        fullName: partner.fullName || "N/A",
+        mobile: partner.mobile,
+        isActive: partner.isActive,
+        status: partner.isActive ? "Active" : "Deactivated",
+        deactivationReason: partner.deactivationReason,
+        deactivationReasonNote: partner.deactivationReasonNote,
+        deactivatedAt: partner.deactivatedAt,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -851,7 +935,6 @@ const getPendingKycPartners = async (req, res) => {
 const approveMinRateUpdate = async (req, res) => {
   try {
     const { id } = req.params;
-
     const { status } = req.body;
 
     if (!["Approved", "Rejected"].includes(status)) {
@@ -872,56 +955,302 @@ const approveMinRateUpdate = async (req, res) => {
 
     if (status === "Approved") {
       partner.minRate = partner.requestedMinRate;
-      partner.minRateApprovalStatus = 'Approved';
+      partner.minRateApprovalStatus = "Approved";
+      partner.requestedMinRate = null;
+    } else {
+      partner.minRateApprovalStatus = "Rejected";
       partner.requestedMinRate = null;
     }
 
-     await partner.save();
-      return res.status(200).json({
-            success: true,
-            message: `Partner rate update ${status.toLowerCase()} successfully`,
-            data: partner
-        });
+    await partner.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Partner rate update ${status.toLowerCase()} successfully`,
+      data: partner,
+    });
   } catch (error) {
-     return res.status(500).json({
-            success: false,
-            message: error.message
-        });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
 const getPendingMinRatePartners = async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const skip = (page - 1) * limit;
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-        const filter = {
-            minRateApprovalStatus: "Pending"
-        };
+    const filter = {
+      minRateApprovalStatus: "Pending",
+    };
 
-        const [partners, total] = await Promise.all([
-            Partner.find(filter)
-                .sort({ updatedAt: -1 })
-                .skip(skip)
-                .limit(limit),
-            Partner.countDocuments(filter)
-        ]);
+    const [partners, total] = await Promise.all([
+      Partner.find(filter)
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Partner.countDocuments(filter),
+    ]);
 
-        return res.status(200).json({
-            success: true,
-            total,
-            page,
-            totalPages: Math.ceil(total / limit),
-            data: partners
-        });
+    return res.status(200).json({
+      success: true,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      data: partners,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
+const getUsersStatusList = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10, search = "" } = req.query;
+
+    const [totalUsers, deactiveUsersCount] = await Promise.all([
+      User.countDocuments({ role: "user" }),
+      User.countDocuments({ role: "user", isActive: false }),
+    ]);
+
+    const activeUsersCount = totalUsers - deactiveUsersCount;
+
+    const filter = { role: "user" };
+
+    if (status === "active") {
+      filter.isActive = { $ne: false };
+    } else if (status === "inactive" || status === "deactive") {
+      filter.isActive = false;
     }
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const users = await User.find(filter)
+      .select("name mobile email isActive deactivationReason deactivatedAt createdAt")
+      .sort({ createdAt: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .lean();
+
+    const formattedUsers = users.map((user) => ({
+      ...user,
+      isActive: user.isActive !== false,
+    }));
+
+    const totalFiltered = await User.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        totalUsers,
+        activeUsers: activeUsersCount,
+        deactiveUsers: deactiveUsersCount,
+      },
+      pagination: {
+        total: totalFiltered,
+        page: Number(page),
+        totalPages: Math.ceil(totalFiltered / Number(limit)),
+      },
+      data: formattedUsers,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getPartnersStatusList = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10, search = "" } = req.query;
+
+    const [totalPartners, deactivePartnersCount] = await Promise.all([
+      Partner.countDocuments(),
+      Partner.countDocuments({ isActive: false }),
+    ]);
+
+    const activePartnersCount = totalPartners - deactivePartnersCount;
+
+    const filter = {};
+
+    if (status === "active") {
+      filter.isActive = { $ne: false };
+    } else if (status === "inactive" || status === "deactive") {
+      filter.isActive = false;
+    }
+
+    if (search) {
+      filter.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const partners = await Partner.find(filter)
+      .select(
+        "fullName mobile email profilePic profileApprovalStatus kycStatus isActive isOnline deactivationReason deactivatedAt deactivatedBy reactivateAt createdAt",
+      )
+      .sort({ createdAt: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .lean();
+
+    const formattedPartners = partners.map((partner) => {
+      const isActive = partner.isActive !== false;
+      return {
+        ...partner,
+        isActive: isActive,
+        status: isActive ? "Active" : "Deactivated",
+      };
+    });
+
+    const totalFiltered = await Partner.countDocuments(filter);
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        totalPartners,
+        activePartners: activePartnersCount,
+        deactivePartners: deactivePartnersCount,
+      },
+      pagination: {
+        total: totalFiltered,
+        page: Number(page),
+        totalPages: Math.ceil(totalFiltered / Number(limit)),
+      },
+      data: formattedPartners,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getPartnerStatusById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Partner ID format",
+      });
+    }
+
+    const partner = await Partner.findById(id)
+      .select(
+        "fullName mobile email isActive isOnline isBusy deactivationReason deactivationReasonNote deactivatedAt deactivatedBy reactivateAt profileApprovalStatus kycStatus createdAt",
+      )
+      .lean();
+
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        message: "Partner not found",
+      });
+    }
+
+    const isActive = partner.isActive !== false;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        partnerId: partner._id,
+        fullName: partner.fullName || "N/A",
+        mobile: partner.mobile,
+        email: partner.email || "N/A",
+        status: isActive ? "Active" : "Inactive",
+        isActive: isActive,
+        isOnline: partner.isOnline || false,
+        isBusy: partner.isBusy || false,
+        deactivationDetails: !isActive
+          ? {
+              reason: partner.deactivationReason || "N/A",
+              note: partner.deactivationReasonNote || "N/A",
+              deactivatedAt: partner.deactivatedAt,
+              deactivatedBy: partner.deactivatedBy,
+              reactivateAt: partner.reactivateAt,
+            }
+          : null,
+        profileApprovalStatus: partner.profileApprovalStatus,
+        kycStatus: partner.kycStatus,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+const getAllPartnersStatus = async (req, res) => {
+  try {
+    const partners = await Partner.find()
+      .select(
+        "fullName mobile email isActive isOnline deactivationReason deactivationReasonNote deactivatedAt deactivatedBy reactivateAt profileApprovalStatus kycStatus createdAt",
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let activeCount = 0;
+    let inactiveCount = 0;
+
+    const formattedPartners = partners.map((partner) => {
+      const isCurrentActive = partner.isActive !== false;
+
+      if (isCurrentActive) {
+        activeCount++;
+      } else {
+        inactiveCount++;
+      }
+
+      return {
+        partnerId: partner._id,
+        fullName: partner.fullName || "N/A",
+        mobile: partner.mobile,
+        email: partner.email || "N/A",
+        status: isCurrentActive ? "Active" : "Inactive",
+        isActive: isCurrentActive,
+        isOnline: partner.isOnline || false,
+        deactivationDetails: !isCurrentActive
+          ? {
+              reason: partner.deactivationReason || "N/A",
+              note: partner.deactivationReasonNote || "N/A",
+              deactivatedAt: partner.deactivatedAt || null,
+              deactivatedBy: partner.deactivatedBy || null,
+              reactivateAt: partner.reactivateAt || null,
+            }
+          : null,
+        kycStatus: partner.kycStatus || "Not Submitted",
+        profileApprovalStatus: partner.profileApprovalStatus || "Pending",
+        joinedDate: partner.createdAt,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      totalPartners: partners.length,
+      activePartners: activeCount,
+      inactivePartners: inactiveCount,
+      data: formattedPartners,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 
 module.exports = {
@@ -943,9 +1272,13 @@ module.exports = {
   activateUser,
   deactivatePartner,
   activatePartner,
+  togglePartnerStatus,
   approvePartnerProfile,
   getPendingKycPartners,
   approveMinRateUpdate,
-  getPendingMinRatePartners
+  getPendingMinRatePartners,
+  getUsersStatusList,
+  getPartnersStatusList,
+  getPartnerStatusById,
+  getAllPartnersStatus,
 };
-

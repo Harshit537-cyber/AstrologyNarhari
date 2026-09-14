@@ -11,12 +11,13 @@ const {
     deleteAccount,
     deactivateAccount,
     activateAccount,
+    getAccountStatus,
     updateFCMToken,
     getTopAstrologers,
     getAstrologerById,
     getDashboardStats,
     getRecentConsultations,
-     getUpcomingBookings,
+    getUpcomingBookings,
     getPartnerReviews,
     updateMinRate,
     getMinRate,
@@ -35,6 +36,13 @@ router.get(
     verifyToken,
     isPartner,
     getProfile
+);
+
+router.get(
+    '/status',
+    verifyToken,
+    isPartner,
+    getAccountStatus
 );
 
 router.get(
@@ -57,7 +65,6 @@ router.get(
     isPartner,
     getRecentConsultations
 );
-
 
 router.get(
     '/dashboard-stats',
@@ -99,6 +106,12 @@ router.patch(
     deactivateAccount
 );
 
+router.patch(
+    '/activate',
+    verifyToken,
+    isPartner,
+    activateAccount
+);
 
 router.patch(
     '/update-min-rate',
@@ -112,13 +125,6 @@ router.get(
     verifyToken,
     isPartner,
     getMinRate
-);
-
-router.patch(
-    '/activate',
-    verifyToken,
-    isPartner,
-    activateAccount
 );
 
 router.patch(
@@ -149,8 +155,9 @@ router.post(
     addBankAccount
 );
 
-router.get("/top-astrologers",verifyToken, getTopAstrologers);
-router.get("/astrologerById/:id", verifyToken,getAstrologerById )
+router.get("/top-astrologers", verifyToken, getTopAstrologers);
+router.get("/astrologerById/:id", verifyToken, getAstrologerById);
+
 router.put(
     '/bank-account',
     verifyToken,
@@ -185,12 +192,9 @@ router.get(
     getKycStatus
 );
 
-
-
 router.delete("/delete-by-mobile", deletePartnerByMobile);
 
 router.patch('/update-fcm', verifyToken, isPartner, updateFCMToken);
-router.post("/logout", verifyToken, isPartner, logoutPartner)
-
+router.post("/logout", verifyToken, isPartner, logoutPartner);
 
 module.exports = router;
