@@ -101,6 +101,7 @@ const partnerSchema = new mongoose.Schema({
         status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
         uploadedAt: { type: Date, default: null }
     },
+    
     astrologyCertificate: {
         url: { type: String, default: null },
         status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },

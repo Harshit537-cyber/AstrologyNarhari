@@ -1,8 +1,32 @@
 const User = require('../../models/User');
 const Kundli = require('../../models/kundali/Kundali');
-const { getMatchMakingReport, getAstrologyData, getPdfReport,getFestivalData,getTithiEvent,
+const { getMatchMakingReport, getAstrologyData, getPdfReport, getFestivalData, getTithiEvent,
     daysInMonth,
-    buildDate ,getHoroscopeData, validZodiacSigns,getDetailedHoroscopeData } = require('../../utils/astrologyService');
+    buildDate, getHoroscopeData, validZodiacSigns, getDetailedHoroscopeData } = require('../../utils/astrologyService');
+
+const parseDashaDateTime = (str) => {
+    // str example: "28-4-1992  18:35"
+    const [datePart, timePart] = str.trim().split(/\s+/);
+    const [day, month, year] = datePart.split('-').map(Number);
+    const [hour, min] = (timePart || "0:0").split(':').map(Number);
+    return new Date(year, month - 1, day, hour, min);
+};
+
+const getCurrentMahaDashaPlanet = (vDashaArray) => {
+    if (!Array.isArray(vDashaArray)) return null;
+
+    const now = new Date();
+    const current = vDashaArray.find(period => {
+        const start = parseDashaDateTime(period.start);
+        const end = parseDashaDateTime(period.end);
+        return now >= start && now <= end;
+    });
+
+    const selected = current || vDashaArray[0];
+    return selected ? selected.planet.toLowerCase() : null;
+};
+
+
 
 exports.checkCompatibility = async (req, res) => {
     try {
@@ -86,7 +110,8 @@ exports.checkCompatibility = async (req, res) => {
 };
 
 
-exports.generateKundli =async (req, res) => {
+
+exports.generateKundli = async (req, res) => {
     try {
         const { dateOfBirth, timeOfBirth, lat, lon, timezone, fullName, gender } = req.body;
         const dob = new Date(dateOfBirth);
@@ -116,12 +141,12 @@ exports.generateKundli =async (req, res) => {
         };
 
         const [
-            planets,       
-            astro,         
-            panchang,       
-            vDasha,         
-            manglik,       
-            pdfData         
+            planets,
+            astro,
+            panchang,
+            vDasha,
+            manglik,
+            pdfData
         ] = await Promise.all([
             getAstrologyData('planets', payload).catch(e => null),
             getAstrologyData('astro_details', payload).catch(e => null),
@@ -130,6 +155,25 @@ exports.generateKundli =async (req, res) => {
             getAstrologyData('manglik', payload).catch(e => null),
             getPdfReport('basic_horoscope_pdf', pdfPayload)
         ]);
+
+        let antarDasha = null;
+        const currentMahaDashaPlanet = getCurrentMahaDashaPlanet(vDasha);
+
+        if (currentMahaDashaPlanet) {
+            antarDasha = await getAstrologyData(`sub_vdasha/${currentMahaDashaPlanet}`, payload)
+                .catch(e => null);
+        }
+
+
+        let pratyantarDasha = null;
+        const currentAntarDashaPlanet = getCurrentMahaDashaPlanet(antarDasha);
+
+        if (currentMahaDashaPlanet && currentAntarDashaPlanet) {
+            pratyantarDasha = await getAstrologyData(
+                `sub_sub_vdasha/${currentMahaDashaPlanet}/${currentAntarDashaPlanet}`,
+                payload
+            ).catch(e => null);
+        }
 
         res.status(200).json({
             success: true,
@@ -141,6 +185,8 @@ exports.generateKundli =async (req, res) => {
                 astrological_details: astro,
                 planetary_positions: planets,
                 dasha: vDasha,
+                antardasha: antarDasha,
+                pratyantardasha: pratyantarDasha,
                 doshas: {
                     manglik: manglik,
                 }
@@ -315,8 +361,8 @@ exports.getWeeklyHoroscope = async (req, res) => {
         if (!result.ok) {
             return res.status(502).json({ success: false, message: "Upstream weekly horoscope request failed", error: { status: result.status, data: result.data } });
         }
- 
-        
+
+
         res.status(200).json({ success: true, zodiacName, horoscope: result.data });
 
     } catch (error) {
@@ -336,7 +382,7 @@ exports.getYearlyHoroscope = async (req, res) => {
             });
         }
 
-        
+
         if (!user.zodiac) {
             return res.status(400).json({
                 success: false,
@@ -402,6 +448,7 @@ exports.getYearlyHoroscope = async (req, res) => {
         });
     }
 };
+
 
 exports.getMonthlyHoroscope = async (req, res) => {
     try {
@@ -539,9 +586,9 @@ exports.getDetailedHoroscope = async (req, res) => {
     }
 };
 
-exports.generateMyOwnKundli =  async (req, res) => {
+exports.generateMyOwnKundli = async (req, res) => {
     try {
-        const userId = req.user.id || req.user._id  ; 
+        const userId = req.user.id || req.user._id;
 
         const { lat, lon, timezone } = req.body;
 
@@ -551,7 +598,7 @@ exports.generateMyOwnKundli =  async (req, res) => {
         }
 
         const { firebaseUid, dateOfBirth, timeOfBirth, fullName, gender } = user;
-        
+
         const dobDate = new Date(dateOfBirth);
         const [hour, min] = timeOfBirth.split(':');
 
@@ -579,12 +626,12 @@ exports.generateMyOwnKundli =  async (req, res) => {
         };
 
         const [
-            planets,       
-            astro,         
-            panchang,       
-            vDasha,         
-            manglik,       
-            pdfData         
+            planets,
+            astro,
+            panchang,
+            vDasha,
+            manglik,
+            pdfData
         ] = await Promise.all([
             getAstrologyData('planets', payload).catch(e => null),
             getAstrologyData('astro_details', payload).catch(e => null),
@@ -594,6 +641,25 @@ exports.generateMyOwnKundli =  async (req, res) => {
             getPdfReport('basic_horoscope_pdf', pdfPayload).catch(e => null)
         ]);
 
+        let antarDasha = null;
+
+        const currentMahaDashaPlanet = getCurrentMahaDashaPlanet(vDasha);
+        console.log("DEBUG currentMahaDashaPlanet:", currentMahaDashaPlanet);
+
+        if (currentMahaDashaPlanet) {
+            antarDasha = await getAstrologyData(`sub_vdasha/${currentMahaDashaPlanet}`, payload)
+                .catch(e => null);
+        }
+        console.log("DEBUG antarDasha:", antarDasha);
+        let pratyantarDasha = null;
+        const currentAntarDashaPlanet = getCurrentMahaDashaPlanet(antarDasha);
+
+        if (currentMahaDashaPlanet && currentAntarDashaPlanet) {
+            pratyantarDasha = await getAstrologyData(
+                `sub_sub_vdasha/${currentMahaDashaPlanet}/${currentAntarDashaPlanet}`,
+                payload
+            ).catch(e => null);
+        }
         const pdfUrl = pdfData ? pdfData.pdf_url : "PDF limit reached or endpoint not allowed";
 
         const responseData = {
@@ -602,13 +668,15 @@ exports.generateMyOwnKundli =  async (req, res) => {
             astrological_details: astro,
             planetary_positions: planets,
             dasha: vDasha,
+            antardasha: antarDasha,
+            pratyantardasha: pratyantarDasha,
             doshas: {
                 manglik: manglik,
             }
         };
 
         const updatedKundli = await Kundli.findOneAndUpdate(
-            { firebaseUid: firebaseUid }, 
+            { firebaseUid: firebaseUid },
             {
                 userId: user._id,
                 firebaseUid: firebaseUid,
@@ -620,9 +688,9 @@ exports.generateMyOwnKundli =  async (req, res) => {
                 lon: parseFloat(lon),
                 timezone: parseFloat(timezone || 5.5),
                 pdf_link: pdfUrl,
-                data: responseData 
+                data: responseData
             },
-            { upsert: true, new: true } 
+            { upsert: true, new: true }
         );
 
         res.status(200).json({
@@ -630,7 +698,7 @@ exports.generateMyOwnKundli =  async (req, res) => {
             message: "Complete Kundli Data Generated and Saved",
             userId: updatedKundli.userId,
             pdf_link: pdfUrl,
-            data: updatedKundli.data 
+            data: updatedKundli.data
         });
 
     } catch (error) {
@@ -655,7 +723,7 @@ exports.getKundliByUid = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Kundli Data Fetched Successfully",
-            userId: kundli.userId,       
+            userId: kundli.userId,
             firebaseUid: kundli.firebaseUid,
             fullName: kundli.fullName,
             gender: kundli.gender,
@@ -664,7 +732,7 @@ exports.getKundliByUid = async (req, res) => {
             lat: kundli.lat,
             lon: kundli.lon,
             pdf_link: kundli.pdf_link,
-            data: kundli.data 
+            data: kundli.data
         });
 
     } catch (error) {

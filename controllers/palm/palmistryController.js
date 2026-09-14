@@ -3,6 +3,7 @@ const { getPalmId, getPalmReading } = require('../../services/palmistryService')
 const fs = require('fs');
 const path = require('path');
 
+
 exports.uploadPalmAndScan = async (req, res) => {
     try {
         const userId = req.user.id; // token se aaya hua (auth middleware se)

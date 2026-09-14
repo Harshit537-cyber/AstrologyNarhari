@@ -19,6 +19,8 @@ const KundliSchema = new mongoose.Schema({
         panchang: mongoose.Schema.Types.Mixed,
         astrological_details: mongoose.Schema.Types.Mixed,
         planetary_positions: [mongoose.Schema.Types.Mixed],
+        antardasha: { type: mongoose.Schema.Types.Mixed },
+        pratyantardasha: { type: mongoose.Schema.Types.Mixed },
         dasha: [mongoose.Schema.Types.Mixed],
         doshas: {
             manglik: mongoose.Schema.Types.Mixed
