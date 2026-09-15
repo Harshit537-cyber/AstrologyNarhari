@@ -121,6 +121,7 @@ const getPanditRitualRequests = async (req, res) => {
     }
 };
 
+
 const getPanditRitualRequestById = async (req, res) => {
     try {
         const request = await RitualBooking.findOne({ _id: req.params.id, panditId: req.user.id })
@@ -204,6 +205,7 @@ const createRitualOrder = async (req, res) => {
         return res.status(500).json({ success: false, message: error.message });
     }
 };
+
 
 const verifyRitualPayment = async (req, res) => {
     try {
