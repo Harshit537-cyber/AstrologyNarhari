@@ -52,60 +52,42 @@ const getAvailablePandits = async (req, res) => {
 };
 
 const createRitualBooking = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
         const { ritualId, panditId, sankalp, personalDetails, schedule, shippingDetails, amount } = req.body;
         const userId = req.user.id;
         
         if (!panditId || !ritualId) {
-            await session.abortTransaction();
-            session.endSession();
             return res.status(400).json({ success: false, message: 'Ritual ID and Pandit ID are required' });
         }
 
-        const ritual = await Ritual.findById(ritualId).session(session);
+        const ritual = await Ritual.findById(ritualId);
         if (!ritual) {
-            await session.abortTransaction();
-            session.endSession();
             return res.status(404).json({ success: false, message: 'Ritual not found' });
         }
 
         const bookingAmount = amount || ritual.price || 0;
 
-        const user = await User.findById(userId).session(session);
+        // Check if user has sufficient wallet balance before allowing booking request
+        const user = await User.findById(userId);
         if (!user) {
-            await session.abortTransaction();
-            session.endSession();
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
         if ((user.walletBalance || 0) < bookingAmount) {
-            await session.abortTransaction();
-            session.endSession();
             return res.status(400).json({ 
                 success: false, 
-                message: `Insufficient wallet balance! You need ₹${bookingAmount} to book this ritual.` 
+                message: `Insufficient wallet balance! You need at least ₹${bookingAmount} to book this ritual.` 
             });
         }
 
-        const pandit = await Pandit.findById(panditId).session(session);
+        const pandit = await Pandit.findById(panditId);
         if (!pandit) {
-            await session.abortTransaction();
-            session.endSession();
             return res.status(404).json({ success: false, message: 'Pandit not found' });
         }
 
-        user.walletBalance -= bookingAmount;
-        await user.save({ session });
-
-        pandit.walletBalance = (pandit.walletBalance || 0) + bookingAmount;
-        await pandit.save({ session });
-
         const bookingId = 'RB' + Date.now() + Math.floor(1000 + Math.random() * 9000);
 
-        const booking = await RitualBooking.create([{
+        const booking = await RitualBooking.create({
             bookingId,
             userId,
             ritualId,
@@ -117,41 +99,26 @@ const createRitualBooking = async (req, res) => {
             paymentDetails: {
                 amount: bookingAmount,
                 paymentMode: 'Wallet',
-                status: 'Success'
+                status: 'Pending'
             },
             status: 'Pending'
-        }], { session });
-
-        await Transaction.create([{
-            user: userId,
-            razorpay_order_id: `ritual_debit_${bookingId}_${Date.now()}`,
-            amount: bookingAmount,
-            status: 'success',
-            type: 'debit',
-            description: `Payment for ritual booking: ${ritual.title || 'Pooja'}`
-        }], { session });
-
-        await session.commitTransaction();
-        session.endSession();
+        });
 
         if (pandit.fcmToken) {
             await sendPushNotification(
                 pandit.fcmToken,
-                { bookingId: booking[0]._id, type: 'RITUAL_BOOKING' },
+                { bookingId: booking._id, type: 'RITUAL_BOOKING' },
                 { title: 'New Pooja Booking Request! 🛕', body: `A new ritual booking request (${bookingId}) has arrived.` }
             );
         }
 
         return res.status(201).json({ 
             success: true, 
-            message: 'Ritual booked successfully using wallet balance', 
-            data: booking[0],
-            remainingWalletBalance: user.walletBalance
+            message: 'Ritual booking request sent successfully to Pandit ji', 
+            data: booking 
         });
 
     } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
         return res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -199,39 +166,6 @@ const getPanditRitualRequestById = async (req, res) => {
 };
 
 const acceptRitualRequestByPandit = async (req, res) => {
-    try {
-        const booking = await RitualBooking.findOne({ _id: req.params.id, panditId: req.user.id, status: 'Pending' });
-
-        if (!booking) {
-            return res.status(400).json({ success: false, message: 'Booking request not found or already processed' });
-        }
-
-        const meetingLink = await createGoogleMeet(
-            'Ritual Pooja Session',
-            booking.schedule?.isoDateTime || booking.schedule?.date,
-            30
-        );
-
-        booking.status = 'Accepted';
-        booking.zoomLink = meetingLink;
-        await booking.save();
-
-        const user = await User.findById(booking.userId);
-        if (user && user.fcmToken) {
-            await sendPushNotification(
-                user.fcmToken,
-                { bookingId: booking._id, meetingLink: meetingLink, type: 'RITUAL_ACCEPTED' },
-                { title: 'Pooja Booking Accepted! 🎉', body: `Pandit ji has accepted your ritual booking (${booking.bookingId}).` }
-            );
-        }
-
-        return res.status(200).json({ success: true, message: 'Request accepted successfully', data: booking });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-const rejectRitualRequestByPandit = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -244,49 +178,109 @@ const rejectRitualRequestByPandit = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Booking request not found or already processed' });
         }
 
-        booking.status = 'Rejected';
+        const userId = booking.userId;
+        const bookingAmount = booking.paymentDetails?.amount || 0;
+
+        const user = await User.findById(userId).session(session);
+        if (!user) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        // Double check balance at the time of acceptance
+        if ((user.walletBalance || 0) < bookingAmount) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ 
+                success: false, 
+                message: `Cannot accept! User's wallet balance is now insufficient (Required: ₹${bookingAmount})` 
+            });
+        }
+
+        const pandit = await Pandit.findById(req.user.id).session(session);
+        if (!pandit) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ success: false, message: 'Pandit not found' });
+        }
+
+        // Deduct from user and add to pandit
+        user.walletBalance -= bookingAmount;
+        await user.save({ session });
+
+        pandit.walletBalance = (pandit.walletBalance || 0) + bookingAmount;
+        await pandit.save({ session });
+
+        booking.paymentDetails.status = 'Success';
         await booking.save({ session });
 
-        const refundAmount = booking.paymentDetails?.amount || 0;
-        if (refundAmount > 0) {
-            const user = await User.findById(booking.userId).session(session);
-            if (user) {
-                user.walletBalance = (user.walletBalance || 0) + refundAmount;
-                await user.save({ session });
+        await Transaction.create([{
+            user: userId,
+            razorpay_order_id: `ritual_debit_${booking._id}_${Date.now()}`,
+            amount: bookingAmount,
+            status: 'success',
+            type: 'debit',
+            description: `Payment for accepted ritual booking: ${booking.bookingId}`
+        }], { session });
 
-                const pandit = await Pandit.findById(booking.panditId).session(session);
-                if (pandit) {
-                    pandit.walletBalance = Math.max(0, (pandit.walletBalance || 0) - refundAmount);
-                    await pandit.save({ session });
-                }
+        const meetingLink = await createGoogleMeet(
+            'Ritual Pooja Session',
+            booking.schedule?.isoDateTime || booking.schedule?.date,
+            30
+        );
 
-                await Transaction.create([{
-                    user: booking.userId,
-                    razorpay_order_id: `ritual_refund_${booking._id}_${Date.now()}`,
-                    amount: refundAmount,
-                    status: 'success',
-                    type: 'credit',
-                    description: `Refund for rejected ritual booking: ${booking.bookingId}`
-                }], { session });
-            }
-        }
+        booking.status = 'Accepted';
+        booking.zoomLink = meetingLink;
+        await booking.save({ session });
 
         await session.commitTransaction();
         session.endSession();
+
+        if (user && user.fcmToken) {
+            await sendPushNotification(
+                user.fcmToken,
+                { bookingId: booking._id, meetingLink: meetingLink, type: 'RITUAL_ACCEPTED' },
+                { title: 'Pooja Booking Accepted! 🎉', body: `Pandit ji has accepted your ritual booking (${booking.bookingId}). Amount of ₹${bookingAmount} deducted from wallet.` }
+            );
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Request accepted and payment deducted successfully', 
+            data: booking 
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const rejectRitualRequestByPandit = async (req, res) => {
+    try {
+        const booking = await RitualBooking.findOneAndUpdate(
+            { _id: req.params.id, panditId: req.user.id, status: 'Pending' },
+            { status: 'Rejected' },
+            { new: true }
+        );
+
+        if (!booking) {
+            return res.status(400).json({ success: false, message: 'Booking request not found or already processed' });
+        }
 
         const user = await User.findById(booking.userId);
         if (user && user.fcmToken) {
             await sendPushNotification(
                 user.fcmToken,
                 { bookingId: booking._id, type: 'RITUAL_REJECTED' },
-                { title: 'Pooja Booking Update ❌', body: `Pandit ji declined your booking (${booking.bookingId}). Amount refunded to wallet.` }
+                { title: 'Pooja Booking Update ❌', body: `Pandit ji has declined your booking (${booking.bookingId}).` }
             );
         }
 
-        return res.status(200).json({ success: true, message: 'Request rejected and amount refunded successfully', data: booking });
+        return res.status(200).json({ success: true, message: 'Request rejected successfully', data: booking });
     } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
         return res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -295,7 +289,7 @@ const createRitualOrder = async (req, res) => {
     try {
         return res.status(200).json({ success: true, message: 'Order created' });
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: error.message });
     }
 };
 
@@ -303,7 +297,7 @@ const verifyRitualPayment = async (req, res) => {
     try {
         return res.status(200).json({ success: true, message: 'Payment verified' });
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: error.message });
     }
 };
 
