@@ -1,10 +1,34 @@
-const jwt = require("jsonwebtoken");
-const fs = require("fs");
-const mongoose = require("mongoose");
+const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const mongoose = require('mongoose');
 const User = require("../../models/User.js");
 const Partner = require("../../models/Partner/Partner");
+const Pandit = require('../../models/Pandit/Pandit');
 const cloudinary = require("../../config/cloudinary");
 const admin = require("../../config/firebase");
+
+const uploadToCloudinary = async (filePath, folder) => {
+    try {
+        const result = await cloudinary.uploader.upload(filePath, { folder });
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        return result.secure_url;
+    } catch (error) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        throw error;
+    }
+};
+
+const cleanUploadedFiles = (files) => {
+    if (!files) return;
+    if (files.profilePic && files.profilePic[0] && fs.existsSync(files.profilePic[0].path)) {
+        fs.unlinkSync(files.profilePic[0].path);
+    }
+    if (files.certificatePhotos) {
+        files.certificatePhotos.forEach((file) => {
+            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        });
+    }
+};
 
 const verifyOtp = async (req, res) => {
   try {
@@ -651,7 +675,7 @@ const approvePartnerProfile = async (req, res) => {
       data: partner,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -1253,6 +1277,96 @@ const getAllPartnersStatus = async (req, res) => {
   }
 };
 
+const getAllPanditsForAdmin = async (req, res) => {
+    try {
+        const { page = 1, limit = 10, search = "", status } = req.query;
+        const filter = {};
+
+        if (status) {
+            filter.profileApprovalStatus = status;
+        }
+
+        if (search) {
+            filter.$or = [
+                { fullName: { $regex: search, $options: "i" } },
+                { mobile: { $regex: search, $options: "i" } },
+                { city: { $regex: search, $options: "i" } },
+                { primaryCategory: { $regex: search, $options: "i" } }
+            ];
+        }
+
+        const pandits = await Pandit.find(filter)
+            .select("-fcmToken")
+            .sort({ createdAt: -1 })
+            .skip((Number(page) - 1) * Number(limit))
+            .limit(Number(limit));
+
+        const total = await Pandit.countDocuments(filter);
+
+        return res.status(200).json({
+            success: true,
+            total,
+            page: Number(page),
+            totalPages: Math.ceil(total / Number(limit)),
+            data: pandits
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getPanditByIdForAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pandit = await Pandit.findById(id).select("-fcmToken");
+
+        if (!pandit) {
+            return res.status(404).json({ success: false, message: "Pandit not found" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: pandit
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const updatePanditApprovalStatusByAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!["Approved", "Rejected"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Status must be either 'Approved' or 'Rejected'"
+            });
+        }
+
+        const pandit = await Pandit.findById(id);
+        if (!pandit) {
+            return res.status(404).json({ success: false, message: "Pandit not found" });
+        }
+
+        pandit.profileApprovalStatus = status;
+        if (status === "Approved") {
+            pandit.isVerified = true;
+        }
+
+        await pandit.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Pandit profile has been ${status.toLowerCase()} successfully`,
+            data: pandit
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
   verifyOtp,
   register,
@@ -1281,4 +1395,7 @@ module.exports = {
   getPartnersStatusList,
   getPartnerStatusById,
   getAllPartnersStatus,
+  getAllPanditsForAdmin,
+  getPanditByIdForAdmin,
+  updatePanditApprovalStatusByAdmin
 };

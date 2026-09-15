@@ -28,6 +28,9 @@ const {
   getPartnersStatusList,
   getPartnerStatusById,
   getAllPartnersStatus,
+  getAllPanditsForAdmin,
+  getPanditByIdForAdmin,
+  updatePanditApprovalStatusByAdmin
 } = require("../../controllers/admin/adminAuth");
 
 const { verifyToken, isAdmin } = require("../../middleware/auth");
@@ -130,5 +133,9 @@ router.put(
   isAdmin,
   approveMinRateUpdate,
 );
+
+router.get("/dashboard/pandits", verifyToken, isAdmin, getAllPanditsForAdmin);
+router.get("/dashboard/pandits/:id", verifyToken, isAdmin, getPanditByIdForAdmin);
+router.put("/dashboard/pandits/:id/approval", verifyToken, isAdmin, updatePanditApprovalStatusByAdmin);
 
 module.exports = router;

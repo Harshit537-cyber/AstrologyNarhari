@@ -49,12 +49,9 @@ const verifyOtp = async (req, res) => {
             pandit = await Pandit.create({
                 mobile,
                 role: 'pandit',
-                isVerified: true,
-                profileApprovalStatus: 'Approved'
+                isVerified: false,
+                profileApprovalStatus: 'Pending'
             });
-        } else {
-            pandit.isVerified = true;
-            await pandit.save();
         }
 
         const token = jwt.sign(
@@ -87,11 +84,6 @@ const register = async (req, res) => {
         if (!pandit) {
             cleanUploadedFiles(req.files);
             return res.status(404).json({ success: false, message: 'Pandit not found' });
-        }
-
-        if (pandit.isProfileComplete) {
-            cleanUploadedFiles(req.files);
-            return res.status(400).json({ success: false, message: 'Profile is already completed.' });
         }
 
         const {
@@ -142,13 +134,13 @@ const register = async (req, res) => {
         pandit.certificatePhotos = certificatePhotosUrls;
         pandit.bio = bio;
         pandit.isProfileComplete = true;
-        pandit.profileApprovalStatus = 'Approved'; 
+        pandit.profileApprovalStatus = 'Pending';
 
         await pandit.save();
 
         return res.status(200).json({
             success: true,
-            message: 'Pandit registration completed successfully',
+            message: 'Pandit registration submitted successfully',
             data: pandit
         });
 
@@ -164,11 +156,7 @@ const getProfile = async (req, res) => {
         if (!pandit) {
             return res.status(404).json({ success: false, message: 'Pandit not found' });
         }
-
-        return res.status(200).json({
-            success: true,
-            data: pandit
-        });
+        return res.status(200).json({ success: true, data: pandit });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
@@ -183,34 +171,14 @@ const updateProfile = async (req, res) => {
         }
 
         const {
-            fullName,
-            dateOfBirth,
-            gender,
-            city,
-            poojaServiceMode,
-            expertise,
-            primaryCategory,
-            languages,
-            experience,
-            vedicEducation,
-            canArrangeSamagri,
-            expectedMonthlyEarnings,
-            minPoojaFee,
-            bio
+            fullName, dateOfBirth, gender, city, poojaServiceMode, expertise,
+            primaryCategory, languages, experience, vedicEducation,
+            canArrangeSamagri, expectedMonthlyEarnings, minPoojaFee, bio
         } = req.body;
 
         let profilePicUrl = pandit.profilePic;
         if (req.files?.profilePic?.[0]) {
             profilePicUrl = await uploadToCloudinary(req.files.profilePic[0].path, 'pandits/profiles');
-        }
-
-        let certificatePhotosUrls = pandit.certificatePhotos || [];
-        if (req.files?.certificatePhotos) {
-            const uploadPromises = req.files.certificatePhotos.map((file) =>
-                uploadToCloudinary(file.path, 'pandits/certificates')
-            );
-            const uploadedUrls = await Promise.all(uploadPromises);
-            certificatePhotosUrls = [...certificatePhotosUrls, ...uploadedUrls].slice(0, 4);
         }
 
         if (fullName !== undefined) pandit.fullName = fullName;
@@ -229,7 +197,6 @@ const updateProfile = async (req, res) => {
         }
         if (expectedMonthlyEarnings !== undefined) pandit.expectedMonthlyEarnings = Number(expectedMonthlyEarnings);
         if (minPoojaFee !== undefined) pandit.minPoojaFee = Number(minPoojaFee);
-        if (certificatePhotosUrls.length > 0) pandit.certificatePhotos = certificatePhotosUrls;
         if (bio !== undefined) pandit.bio = bio;
 
         await pandit.save();
@@ -249,17 +216,9 @@ const updateProfile = async (req, res) => {
 const deleteAccount = async (req, res) => {
     try {
         const pandit = await Pandit.findById(req.user.id);
-        if (!pandit) {
-            return res.status(404).json({ success: false, message: 'Pandit not found' });
-        }
-
+        if (!pandit) return res.status(404).json({ success: false, message: 'Pandit not found' });
         await Pandit.findByIdAndDelete(req.user.id);
-
-        return res.status(200).json({
-            success: true,
-            message: 'Pandit account deleted successfully'
-        });
-
+        return res.status(200).json({ success: true, message: 'Pandit account deleted successfully' });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
@@ -268,38 +227,11 @@ const deleteAccount = async (req, res) => {
 const updatePanditFCMToken = async (req, res) => {
     try {
         const { fcmToken } = req.body;
-        const panditId = req.user.id;
-
-        if (!fcmToken) {
-            return res.status(400).json({
-                success: false,
-                message: "FCM Token is required"
-            });
-        }
-
-        const updatedPandit = await Pandit.findByIdAndUpdate(
-            panditId,
-            { fcmToken },
-            { new: true }
-        );
-
-        if (!updatedPandit) {
-            return res.status(404).json({
-                success: false,
-                message: "Pandit not found"
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "FCM Token updated successfully for pandit"
-        });
-
+        if (!fcmToken) return res.status(400).json({ success: false, message: "FCM Token is required" });
+        await Pandit.findByIdAndUpdate(req.user.id, { fcmToken });
+        return res.status(200).json({ success: true, message: "FCM Token updated successfully" });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error"
-        });
+        return res.status(500).json({ success: false, message: "Internal Server Error" });
     }
 };
 
@@ -312,6 +244,96 @@ const logoutPandit = async (req, res) => {
     }
 };
 
+const getAllPanditsForAdmin = async (req, res) => {
+    try {
+        const { page = 1, limit = 10, search = "", status } = req.query;
+        const filter = {};
+
+        if (status) {
+            filter.profileApprovalStatus = status;
+        }
+
+        if (search) {
+            filter.$or = [
+                { fullName: { $regex: search, $options: "i" } },
+                { mobile: { $regex: search, $options: "i" } },
+                { city: { $regex: search, $options: "i" } },
+                { primaryCategory: { $regex: search, $options: "i" } }
+            ];
+        }
+
+        const pandits = await Pandit.find(filter)
+            .select("-fcmToken")
+            .sort({ createdAt: -1 })
+            .skip((Number(page) - 1) * Number(limit))
+            .limit(Number(limit));
+
+        const total = await Pandit.countDocuments(filter);
+
+        return res.status(200).json({
+            success: true,
+            total,
+            page: Number(page),
+            totalPages: Math.ceil(total / Number(limit)),
+            data: pandits
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getPanditByIdForAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pandit = await Pandit.findById(id).select("-fcmToken");
+
+        if (!pandit) {
+            return res.status(404).json({ success: false, message: "Pandit not found" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: pandit
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const updatePanditApprovalStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!["Approved", "Rejected"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Status must be either 'Approved' or 'Rejected'"
+            });
+        }
+
+        const pandit = await Pandit.findById(id);
+        if (!pandit) {
+            return res.status(404).json({ success: false, message: "Pandit not found" });
+        }
+
+        pandit.profileApprovalStatus = status;
+        if (status === "Approved") {
+            pandit.isVerified = true;
+        }
+
+        await pandit.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Pandit profile has been ${status.toLowerCase()} successfully`,
+            data: pandit
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     verifyOtp,
     register,
@@ -319,5 +341,8 @@ module.exports = {
     updateProfile,
     deleteAccount,
     updatePanditFCMToken,
-    logoutPandit
+    logoutPandit,
+    getAllPanditsForAdmin,
+    getPanditByIdForAdmin,
+    updatePanditApprovalStatus
 };

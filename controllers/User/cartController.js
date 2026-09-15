@@ -1,9 +1,7 @@
 const Cart = require("../../models/E-comm/Cart");
 const Product = require("../../models/E-comm/Product");
 
-// ==============================
-// Add To Cart
-// ==============================
+
 exports.addToCart = async (req, res) => {
     try {
         const userId = req.user.id;
