@@ -36,9 +36,11 @@ const getPanditEarningsHistory = async (req, res) => {
         .populate('ritualId', 'title price')
         .sort({ createdAt: -1 });
 
+        const totalEarnings = acceptedBookings.reduce((acc, item) => acc + (item.paymentDetails?.amount || 0), 0);
+
         return res.status(200).json({
             success: true,
-            totalEarnings: acceptedBookings.reduce((acc, item) => acc + (item.paymentDetails?.amount || 0), 0),
+            totalEarnings: totalEarnings,
             data: acceptedBookings
         });
     } catch (error) {

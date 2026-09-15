@@ -4,6 +4,7 @@ const transactionSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     razorpay_order_id: { type: String, sparse: true }, 
     razorpay_payment_id: { type: String, sparse: true },
+    pandit: { type: mongoose.Schema.Types.ObjectId, ref: 'Pandit' }, 
     amount: { type: Number, required: true },
     currency: { type: String, default: 'INR' },
     status: { type: String, enum: ['pending', 'success', 'failed'], default: 'pending' },

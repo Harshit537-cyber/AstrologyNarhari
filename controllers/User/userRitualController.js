@@ -67,7 +67,6 @@ const createRitualBooking = async (req, res) => {
 
         const bookingAmount = amount || ritual.price || 0;
 
-     
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
@@ -170,7 +169,11 @@ const acceptRitualRequestByPandit = async (req, res) => {
     session.startTransaction();
 
     try {
-        const booking = await RitualBooking.findOne({ _id: req.params.id, panditId: req.user.id, status: 'Pending' }).session(session);
+        const booking = await RitualBooking.findOne({ 
+            _id: req.params.id, 
+            panditId: req.user.id, 
+            status: 'Pending' 
+        }).session(session);
 
         if (!booking) {
             await session.abortTransaction();
@@ -188,13 +191,12 @@ const acceptRitualRequestByPandit = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-       
         if ((user.walletBalance || 0) < bookingAmount) {
             await session.abortTransaction();
             session.endSession();
             return res.status(400).json({ 
                 success: false, 
-                message: `Cannot accept! User's wallet balance is now insufficient (Required: ₹${bookingAmount})` 
+                message: `Cannot accept! User's wallet balance is insufficient (Required: ₹${bookingAmount})` 
             });
         }
 
@@ -205,14 +207,27 @@ const acceptRitualRequestByPandit = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Pandit not found' });
         }
 
-        // Deduct from user and add to pandit
-        user.walletBalance -= bookingAmount;
+        user.walletBalance = Number(user.walletBalance) - Number(bookingAmount);
         await user.save({ session });
 
-        pandit.walletBalance = (pandit.walletBalance || 0) + bookingAmount;
+        pandit.walletBalance = Number(pandit.walletBalance || 0) + Number(bookingAmount);
         await pandit.save({ session });
 
         booking.paymentDetails.status = 'Success';
+        
+        let meetingLink = '';
+        try {
+            meetingLink = await createGoogleMeet(
+                'Ritual Pooja Session',
+                booking.schedule?.isoDateTime || booking.schedule?.date,
+                30
+            );
+        } catch (err) {
+            meetingLink = '';
+        }
+
+        booking.status = 'Accepted';
+        booking.zoomLink = meetingLink;
         await booking.save({ session });
 
         await Transaction.create([{
@@ -223,16 +238,6 @@ const acceptRitualRequestByPandit = async (req, res) => {
             type: 'debit',
             description: `Payment for accepted ritual booking: ${booking.bookingId}`
         }], { session });
-
-        const meetingLink = await createGoogleMeet(
-            'Ritual Pooja Session',
-            booking.schedule?.isoDateTime || booking.schedule?.date,
-            30
-        );
-
-        booking.status = 'Accepted';
-        booking.zoomLink = meetingLink;
-        await booking.save({ session });
 
         await session.commitTransaction();
         session.endSession();
@@ -248,7 +253,8 @@ const acceptRitualRequestByPandit = async (req, res) => {
         return res.status(200).json({ 
             success: true, 
             message: 'Request accepted and payment deducted successfully', 
-            data: booking 
+            data: booking,
+            userRemainingBalance: user.walletBalance
         });
 
     } catch (error) {
