@@ -7,7 +7,7 @@ exports.createProfile = async (req, res) => {
     const filePath = req.file ? req.file.path : null;
 
     try {
-        const { fullName, gender, dateOfBirth, timeOfBirth, placeOfBirth } = req.body;
+        const { fullName, gender, dateOfBirth, timeOfBirth, placeOfBirth, zodiac } = req.body;
         const userId = req.user.id;
 
         let user = await User.findById(userId);
@@ -21,7 +21,6 @@ exports.createProfile = async (req, res) => {
             return res.status(400).json({ success: false, message: "Profile already exists" });
         }
 
-        const zodiacSign = dateOfBirth ? getZodiacSign(dateOfBirth) : null;
 
         let profilePicUrl = "";
         if (filePath && fs.existsSync(filePath)) {
@@ -39,32 +38,31 @@ exports.createProfile = async (req, res) => {
         user.timeOfBirth = timeOfBirth;
         user.placeOfBirth = placeOfBirth;
         user.profilePic = profilePicUrl;
-        if (zodiacSign) user.zodiac = zodiacSign;
-
+        if (zodiac) user.zodiac = zodiac;
         await user.save();
 
-        return res.status(201).json({ 
-            success: true, 
+        return res.status(201).json({
+            success: true,
             message: "Profile created successfully",
-            data: user 
+            data: user
         });
 
     } catch (error) {
         if (filePath && fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+            try { fs.unlinkSync(filePath); } catch (e) { }
         }
 
-        return res.status(500).json({ 
-            success: false, 
-            message: "Server Error", 
-            error: error.message 
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
         });
     }
 };
 
 exports.getProfileForKundli = async (req, res) => {
     try {
-        const userId = req.user.id; 
+        const userId = req.user.id;
 
         const profile = await User.findById(userId).select(
             'fullName gender dateOfBirth timeOfBirth placeOfBirth profilePic'
@@ -102,11 +100,11 @@ exports.getProfile = async (req, res) => {
     try {
         const userId = req.user.id;
         const user = await User.findById(userId).select('-otp -__v');
-        
+
         if (!user) {
-            return res.status(404).json({ 
-                success: false, 
-                message: "User not found" 
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
             });
         }
 
@@ -128,7 +126,7 @@ exports.editProfile = async (req, res) => {
 
     try {
         const userId = req.user.id;
-        const { fullName, gender, dateOfBirth, timeOfBirth, placeOfBirth } = req.body;
+        const { fullName, gender, dateOfBirth, timeOfBirth, placeOfBirth, zodiac } = req.body;
 
         let user = await User.findById(userId);
         if (!user) {
@@ -146,7 +144,9 @@ exports.editProfile = async (req, res) => {
 
         if (dateOfBirth !== undefined) {
             user.dateOfBirth = dateOfBirth;
-            user.zodiac = getZodiacSign(dateOfBirth);
+        }
+        if (zodiac !== undefined) {
+            user.zodiac = zodiac;
         }
 
         if (filePath && fs.existsSync(filePath)) {
@@ -167,13 +167,13 @@ exports.editProfile = async (req, res) => {
 
     } catch (error) {
         if (filePath && fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+            try { fs.unlinkSync(filePath); } catch (e) { }
         }
 
-        return res.status(500).json({ 
-            success: false, 
-            message: "Server Error", 
-            error: error.message 
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
         });
     }
 };
