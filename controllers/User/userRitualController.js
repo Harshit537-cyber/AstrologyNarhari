@@ -67,7 +67,7 @@ const createRitualBooking = async (req, res) => {
 
         const bookingAmount = amount || ritual.price || 0;
 
-        // Check if user has sufficient wallet balance before allowing booking request
+     
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
@@ -188,7 +188,7 @@ const acceptRitualRequestByPandit = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        // Double check balance at the time of acceptance
+       
         if ((user.walletBalance || 0) < bookingAmount) {
             await session.abortTransaction();
             session.endSession();

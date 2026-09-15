@@ -6,7 +6,6 @@ const {
     getPanditEarningsHistory 
 } = require('../../controllers/Pandit/panditWalletController');
 
-// Pandit Wallet APIs
 router.get('/wallet/balance', verifyToken, isPandit, getPanditWalletBalance);
 router.get('/wallet/earnings', verifyToken, isPandit, getPanditEarningsHistory);
 

@@ -1,5 +1,5 @@
 const Pandit = require('../../models/Pandit/Pandit');
-const Transaction = require('../../models/Transaction/Transaction'); // Agar aapka transaction model common hai
+const RitualBooking = require('../../models/Ritual/RitualBooking');
 
 const getPanditWalletBalance = async (req, res) => {
     try {
@@ -28,8 +28,6 @@ const getPanditEarningsHistory = async (req, res) => {
     try {
         const panditId = req.user.id;
         
-        // Agar aap transactions ko partner/pandit ke liye bhi store karte hain ya RitualBooking se history nikalni hai
-        const RitualBooking = require('../../models/Ritual/RitualBooking');
         const acceptedBookings = await RitualBooking.find({ 
             panditId: panditId, 
             status: 'Accepted' 
