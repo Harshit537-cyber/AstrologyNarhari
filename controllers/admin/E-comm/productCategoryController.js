@@ -175,6 +175,7 @@ exports.deleteCategory = async (req, res) => {
 
 
 
+
 exports.getAllCategories = async (req, res) => {
     try {
         const {
