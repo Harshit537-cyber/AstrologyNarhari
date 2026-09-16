@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const userAuthRoutes = require("./routes/UserRoutes/userAuth");
 const partnerAuthRoutes = require("./routes/PatnerRoutes/partnerAuth");
 const panditAuthRoutes = require("./routes/PanditRoutes/panditAuth");
+const panditWalletRoutes = require("./routes/PanditRoutes/panditWalletRoutes"); 
 const adminAuthRoutes = require("./routes/AdminRoutes/adminAuth");
 const adminNotificationRoutes = require("./routes/AdminRoutes/adminNotificationRoutes");
 const bookingRoutes = require("./routes/bookingRoutes/bookingRoutes");
@@ -16,9 +17,8 @@ const cartRoutes = require("./routes/UserRoutes/cartRoutes");
 const ticketRoutes = require("./routes/ticketRoutes/ticketRoutes");
 const razorpayInstance = require("./config/razorpay");
 
-// --- NEWLY ADDED ROUTES FOR COUPON WALLET BONUS ---
 const adminCouponRoutes = require("./routes/AdminRoutes/adminCouponRoutes");
-const userCouponBonusRoutes = require("./routes/UserRoutes/userCouponRoutes"); // User apply first-time coupon route
+const userCouponBonusRoutes = require("./routes/UserRoutes/userCouponRoutes"); 
 
 const sessionRoutes = require("./routes/sessionRoutes/sessionRoutes");
 const partnerAvailabilityRoutes = require("./routes/PatnerRoutes/partnerRoutes");
@@ -34,7 +34,9 @@ app.use("/api/user", userAuthRoutes);
 app.use("/api/user/cart", cartRoutes);
 app.use("/api/partner", partnerAuthRoutes);
 app.use("/api/partner", partnerAvailabilityRoutes);
+
 app.use("/api/pandit", panditAuthRoutes);
+app.use("/api/pandit", panditWalletRoutes); 
 
 app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
 app.use("/api/review", require("./routes/review/reviewRoutes"));
@@ -47,9 +49,7 @@ app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
 
-// --- MOUNTED USER FIRST TIME COUPON/BONUS ROUTE ---
 app.use("/api/user/first-coupon", userCouponBonusRoutes); 
-// Endpoint ban jayega: POST /api/user/first-coupon/apply
 
 app.use("/api/session", sessionRoutes);
 
@@ -69,9 +69,7 @@ app.use("/api/admin/product", productRoutes);
 app.use("/api/admin/coupon", couponRoutes);
 app.use("/api/admin/insights", require("./routes/AdminRoutes/adminInsightsRoutes"));
 
-// --- MOUNTED ADMIN COUPON MANAGEMENT ROUTES ---
 app.use("/api/admin/consultation-coupons", adminCouponRoutes); 
-
 
 app.use("/api/v1/calls", require("./routes/callWebhookRoutes/callWebhookRoutes"));
 app.use("/api/agora", require("./routes/agora/agoraRoutes"));
