@@ -22,6 +22,7 @@ const userCouponBonusRoutes = require("./routes/UserRoutes/userCouponRoutes");
 
 const sessionRoutes = require("./routes/sessionRoutes/sessionRoutes");
 const partnerAvailabilityRoutes = require("./routes/PatnerRoutes/partnerRoutes");
+const partnerEarningsRoutes = require("./routes/PatnerRoutes/partnerRatingRoutes");
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use("/api/user", userAuthRoutes);
 app.use("/api/user/cart", cartRoutes);
 app.use("/api/partner", partnerAuthRoutes);
 app.use("/api/partner", partnerAvailabilityRoutes);
+app.use("/api/partner/earnings", partnerEarningsRoutes);
 
 app.use("/api/pandit", panditAuthRoutes);
 app.use("/api/pandit", panditWalletRoutes); 
