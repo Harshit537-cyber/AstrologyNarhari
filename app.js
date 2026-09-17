@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 
+const LiveSession = require("./models/Agora/LiveSession");
+const Partner = require("./models/Partner/Partner");
+
 const userAuthRoutes = require("./routes/UserRoutes/userAuth");
 const partnerAuthRoutes = require("./routes/PatnerRoutes/partnerAuth");
 const panditAuthRoutes = require("./routes/PanditRoutes/panditAuth");
@@ -16,7 +19,6 @@ const couponRoutes = require("./routes/AdminRoutes/E-comm/couponRoutes");
 const cartRoutes = require("./routes/UserRoutes/cartRoutes");
 const ticketRoutes = require("./routes/ticketRoutes/ticketRoutes");
 const razorpayInstance = require("./config/razorpay");
-
 
 const consultationRatingRoutes = require("./routes/ConsultationRatingRoutes/consultationRatingRoutes");
 
@@ -90,6 +92,37 @@ app.use("/api/admin/restrictKeyword", require("./routes/AdminRoutes/adminRestric
 app.use("/api/video/call", require("./routes/agora/videoCallRoutes"));
 app.use("/api/contact", require("./routes/contact/contactRoutes"));
 app.use("/api/video-blogs", require("./routes/Articles/videoBlogRoutes"));
+
+setInterval(async () => {
+    try {
+        const timeoutCutoff = new Date(Date.now() - 35 * 1000);
+
+        const deadSessions = await LiveSession.find({
+            status: 'Active',
+            lastActiveAt: { $lt: timeoutCutoff }
+        }).select('_id partnerId');
+
+        if (deadSessions.length > 0) {
+            const deadSessionIds = deadSessions.map(s => s._id);
+            const deadPartnerIds = deadSessions.map(s => s.partnerId);
+
+            await LiveSession.updateMany(
+                { _id: { $in: deadSessionIds } },
+                {
+                    status: 'Ended',
+                    endTime: Date.now(),
+                    viewers: [],
+                    viewerCount: 0
+                }
+            );
+
+            await Partner.updateMany(
+                { _id: { $in: deadPartnerIds } },
+                { isBusy: false }
+            );
+        }
+    } catch (err) {}
+}, 30000);
 
 app.get("/", (req, res) => {
     res.status(200).json({

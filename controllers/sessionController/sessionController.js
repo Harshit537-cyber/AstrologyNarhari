@@ -65,11 +65,12 @@ const initiateSessionRequest = async (req, res) => {
                 android: {
                     priority: 'high',
                     notification: {
+                        sound: 'ringtone2',         // ✅ Kill mode ke liye custom sound add kiya
                         defaultSound: false,
                         defaultVibrateTimings: true,
                         priority: 'max',
                         visibility: 'public',
-                        channelId: 'call_sound_v3' // ✅ Updated from 'call_sound_v2' to 'call_sound_v3'
+                        channelId: 'call_sound_v4'  // ✅ Channel ID v4 kiya
                     }
                 },
                 apns: {
@@ -78,7 +79,7 @@ const initiateSessionRequest = async (req, res) => {
                     },
                     payload: {
                         aps: {
-                            sound: 'default',
+                            sound: 'ringtone2.mp3',
                             contentAvailable: true
                         }
                     }
