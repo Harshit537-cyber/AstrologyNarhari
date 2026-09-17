@@ -1,14 +1,18 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const {verifyToken, isPartner, isAdmin} = require("../../middleware/auth")
-const partnerRatingController = require("../../controllers/Patner/partnerRatingController"); 
+const { verifyToken, isPartner } = require("../../middleware/auth");
+const {
+  getPartnerEarningsSummary,
+  getPartnerEarningsGraph,
+  getCallWiseEarnings,
+  getCallEarningById,
+} = require("../../controllers/Patner/partnerEarningsController");
 
-router.post("/submit-rating", verifyToken, isPartner, partnerRatingController.submitRating);
+router.use(verifyToken, isPartner);
 
-router.get('/all', verifyToken, isAdmin, partnerRatingController.getAllRatings);
-router.get('/stats', verifyToken, isAdmin, partnerRatingController.getRatingStats);
-router.get('/check-status', verifyToken, isPartner, partnerRatingController.checkRatingStatus);
-router.get('/my-rating', verifyToken, isPartner, partnerRatingController.getMyRating);
-
+router.get("/summary", getPartnerEarningsSummary);
+router.get("/analytics", getPartnerEarningsGraph);
+router.get("/calls", getCallWiseEarnings);
+router.get("/calls/:sessionId", getCallEarningById);
 
 module.exports = router;
