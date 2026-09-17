@@ -69,7 +69,7 @@ const initiateSessionRequest = async (req, res) => {
                         defaultVibrateTimings: true,
                         priority: 'max',
                         visibility: 'public',
-                        channelId: 'call_sound_v2'
+                        channelId: 'call_sound_v3' // ✅ Updated from 'call_sound_v2' to 'call_sound_v3'
                     }
                 },
                 apns: {
