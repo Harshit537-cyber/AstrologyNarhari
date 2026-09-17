@@ -17,6 +17,9 @@ const cartRoutes = require("./routes/UserRoutes/cartRoutes");
 const ticketRoutes = require("./routes/ticketRoutes/ticketRoutes");
 const razorpayInstance = require("./config/razorpay");
 
+
+const consultationRatingRoutes = require("./routes/ConsultationRatingRoutes/consultationRatingRoutes");
+
 const adminCouponRoutes = require("./routes/AdminRoutes/adminCouponRoutes");
 const userCouponBonusRoutes = require("./routes/UserRoutes/userCouponRoutes"); 
 
@@ -50,6 +53,8 @@ app.use("/api/banner", require("./routes/UserRoutes/bannerRoutes"));
 app.use("/api/product", require("./routes/UserRoutes/productRoutes"));
 app.use("/api/article", require("./routes/Articles/ArticleRoutes"));
 app.use("/api/call", require("./routes/callRoutes/callRoutes"));
+
+app.use("/api/consultation-rating", consultationRatingRoutes);
 
 app.use("/api/user/first-coupon", userCouponBonusRoutes); 
 
