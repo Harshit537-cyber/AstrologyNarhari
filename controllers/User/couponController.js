@@ -88,6 +88,7 @@ exports.applyCoupon = async (req, res) => {
             });
         }
 
+        
         if (cart.totalAmount < coupon.minimumOrderAmount) {
             return res.status(400).json({
                 success: false,
