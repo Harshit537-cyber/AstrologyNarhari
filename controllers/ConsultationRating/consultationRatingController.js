@@ -5,39 +5,42 @@ const Booking = require("../../models/Booking/Booking");
 const SessionRequest = require("../../models/SessionRequest/SessionRequest");
 
 const updatePartnerAverageRating = async (partnerId) => {
-  const stats = await ConsultationRating.aggregate([
-    { $match: { partner: new mongoose.Types.ObjectId(partnerId) } },
-    {
-      $group: {
-        _id: "$partner",
-        totalRatings: { $sum: 1 },
-        averageRating: { $avg: "$rating" },
+  try {
+    const stats = await ConsultationRating.aggregate([
+      { $match: { partner: new mongoose.Types.ObjectId(partnerId.toString()) } },
+      {
+        $group: {
+          _id: "$partner",
+          totalRatings: { $sum: 1 },
+          averageRating: { $avg: "$rating" },
+        },
       },
-    },
-  ]);
+    ]);
 
-  if (stats.length > 0) {
-    await Partner.findByIdAndUpdate(partnerId, {
-      averageRating: parseFloat(stats[0].averageRating.toFixed(1)),
-      totalReviews: stats[0].totalRatings,
-    });
-  } else {
-    await Partner.findByIdAndUpdate(partnerId, {
-      averageRating: 0,
-      totalReviews: 0,
-    });
-  }
+    if (stats.length > 0) {
+      await Partner.findByIdAndUpdate(partnerId, {
+        averageRating: parseFloat(stats[0].averageRating.toFixed(1)),
+        totalReviews: stats[0].totalRatings,
+      });
+    } else {
+      await Partner.findByIdAndUpdate(partnerId, {
+        averageRating: 0,
+        totalReviews: 0,
+      });
+    }
+  } catch (err) {}
 };
 
 const createConsultationRating = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { partnerId, serviceType, referenceId, rating, feedback } = req.body;
+    const userId = req.user?._id?.toString() || req.user?.id?.toString();
+    const { serviceType, referenceId, rating, feedback } = req.body || {};
+    let partnerId = req.body?.partnerId;
 
-    if (!partnerId || !serviceType || !referenceId || rating === undefined) {
+    if (!serviceType || !referenceId || rating === undefined) {
       return res.status(400).json({
         success: false,
-        message: "partnerId, serviceType, referenceId, and rating are required",
+        message: "serviceType, referenceId, and rating are required",
       });
     }
 
@@ -49,30 +52,22 @@ const createConsultationRating = async (req, res) => {
       });
     }
 
+    let sessionDoc = null;
+
     if (["call", "video_call", "chat"].includes(serviceType)) {
-      const booking = await Booking.findOne({
-        _id: referenceId,
-        user: userId,
-        partner: partnerId,
-        status: "completed",
-      });
-      if (!booking) {
+      sessionDoc = await Booking.findById(referenceId);
+      if (!sessionDoc) {
         return res.status(404).json({
           success: false,
-          message: "Completed booking session not found",
+          message: `Booking not found with ID: ${referenceId}`,
         });
       }
     } else if (["instant_call", "instant_chat"].includes(serviceType)) {
-      const session = await SessionRequest.findOne({
-        _id: referenceId,
-        user: userId,
-        partner: partnerId,
-        status: "completed",
-      });
-      if (!session) {
+      sessionDoc = await SessionRequest.findById(referenceId);
+      if (!sessionDoc) {
         return res.status(404).json({
           success: false,
-          message: "Completed instant session not found",
+          message: `Instant session not found with ID: ${referenceId}`,
         });
       }
     } else {
@@ -80,6 +75,11 @@ const createConsultationRating = async (req, res) => {
         success: false,
         message: "Invalid serviceType",
       });
+    }
+
+    const actualPartnerId = sessionDoc.partner?._id?.toString() || sessionDoc.partner?.toString();
+    if (!partnerId) {
+      partnerId = actualPartnerId;
     }
 
     const existingRating = await ConsultationRating.findOne({
@@ -96,7 +96,7 @@ const createConsultationRating = async (req, res) => {
 
     const newRating = await ConsultationRating.create({
       user: userId,
-      partner: partnerId,
+      partner: partnerId || actualPartnerId,
       serviceType,
       referenceId,
       rating: numRating,
@@ -110,7 +110,7 @@ const createConsultationRating = async (req, res) => {
       });
     }
 
-    await updatePartnerAverageRating(partnerId);
+    await updatePartnerAverageRating(partnerId || actualPartnerId);
 
     return res.status(201).json({
       success: true,
@@ -125,9 +125,45 @@ const createConsultationRating = async (req, res) => {
   }
 };
 
+const getPartnerOverallRatingById = async (req, res) => {
+  try {
+    const { partnerId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(partnerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid partnerId format",
+      });
+    }
+
+    const partner = await Partner.findById(partnerId).select("averageRating totalReviews");
+
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        message: "Partner not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      partnerId: partner._id,
+      overallRating: {
+        averageRating: partner.averageRating || 0,
+        totalReviews: partner.totalReviews || 0,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 const getPartnerRatingHistory = async (req, res) => {
   try {
-    const partnerId = req.user.id;
+    const partnerId = req.user?._id?.toString() || req.user?.id?.toString();
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -231,6 +267,7 @@ const getAdminAstrologersRatingList = async (req, res) => {
 
 module.exports = {
   createConsultationRating,
+  getPartnerOverallRatingById,
   getPartnerRatingHistory,
   getAdminAllConsultationRatings,
   getAdminAstrologersRatingList,
