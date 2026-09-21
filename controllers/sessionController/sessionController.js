@@ -65,12 +65,12 @@ const initiateSessionRequest = async (req, res) => {
                 android: {
                     priority: 'high',
                     notification: {
-                        sound: 'ringtone2',         // ✅ Kill mode ke liye custom sound add kiya
+                        sound: 'ringtone2',
                         defaultSound: false,
                         defaultVibrateTimings: true,
                         priority: 'max',
                         visibility: 'public',
-                        channelId: 'call_sound_v4'  // ✅ Channel ID v4 kiya
+                        channelId: 'call_sound_v4'
                     }
                 },
                 apns: {
@@ -84,7 +84,7 @@ const initiateSessionRequest = async (req, res) => {
                         }
                     }
                 }
-            }).catch(err => console.error("FCM Error:", err.message));
+            }).catch(() => {});
         }
 
         admin.database().ref(`session_requests/${partnerId}/${sessionRequest._id}`).set({
@@ -95,7 +95,7 @@ const initiateSessionRequest = async (req, res) => {
             durationMinutes: durationMinutes,
             status: 'pending',
             timestamp: Date.now()
-        }).catch(err => console.error("Firebase DB Error:", err.message));
+        }).catch(() => {});
 
         return res.status(200).json({
             success: true,
@@ -131,7 +131,7 @@ const cancelSessionRequest = async (req, res) => {
         await sessionReq.save();
 
         admin.database().ref(`session_requests/${sessionReq.partner}/${requestId}`).remove()
-            .catch(err => console.error("Firebase DB Error:", err.message));
+            .catch(() => {});
 
         return res.status(200).json({
             success: true,
@@ -163,7 +163,7 @@ const respondToSessionRequest = async (req, res) => {
         }
 
         admin.database().ref(`session_requests/${partnerId}/${requestId}`).remove()
-            .catch(err => console.error("Firebase DB Error:", err.message));
+            .catch(() => {});
 
         if (action === 'decline') {
             sessionReq.status = 'rejected';
@@ -196,7 +196,7 @@ const respondToSessionRequest = async (req, res) => {
                             }
                         }
                     }
-                }).catch(err => console.error("FCM Error:", err.message));
+                }).catch(() => {});
             }
 
             return res.status(200).json({ success: true, message: "Request declined successfully" });
@@ -216,7 +216,7 @@ const respondToSessionRequest = async (req, res) => {
                     partner: partnerId,
                     status: 'active',
                     createdAt: Date.now()
-                }).catch(err => console.error("Firebase DB Error:", err.message));
+                }).catch(() => {});
 
                 if (sessionReq.user && sessionReq.user.fcmToken) {
                     admin.messaging().send({
@@ -247,7 +247,7 @@ const respondToSessionRequest = async (req, res) => {
                                 }
                             }
                         }
-                    }).catch(err => console.error("FCM Error:", err.message));
+                    }).catch(() => {});
                 }
 
                 return res.status(200).json({
@@ -318,7 +318,7 @@ const respondToSessionRequest = async (req, res) => {
                                 }
                             }
                         }
-                    }).catch(err => console.error("FCM Error:", err.message));
+                    }).catch(() => {});
                 }
 
                 return res.status(200).json({
@@ -337,6 +337,68 @@ const respondToSessionRequest = async (req, res) => {
     }
 };
 
+const handleExotelCallWebhook = async (req, res) => {
+    try {
+        const payload = { ...req.query, ...req.body };
+        const requestId = payload.requestId;
+        const callSid = payload.CallSid || payload.Sid;
+        
+        let sessionReq = null;
+        if (requestId) {
+            sessionReq = await SessionRequest.findById(requestId);
+        } else if (callSid) {
+            sessionReq = await SessionRequest.findOne({ exotelCallSid: callSid });
+        }
+
+        if (!sessionReq) {
+            return res.status(200).send("NO_SESSION_FOUND");
+        }
+
+        if (sessionReq.status === 'completed') {
+            return res.status(200).send("ALREADY_COMPLETED");
+        }
+
+        const rawDurationSec = Number(
+            payload.ConversationDuration ||
+            payload.DialCallDuration ||
+            payload.Duration ||
+            0
+        );
+
+        const durationInSeconds = Math.max(0, rawDurationSec);
+        const billedMinutes = durationInSeconds > 0 ? Math.ceil(durationInSeconds / 60) : 0;
+        const ratePerMin = Number(sessionReq.ratePerMin || 10);
+        const totalDeductedAmount = billedMinutes * ratePerMin;
+
+        sessionReq.status = 'completed';
+        sessionReq.endTime = new Date();
+        sessionReq.durationInSeconds = durationInSeconds;
+        sessionReq.durationMinutes = billedMinutes;
+        sessionReq.totalDeductedAmount = totalDeductedAmount;
+        sessionReq.callStatus = payload.Status || 'completed';
+
+        if (payload.RecordingUrl) {
+            sessionReq.recordingUrl = payload.RecordingUrl;
+        }
+
+        await sessionReq.save();
+
+        if (totalDeductedAmount > 0) {
+            await User.findByIdAndUpdate(sessionReq.user, {
+                $inc: { walletBalance: -totalDeductedAmount }
+            });
+
+            await Partner.findByIdAndUpdate(sessionReq.partner, {
+                $inc: { walletBalance: totalDeductedAmount }
+            });
+        }
+
+        return res.status(200).send("OK");
+    } catch (error) {
+        return res.status(500).send(error.message);
+    }
+};
+
 const endSession = async (req, res) => {
     try {
         const { requestId } = req.body;
@@ -347,21 +409,39 @@ const endSession = async (req, res) => {
 
         const sessionReq = await SessionRequest.findById(requestId);
 
-        if (!sessionReq || sessionReq.status !== 'accepted') {
-            return res.status(400).json({ success: false, message: "Session is not active or already completed" });
+        if (!sessionReq) {
+            return res.status(404).json({ success: false, message: "Session not found" });
+        }
+
+        if (sessionReq.status === 'completed') {
+            return res.status(200).json({
+                success: true,
+                message: "Session already ended and charged",
+                durationMinutes: sessionReq.durationMinutes,
+                totalDeductedAmount: sessionReq.totalDeductedAmount
+            });
+        }
+
+        if (sessionReq.status !== 'accepted') {
+            return res.status(400).json({ success: false, message: "Session is not active" });
         }
 
         const endTime = new Date();
         const startTime = sessionReq.startTime || new Date();
         const durationInSeconds = Math.max(1, Math.ceil((endTime - startTime) / 1000));
-        const durationMinutes = Math.ceil(durationInSeconds / 60);
+        let durationMinutes = Math.ceil(durationInSeconds / 60);
 
-        const finalDuration = sessionReq.durationMinutes ? Math.min(durationMinutes, sessionReq.durationMinutes) : durationMinutes;
-        const totalDeductedAmount = finalDuration * (sessionReq.ratePerMin || 10);
+        if (sessionReq.durationMinutes && durationMinutes > sessionReq.durationMinutes) {
+            durationMinutes = sessionReq.durationMinutes;
+        }
+
+        const ratePerMin = Number(sessionReq.ratePerMin || 10);
+        const totalDeductedAmount = durationMinutes * ratePerMin;
 
         sessionReq.status = 'completed';
         sessionReq.endTime = endTime;
         sessionReq.durationInSeconds = durationInSeconds;
+        sessionReq.durationMinutes = durationMinutes;
         sessionReq.totalDeductedAmount = totalDeductedAmount;
         await sessionReq.save();
 
@@ -375,13 +455,13 @@ const endSession = async (req, res) => {
 
         if (sessionReq.chatRoomId) {
             admin.database().ref(`chats/${sessionReq.chatRoomId}`).update({ status: 'ended' })
-                .catch(err => console.error("Firebase DB Error:", err.message));
+                .catch(() => {});
         }
 
         return res.status(200).json({
             success: true,
             message: "Session ended successfully",
-            durationMinutes: finalDuration,
+            durationMinutes,
             totalDeductedAmount
         });
 
@@ -467,6 +547,7 @@ module.exports = {
     initiateSessionRequest,
     cancelSessionRequest,
     respondToSessionRequest,
+    handleExotelCallWebhook,
     endSession,
     getPartnerPendingRequests,
     getPartnerAcceptedRequests,

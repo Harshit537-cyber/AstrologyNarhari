@@ -3,20 +3,20 @@ const Partner = require('../../models/Partner/Partner');
 const User = require('../../models/User');
 const sendPushNotification = require('../../utils/notificationService');
 const mongoose = require('mongoose');
-const CallLog = require("../../models/CallLog/CallLog")
+const CallLog = require("../../models/CallLog/CallLog");
 
 exports.exotelWebhook = async (req, res) => {
-   
-    const { requestId:bookingId, auth } = req.query;
-     console.log("--- WEBHOOK TRIGGERED ---");
-    console.log("Booking ID:", bookingId);
-    console.log("Body Data:", req.body);
-    const { Status, Duration, RecordingUrl, CallSid, StartTime, EndTime } = req.body;
+    const payload = { ...req.query, ...req.body };
+    const bookingId = payload.requestId || req.query.requestId;
+    const auth = payload.auth || req.query.auth;
 
+    const Status = payload.Status;
+    const RecordingUrl = payload.RecordingUrl;
+    const CallSid = payload.CallSid || payload.Sid;
+    const StartTime = payload.StartTime;
+    const EndTime = payload.EndTime;
 
     if (auth !== process.env.MY_INTERNAL_API_KEY) {
-                console.log("AUTH FAILED: Got", auth, "Expected", process.env.MY_INTERNAL_API_KEY);
-
         return res.status(401).send("Unauthorized");
     }
 
@@ -25,7 +25,7 @@ exports.exotelWebhook = async (req, res) => {
 
     try {
         const booking = await Booking.findById(bookingId).populate('user partner').session(session);
-        if (!booking || booking.status === 'completed'|| booking.status === 'missed') {
+        if (!booking || booking.status === 'completed' || booking.status === 'missed') {
             await session.abortTransaction();
             session.endSession();
             return res.status(200).send("Already Processed");
@@ -35,55 +35,84 @@ exports.exotelWebhook = async (req, res) => {
         const partner = await Partner.findById(booking.partner._id).session(session);
         const adminUser = await User.findOne({ role: 'admin' }).session(session);
 
-
-
         if (partner) {
             partner.isBusy = false;
             await partner.save({ session });
         }
 
-        const durationSeconds = parseInt(Duration || 0);
+        const rawSec = parseInt(
+            payload.ConversationDuration ||
+            payload.DialCallDuration ||
+            payload.Duration ||
+            0,
+            10
+        );
+
+        const durationSeconds = isNaN(rawSec) ? 0 : Math.max(0, rawSec);
         const statusLower = Status ? Status.toLowerCase() : "";
-        
+
         let finalCost = 0;
         let billedMins = 0;
         let isCallSuccessful = false;
 
-        if (statusLower === 'completed' && durationSeconds >= 30) {
-            finalCost = booking.totalFee;
-            billedMins = booking.duration;
+        const ratePerMinute = Number(booking.ratePerMinute || partner?.minRate || 10);
+
+        if (statusLower === 'completed' && durationSeconds > 0) {
+            billedMins = Math.ceil(durationSeconds / 60);
+            finalCost = parseFloat((billedMins * ratePerMinute).toFixed(2));
             isCallSuccessful = true;
         }
+
         const userBalBefore = user?.walletBalance || 0;
         const partnerBalBefore = partner?.walletBalance || 0;
 
+        let pEarning = 0;
+        let aComm = 0;
 
         if (isCallSuccessful) {
+            const balanceDiff = parseFloat(((booking.totalFee || 0) - finalCost).toFixed(2));
+
+            if (user && balanceDiff !== 0) {
+                user.walletBalance = parseFloat((user.walletBalance + balanceDiff).toFixed(2));
+                await user.save({ session });
+            }
+
+            const commissionRatio = (booking.totalFee && booking.adminCommission)
+                ? (booking.adminCommission / booking.totalFee)
+                : 0;
+
+            aComm = parseFloat((finalCost * commissionRatio).toFixed(2));
+            pEarning = parseFloat((finalCost - aComm).toFixed(2));
+
             if (partner) {
-                const pEarning = booking.partnerEarning || finalCost;
                 partner.walletBalance = parseFloat((partner.walletBalance + pEarning).toFixed(2));
                 await partner.save({ session });
             }
 
-
-            if (adminUser) {
-                const aComm = booking.adminCommission || 0;
+            if (adminUser && aComm > 0) {
                 adminUser.walletBalance = parseFloat((adminUser.walletBalance + aComm).toFixed(2));
                 await adminUser.save({ session });
             }
 
             booking.status = 'completed';
             booking.paymentStatus = 'completed';
+            booking.totalFee = finalCost;
+            booking.partnerEarning = pEarning;
+            booking.adminCommission = aComm;
+            booking.duration = billedMins;
         } else {
-
             if (user) {
-                user.walletBalance = parseFloat((user.walletBalance + booking.totalFee).toFixed(2));
+                user.walletBalance = parseFloat((user.walletBalance + (booking.totalFee || 0)).toFixed(2));
                 await user.save({ session });
             }
             booking.status = 'missed';
             booking.paymentStatus = 'refunded';
+            booking.duration = 0;
+            booking.totalFee = 0;
         }
 
+        booking.actualDuration = durationSeconds;
+        await booking.save({ session });
 
         const newCallLog = new CallLog({
             bookingId: booking._id,
@@ -102,10 +131,10 @@ exports.exotelWebhook = async (req, res) => {
                 balanceAfter: partner?.walletBalance
             },
             callSid: CallSid,
-            status: Status === 'completed' ? 'completed' : (Status || 'failed'),
+            status: isCallSuccessful ? 'completed' : (Status || 'failed'),
             durationSeconds: durationSeconds,
             billedMinutes: billedMins,
-            ratePerMinute: booking.ratePerMinute,
+            ratePerMinute: ratePerMinute,
             totalCost: finalCost,
             recordingUrl: RecordingUrl || "",
             startTime: StartTime || new Date(),
@@ -113,22 +142,19 @@ exports.exotelWebhook = async (req, res) => {
         });
 
         await newCallLog.save({ session });
-        booking.actualDuration = durationSeconds;
-        await booking.save({ session });
 
         await session.commitTransaction();
         session.endSession();
-        console.log("--- SUCCESS: TRANSACTION COMMITTED ---");
 
         if (booking.status === 'completed') {
             await sendPushNotification(user?.fcmToken, { type: 'CALL_SUCCESS' }, {
                 title: "Consultation Done",
-                body: `Charged ₹${finalCost} for ${booking.duration} mins session.`
+                body: `Charged ₹${finalCost} for ${billedMins} mins session.`
             });
-        } else if (statusLower !== 'completed') {
+        } else {
             await sendPushNotification(partner?.fcmToken, { type: 'MISSED_CALL' }, {
                 title: "Missed Call",
-                body: `You missed a consultation with ${user?.fullName}`
+                body: `You missed a consultation with ${user?.fullName || 'User'}`
             });
         }
 
@@ -137,7 +163,6 @@ exports.exotelWebhook = async (req, res) => {
     } catch (error) {
         if (session.inTransaction()) await session.abortTransaction();
         session.endSession();
-        console.error("WEBHOOK_ERROR:", error);
         return res.status(500).send("Internal Error");
     }
 };

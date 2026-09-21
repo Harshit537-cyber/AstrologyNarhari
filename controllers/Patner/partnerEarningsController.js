@@ -28,7 +28,7 @@ const getPartnerEarningsSummary = async (req, res) => {
 
     const matchFilter = {
       partner: partnerMatch,
-      status: { $in: ["completed", "accepted"] },
+      status: "completed",
     };
 
     const earningExpr = {
@@ -252,7 +252,7 @@ const getPartnerEarningsGraph = async (req, res) => {
 
     const matchQuery = {
       partner: partnerMatch,
-      status: { $in: ["completed", "accepted"] },
+      status: "completed",
     };
 
     if (type) {
@@ -358,7 +358,7 @@ const getCallWiseEarnings = async (req, res) => {
 
     const query = {
       partner: partnerMatch,
-      status: { $in: ["completed", "accepted"] },
+      status: "completed",
     };
 
     if (type) {
@@ -402,18 +402,15 @@ const getCallWiseEarnings = async (req, res) => {
     ]);
 
     const formattedCalls = calls.map((call) => {
-      const durationSeconds =
-        Number(call.durationInSeconds) ||
-        (call.durationMinutes ? Number(call.durationMinutes) * 60 : 60);
-      const minutes = Math.ceil(durationSeconds / 60);
-      const amount =
-        Number(call.totalDeductedAmount) ||
-        (call.ratePerMin ? Number(call.ratePerMin) * minutes : 0);
+      const durationSeconds = Number(call.durationInSeconds) || 0;
+      const minutes = durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : Number(call.durationMinutes) || 0;
+      const rate = Number(call.ratePerMin) || 10;
+      const amount = Number(call.totalDeductedAmount) || (minutes * rate);
 
       return {
         sessionId: call._id,
         sessionType: call.type,
-        ratePerMin: call.ratePerMin || 0,
+        ratePerMin: rate,
         durationInSeconds: durationSeconds,
         durationMinutes: minutes,
         earnedAmount: amount,
@@ -483,20 +480,17 @@ const getCallEarningById = async (req, res) => {
       });
     }
 
-    const durationSeconds =
-      Number(call.durationInSeconds) ||
-      (call.durationMinutes ? Number(call.durationMinutes) * 60 : 60);
-    const minutes = Math.ceil(durationSeconds / 60);
-    const amount =
-      Number(call.totalDeductedAmount) ||
-      (call.ratePerMin ? Number(call.ratePerMin) * minutes : 0);
+    const durationSeconds = Number(call.durationInSeconds) || 0;
+    const minutes = durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : Number(call.durationMinutes) || 0;
+    const rate = Number(call.ratePerMin) || 10;
+    const amount = Number(call.totalDeductedAmount) || (minutes * rate);
 
     return res.status(200).json({
       success: true,
       data: {
         sessionId: call._id,
         sessionType: call.type,
-        ratePerMin: call.ratePerMin || 0,
+        ratePerMin: rate,
         durationInSeconds: durationSeconds,
         billedMinutes: minutes,
         earnedAmount: amount,
