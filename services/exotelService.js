@@ -10,35 +10,48 @@ const triggerExotelCall = async (
   try {
     const url = exotelConfig.getCallUrl();
 
-    const cleanNumber = (num) => {
+    // Indian mobile number ko exact 10 digits me clean karne ka standard function
+    const cleanMobileNumber = (num) => {
       if (!num) return "";
-      let clean = String(num).replace(/\D/g, "");
-      if (clean.length === 10) return "0" + clean;
-      if (clean.length === 12 && clean.startsWith("91"))
-        return "0" + clean.substring(2);
+      let clean = String(num).replace(/\D/g, ""); // saare non-numeric characters hatayein
+      
+      // Agar 12 digits hai aur 91 se start hai (+91)
+      if (clean.length === 12 && clean.startsWith("91")) {
+        return clean.substring(2);
+      }
+      // Agar 11 digits hai aur 0 se start hai (09876...)
+      if (clean.length === 11 && clean.startsWith("0")) {
+        return clean.substring(1);
+      }
+      // Agar already 10 digits hai
+      if (clean.length === 10) {
+        return clean;
+      }
       return clean;
     };
 
-    const from = cleanNumber(partnerMobile); 
-    const to = cleanNumber(userMobile); 
+    const from = cleanMobileNumber(partnerMobile); 
+    const to = cleanMobileNumber(userMobile); 
 
-    // Raw Exophone format cleaning
-    let rawExophone = String(exotelConfig.EXOPHONE || "")
+    // ExoPhone me se sirf hyphen aur space hatayein, koi extra '0' mat lagaiye
+    let callerId = String(exotelConfig.EXOPHONE || "")
       .split(",")[0]
-      .split("-")
-      .join("")
+      .replace(/[\s-]/g, "")
       .trim();
-    const callerId = cleanNumber(rawExophone);
 
-    const baseUrl = process.env.BACKEND_URL || "http://localhost:5000";
-    const callbackUrl = `${baseUrl}/api/call/webhook?requestId=${requestId}&auth=${exotelConfig.INTERNAL_KEY}`;
+    const baseUrl = process.env.BACKEND_URL || "";
+    let callbackUrl = "";
+    // Sirf tabhi callback bhejein agar backend public URL ho (localhost na ho)
+    if (baseUrl && !baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1")) {
+      callbackUrl = `${baseUrl}/api/call/webhook?requestId=${requestId}&auth=${exotelConfig.INTERNAL_KEY}`;
+    }
 
     console.log(">>>> EXOTEL FINAL PAYLOAD <<<<");
     console.log("FROM (Partner):", from);
     console.log("TO (User):", to);
-    console.log("CALLER ID:", callerId);
-    console.log("TIME LIMIT (SEC):", Math.floor(timeLimitSec));
-    console.log("CALLBACK URL:", callbackUrl);
+    console.log("CALLER ID (ExoPhone):", callerId);
+    console.log("TIME LIMIT (SEC):", Math.floor(timeLimitSec || 300));
+    console.log("CALLBACK URL:", callbackUrl || "None (Localhost/No Public URL)");
     console.log(">>>> END PAYLOAD <<<<");
 
     const params = new URLSearchParams();
@@ -48,7 +61,7 @@ const triggerExotelCall = async (
     params.append("TimeLimit", Math.floor(timeLimitSec || 300)); 
     params.append("Record", "true");
 
-    if (callbackUrl.startsWith("http")) {
+    if (callbackUrl) {
       params.append("StatusCallback", callbackUrl);
     }
 
@@ -59,14 +72,16 @@ const triggerExotelCall = async (
       },
     });
 
+    console.log("✅ Exotel Call Initiated:", response.data);
+
     return {
       success: true,
-      callSid: response.data.Call.Sid,
-      status: response.data.Call.Status,
+      callSid: response.data?.Call?.Sid,
+      status: response.data?.Call?.Status,
     };
   } catch (error) {
     console.error(
-      "Exotel Service Error:",
+      "❌ Exotel Service Error:",
       error.response
         ? JSON.stringify(error.response.data, null, 2)
         : error.message,
@@ -77,7 +92,6 @@ const triggerExotelCall = async (
     };
   }
 };
-
 
 module.exports = {
   triggerExotelCall,
