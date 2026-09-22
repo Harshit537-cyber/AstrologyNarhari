@@ -31,6 +31,10 @@ const bankAccountSchema = new mongoose.Schema({
     branchName: {
         type: String,
         trim: true
+    },
+    aadhaarNumber: {
+        type: String,
+        trim: true
     }
 }, {
     timestamps: true

@@ -10,12 +10,10 @@ const initiateSessionRequest = async (req, res) => {
     const { partnerId, type, durationMinutes } = req.body;
 
     if (!partnerId || !type || !durationMinutes) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "partnerId, type, and durationMinutes are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "partnerId, type, and durationMinutes are required",
+      });
     }
 
     if (!["chat", "call"].includes(type)) {
@@ -151,12 +149,10 @@ const cancelSessionRequest = async (req, res) => {
     }
 
     if (sessionReq.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Only pending requests can be cancelled",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Only pending requests can be cancelled",
+      });
     }
 
     sessionReq.status = "cancelled";
@@ -189,24 +185,20 @@ const respondToSessionRequest = async (req, res) => {
     }
 
     if (!["accept", "decline"].includes(action)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Action must be 'accept' or 'decline'",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Action must be 'accept' or 'decline'",
+      });
     }
 
     const sessionReq =
       await SessionRequest.findById(requestId).populate("user partner");
 
     if (!sessionReq || sessionReq.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Request expired, cancelled or already processed",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Request expired, cancelled or already processed",
+      });
     }
 
     admin
@@ -266,6 +258,7 @@ const respondToSessionRequest = async (req, res) => {
         sessionReq.chatRoomId = chatRoomId;
         await sessionReq.save();
 
+        // 1. Realtime Database me banayein
         admin
           .database()
           .ref(`chats/${chatRoomId}`)
@@ -276,6 +269,30 @@ const respondToSessionRequest = async (req, res) => {
             createdAt: Date.now(),
           })
           .catch(() => {});
+
+        // 2. ✅ FIRESTORE me conversation document banayein (ZAROORI)
+        await admin
+          .firestore()
+          .collection("conversations")
+          .doc(chatRoomId)
+          .set(
+            {
+              id: chatRoomId,
+              status: "active",
+              participants: [
+                partnerId.toString(),
+                sessionReq.user._id.toString(),
+              ],
+              userId: sessionReq.user._id.toString(),
+              partnerId: partnerId.toString(),
+              clientName: sessionReq.user.fullName || "Client",
+              partnerName: sessionReq.partner.name || "Astrologer",
+              sessionType: "chat",
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+          .catch((err) => console.log("Firestore conversation create error:", err));
 
         if (sessionReq.user && sessionReq.user.fcmToken) {
           admin
@@ -339,7 +356,7 @@ const respondToSessionRequest = async (req, res) => {
           sessionReq.partner.mobile,
           sessionReq.user.mobile,
           timeLimitSec,
-          sessionReq._id.toString(),
+          sessionReq._id.toString()
         );
 
         if (!callResult.success) {
@@ -429,7 +446,7 @@ const handleExotelCallWebhook = async (req, res) => {
       payload.ConversationDuration ||
         payload.DialCallDuration ||
         payload.Duration ||
-        0,
+        0
     );
 
     const durationInSeconds = Math.max(0, rawDurationSec);
@@ -467,37 +484,49 @@ const handleExotelCallWebhook = async (req, res) => {
   }
 };
 
-// endSession function ke andar:
+// ✅ UPDATED ROBUST endSession Function
 const endSession = async (req, res) => {
   try {
-    const { requestId } = req.body;
-    const currentUserId = req.user.id;
+    const { requestId, conversationId, chatRoomId } = req.body;
+    console.log("👉 /end API Call aayi, Body:", req.body);
 
-    if (!requestId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "requestId is required" });
+    const targetId = requestId || conversationId || chatRoomId;
+
+    if (!targetId) {
+      return res.status(400).json({
+        success: false,
+        message: "requestId, conversationId, or chatRoomId is required",
+      });
     }
 
-    const sessionReq =
-      await SessionRequest.findById(requestId).populate("partner user");
+    // 1. Session request dhundein (requestId se ya chatRoomId se)
+    const isMongoId = /^[0-9a-fA-F]{24}$/.test(targetId);
+    let sessionReq = await SessionRequest.findOne({
+      $or: [
+        ...(isMongoId ? [{ _id: targetId }] : []),
+        { chatRoomId: targetId },
+      ],
+    }).populate("partner user");
+
     if (!sessionReq) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Session not found" });
+      console.log("❌ MongoDB me session request nahi mili for ID:", targetId);
+      return res.status(404).json({ success: false, message: "Session not found" });
     }
 
     if (sessionReq.status === "completed") {
-      return res
-        .status(200)
-        .json({ success: true, message: "Session already ended" });
+      return res.status(200).json({
+        success: true,
+        message: "Session already ended",
+        durationMinutes: sessionReq.durationMinutes,
+        totalDeductedAmount: sessionReq.totalDeductedAmount,
+      });
     }
 
     const endTime = new Date();
     const startTime = sessionReq.startTime || new Date();
     const durationInSeconds = Math.max(
       1,
-      Math.ceil((endTime - startTime) / 1000),
+      Math.ceil((endTime - startTime) / 1000)
     );
     let durationMinutes = Math.ceil(durationInSeconds / 60);
 
@@ -519,22 +548,35 @@ const endSession = async (req, res) => {
     await sessionReq.save();
 
     // Wallet balance update
-    await User.findByIdAndUpdate(sessionReq.user._id, {
-      $inc: { walletBalance: -totalDeductedAmount },
-    });
-    await Partner.findByIdAndUpdate(sessionReq.partner._id, {
-      $inc: { walletBalance: totalDeductedAmount },
-    });
+    if (totalDeductedAmount > 0) {
+      if (sessionReq.user) {
+        await User.findByIdAndUpdate(sessionReq.user._id, {
+          $inc: { walletBalance: -totalDeductedAmount },
+        });
+      }
+      if (sessionReq.partner) {
+        await Partner.findByIdAndUpdate(sessionReq.partner._id, {
+          $inc: { walletBalance: totalDeductedAmount },
+        });
+      }
+    }
 
-    const endedBy =
-      currentUserId === sessionReq.user._id.toString() ? "user" : "partner";
+    const currentUserId = req.user?.id || req.user?._id;
+    const isUser =
+      sessionReq.user &&
+      currentUserId &&
+      currentUserId.toString() === sessionReq.user._id.toString();
+    const endedBy = isUser ? "user" : "partner";
 
-    // ✅ सही रास्ता: सीधे Firestore के conversation डॉक्यूमेंट को 'ended' करें
-    if (sessionReq.chatRoomId) {
+    const activeRoomId = sessionReq.chatRoomId || targetId;
+
+    // ✅ FIRESTORE STATUS UPDATE (Isse Partner App me Pop-up khulega)
+    if (activeRoomId) {
+      console.log("🔥 Updating Firestore conversation document:", activeRoomId);
       await admin
         .firestore()
         .collection("conversations")
-        .doc(sessionReq.chatRoomId)
+        .doc(activeRoomId)
         .set(
           {
             status: "ended",
@@ -543,9 +585,20 @@ const endSession = async (req, res) => {
             totalEarned: totalDeductedAmount,
             endedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
-          { merge: true },
+          { merge: true }
         )
-        .catch((err) => console.log("Firestore update error:", err));
+        .catch((err) => console.error("Firestore update error:", err));
+
+      // Realtime Database me bhi update kar dein
+      admin
+        .database()
+        .ref(`chats/${activeRoomId}`)
+        .update({
+          status: "ended",
+          durationMinutes: durationMinutes,
+          totalEarned: totalDeductedAmount,
+        })
+        .catch(() => {});
     }
 
     return res.status(200).json({
@@ -555,6 +608,7 @@ const endSession = async (req, res) => {
       totalDeductedAmount,
     });
   } catch (error) {
+    console.error("❌ endSession Error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };

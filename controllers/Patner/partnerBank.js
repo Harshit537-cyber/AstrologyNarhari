@@ -3,7 +3,7 @@ const Partner = require('../../models/Partner/Partner');
 
 const addBankAccount = async (req, res) => {
     try {
-        const { accountHolderName, bankName, accountNumber, ifscCode, branchName } = req.body;
+        const { accountHolderName, bankName, accountNumber, ifscCode, branchName, aadhaarNumber } = req.body;
 
         if (!accountHolderName || !bankName || !accountNumber || !ifscCode) {
             return res.status(400).json({
@@ -26,7 +26,8 @@ const addBankAccount = async (req, res) => {
             bankName,
             accountNumber,
             ifscCode,
-            branchName
+            branchName,
+            aadhaarNumber
         });
 
         res.status(201).json({
@@ -44,11 +45,19 @@ const addBankAccount = async (req, res) => {
 
 const updateBankAccount = async (req, res) => {
     try {
-        const { accountHolderName, bankName, accountNumber, ifscCode, branchName } = req.body;
+        const { accountHolderName, bankName, accountNumber, ifscCode, branchName, aadhaarNumber } = req.body;
+
+        const updateData = {};
+        if (accountHolderName !== undefined) updateData.accountHolderName = accountHolderName;
+        if (bankName !== undefined) updateData.bankName = bankName;
+        if (accountNumber !== undefined) updateData.accountNumber = accountNumber;
+        if (ifscCode !== undefined) updateData.ifscCode = ifscCode;
+        if (branchName !== undefined) updateData.branchName = branchName;
+        if (aadhaarNumber !== undefined) updateData.aadhaarNumber = aadhaarNumber;
 
         const bankAccount = await BankAccount.findOneAndUpdate(
             { partnerId: req.user.id },
-            { accountHolderName, bankName, accountNumber, ifscCode, branchName },
+            updateData,
             { new: true, runValidators: true }
         );
 
