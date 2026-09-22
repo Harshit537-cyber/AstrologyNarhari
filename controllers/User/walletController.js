@@ -4,7 +4,7 @@ const razorpayInstance = require('../../config/razorpay');
 const Transaction = require('../../models/Transaction/Transaction');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const admin = require('../../config/firebase'); // ✅ Firebase Admin Import
+const admin = require('../../config/firebase'); // Firebase Admin Import
 
 const chatSessionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -234,8 +234,11 @@ const endChat = async (req, res) => {
     session.startTransaction();
 
     try {
-        const { sessionId } = req.body;
+        // ✅ 1. Flutter se bheja hua conversationId bhi extract karein:
+        const { sessionId, conversationId } = req.body;
         const userId = req.user.id;
+
+        console.log("👉 /end-chat API hit! sessionId:", sessionId, "conversationId:", conversationId);
 
         if (!sessionId) {
             await session.abortTransaction();
@@ -304,44 +307,18 @@ const endChat = async (req, res) => {
                 endedAt: admin.firestore.FieldValue.serverTimestamp()
             };
 
-            const sessionStr = sessionId.toString();
-
-            // 1. Direct Document update by sessionId
-            await admin.firestore().collection("conversations").doc(sessionStr).set(endPayload, { merge: true });
-
-            // 2. Agar document kisi aur ID se bana ho jisme sessionId field ho
-            const matchedConvs = await admin.firestore().collection("conversations")
-                .where("sessionId", "==", sessionStr)
-                .get();
-
-            if (!matchedConvs.empty) {
-                matchedConvs.forEach(async (docSnap) => {
-                    await docSnap.ref.set(endPayload, { merge: true });
-                });
+            // ✅ 1. Asli Firestore conversation document update karein:
+            if (conversationId) {
+                console.log("🔥 Direct updating Firestore conversation document:", conversationId);
+                await admin.firestore().collection("conversations").doc(conversationId).set(endPayload, { merge: true });
             }
 
-            // 3. Partner ki active conversation dhund kar update karna (Zero-fail guarantee)
-            const partnerInfo = await Partner.findById(chat.partnerId);
-            const possiblePartnerUids = [
-                chat.partnerId.toString(),
-                partnerInfo?.uid,
-                partnerInfo?.firebaseUid
-            ].filter(Boolean);
-
-            for (const pUid of possiblePartnerUids) {
-                const activeConvs = await admin.firestore().collection("conversations")
-                    .where("participants", "array-contains", pUid)
-                    .get();
-
-                activeConvs.forEach(async (docSnap) => {
-                    const docData = docSnap.data();
-                    if (docData.sessionId === sessionStr || docData.status === 'active' || !docData.status) {
-                        await docSnap.ref.set(endPayload, { merge: true });
-                    }
-                });
+            // 2. Safety ke liye sessionId par bhi update karein
+            if (sessionId) {
+                await admin.firestore().collection("conversations").doc(sessionId.toString()).set(endPayload, { merge: true });
             }
 
-            console.log("🔥 Successfully updated Firestore conversation to 'ended' for session:", sessionStr);
+            console.log("✅ Successfully marked status as 'ended' in Firestore!");
         } catch (firebaseErr) {
             console.error("❌ Firestore update error in endChat:", firebaseErr);
         }
