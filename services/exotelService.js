@@ -40,7 +40,7 @@ const triggerExotelCall = async (
     const internalApiKey = process.env.MY_INTERNAL_API_KEY || exotelConfig.INTERNAL_KEY;
 
     if (baseUrl && !baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1")) {
-      callbackUrl = `${baseUrl}/api/call/webhook?requestId=${requestId}&auth=${internalApiKey}`;
+     callbackUrl = `${baseUrl}/api/v1/calls/webhook?requestId=${requestId}&auth=${internalApiKey}`;
     }
 
     const params = new URLSearchParams();
