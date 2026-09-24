@@ -18,7 +18,7 @@ const sessionRequestSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        enum: ['pending', 'accepted', 'rejected', 'timeout', 'completed', 'cancelled', 'failed'], 
+        enum: ['pending', 'accepted', 'rejected', 'timeout', 'completed', 'cancelled', 'failed', 'busy', 'no-answer'], 
         default: 'pending' 
     },
     ratePerMin: { 
@@ -36,6 +36,7 @@ const sessionRequestSchema = new mongoose.Schema({
     startTime: { type: Date },
     endTime: { type: Date },
     durationInSeconds: { type: Number, default: 0 },
+    durationMinutes: { type: Number, default: 0 }, // ✅ Yeh field add kar di gayi hai
     totalDeductedAmount: { type: Number, default: 0 }
 }, { timestamps: true });
 

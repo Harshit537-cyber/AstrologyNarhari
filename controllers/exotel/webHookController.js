@@ -3,44 +3,50 @@ const SessionRequest = require('../../models/SessionRequest/SessionRequest');
 const Partner = require('../../models/Partner/Partner');
 const User = require('../../models/User');
 const sendPushNotification = require('../../utils/notificationService');
+const mongoose = require('mongoose');
 const CallLog = require("../../models/CallLog/CallLog");
 
 exports.exotelWebhook = async (req, res) => {
+    const payload = { ...req.query, ...req.body };
+    const bookingId = payload.requestId || req.query.requestId;
+    const auth = payload.auth || req.query.auth;
+
+    const Status = payload.Status;
+    const RecordingUrl = payload.RecordingUrl;
+    const CallSid = payload.CallSid || payload.Sid;
+    const StartTime = payload.StartTime;
+    const EndTime = payload.EndTime;
+
+    if (auth !== process.env.MY_INTERNAL_API_KEY) {
+        return res.status(401).send("Unauthorized");
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-        const payload = { ...req.query, ...req.body };
-        const bookingId = payload.requestId || req.query.requestId;
-        const auth = payload.auth || req.query.auth;
-
-        const Status = payload.Status;
-        const RecordingUrl = payload.RecordingUrl;
-        const CallSid = payload.CallSid || payload.Sid;
-        const StartTime = payload.StartTime;
-        const EndTime = payload.EndTime;
-
-        if (auth !== process.env.MY_INTERNAL_API_KEY) {
-            return res.status(401).send("Unauthorized");
-        }
-
         // 1. Check Booking or SessionRequest
-        let booking = await Booking.findById(bookingId).populate('user partner');
+        let booking = await Booking.findById(bookingId).populate('user partner').session(session);
         let isSessionRequest = false;
 
         if (!booking) {
-            booking = await SessionRequest.findById(bookingId).populate('user partner');
+            booking = await SessionRequest.findById(bookingId).populate('user partner').session(session);
             isSessionRequest = true;
         }
 
-        if (!booking || booking.status === 'completed' || booking.status === 'missed') {
+        if (!booking || booking.status === 'completed' || booking.status === 'failed' || booking.status === 'rejected') {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(200).send("Already Processed");
         }
 
-        const user = await User.findById(booking.user._id || booking.user);
-        const partner = await Partner.findById(booking.partner._id || booking.partner);
-        const adminUser = await User.findOne({ role: 'admin' });
+        const user = await User.findById(booking.user._id || booking.user).session(session);
+        const partner = await Partner.findById(booking.partner._id || booking.partner).session(session);
+        const adminUser = await User.findOne({ role: 'admin' }).session(session);
 
         if (partner) {
             partner.isBusy = false;
-            await partner.save();
+            await partner.save({ session });
         }
 
         const rawSec = parseInt(
@@ -78,17 +84,17 @@ exports.exotelWebhook = async (req, res) => {
 
             if (user) {
                 user.walletBalance = Math.max(0, parseFloat((user.walletBalance - finalCost).toFixed(2)));
-                await user.save();
+                await user.save({ session });
             }
 
             if (partner) {
                 partner.walletBalance = parseFloat((partner.walletBalance + pEarning).toFixed(2));
-                await partner.save();
+                await partner.save({ session });
             }
 
             if (adminUser && aComm > 0) {
                 adminUser.walletBalance = parseFloat((adminUser.walletBalance + aComm).toFixed(2));
-                await adminUser.save();
+                await adminUser.save({ session });
             }
 
             booking.status = 'completed';
@@ -103,8 +109,9 @@ exports.exotelWebhook = async (req, res) => {
             booking.duration = billedMins;
             booking.durationMinutes = billedMins;
         } else {
-            booking.status = 'missed';
-            booking.paymentStatus = 'refunded';
+            // Fix: SessionRequest ke liye 'failed' use karenge taaki enum validation error na aaye
+            booking.status = isSessionRequest ? 'failed' : 'missed';
+            if (!isSessionRequest) booking.paymentStatus = 'refunded';
             booking.duration = 0;
             booking.durationMinutes = 0;
             if (!isSessionRequest) booking.totalFee = 0;
@@ -113,7 +120,7 @@ exports.exotelWebhook = async (req, res) => {
 
         booking.actualDuration = durationSeconds;
         booking.durationInSeconds = durationSeconds;
-        await booking.save();
+        await booking.save({ session });
 
         const newCallLog = new CallLog({
             bookingId: isSessionRequest ? null : booking._id,
@@ -142,7 +149,10 @@ exports.exotelWebhook = async (req, res) => {
             endTime: EndTime || new Date()
         });
 
-        await newCallLog.save();
+        await newCallLog.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
 
         if (booking.status === 'completed') {
             await sendPushNotification(user?.fcmToken, { type: 'CALL_SUCCESS' }, {
@@ -154,6 +164,8 @@ exports.exotelWebhook = async (req, res) => {
         return res.status(200).send("Call Logged and Processed");
 
     } catch (error) {
+        if (session.inTransaction()) await session.abortTransaction();
+        session.endSession();
         console.error("Webhook Internal Error:", error); 
         return res.status(500).send("Internal Error: " + error.message);
     }
