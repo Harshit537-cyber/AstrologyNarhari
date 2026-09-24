@@ -570,7 +570,7 @@ const endSession = async (req, res) => {
 
     const activeRoomId = sessionReq.chatRoomId || targetId;
 
-    // ✅ FIRESTORE STATUS UPDATE (Isse Partner App me Pop-up khulega)
+    
     if (activeRoomId) {
       console.log("🔥 Updating Firestore conversation document:", activeRoomId);
       await admin
