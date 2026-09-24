@@ -8,7 +8,8 @@ const {
     getPartnerPendingRequests,
     getUserRequestStatus,
     getPartnerAcceptedRequests,
-    getSessionSummary
+    getSessionSummary,
+    checkCallStatusAndSummary
 } = require('../../controllers/sessionController/sessionController');
 const { verifyToken } = require('../../middleware/auth');
 
@@ -21,6 +22,8 @@ router.get('/partner/pending-requests', verifyToken, getPartnerPendingRequests);
 router.get('/partner/accepted-requests', verifyToken, getPartnerAcceptedRequests);
 
 router.get("/session-summary/:requestId", verifyToken, getSessionSummary);
+
+router.get("/call-status-summary/:requestId", verifyToken, checkCallStatusAndSummary);
 
 router.post('/end', verifyToken, endSession);
 

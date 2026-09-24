@@ -721,6 +721,54 @@ const getSessionSummary = async (req, res) => {
 };
 
 
+// ✅ Live Call Check & Summary API for Frontend App
+const checkCallStatusAndSummary = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+
+    const sessionReq = await SessionRequest.findById(requestId)
+      .populate("partner", "fullName mobile avatar name")
+      .populate("user", "fullName mobile");
+
+    if (!sessionReq) {
+      return res.status(404).json({ success: false, message: "Session request not found" });
+    }
+
+    // Agar call abhi chal rahi hai (accepted state me hai aur completed nahi hui)
+    if (sessionReq.status === "accepted") {
+      return res.status(200).json({
+        success: true,
+        isCallActive: true, // Frontend isse pehchaan lega ki call abhi chal rahi hai
+        status: sessionReq.status,
+        message: "Call is currently active..."
+      });
+    }
+
+    // Jab call cut ho chuki hogi aur webhook apna kaam kar chuka hoga
+    return res.status(200).json({
+      success: true,
+      isCallActive: false, // Call khatam ho chuki hai
+      data: {
+        requestId: sessionReq._id,
+        type: sessionReq.type,
+        status: sessionReq.status, // 'completed' ya 'failed'
+        durationMinutes: sessionReq.durationMinutes || 0,
+        durationInSeconds: sessionReq.durationInSeconds || 0,
+        ratePerMin: sessionReq.ratePerMin || 10,
+        totalDeductedAmount: sessionReq.totalDeductedAmount || 0,
+        partnerName: sessionReq.partner?.fullName || sessionReq.partner?.name,
+        userName: sessionReq.user?.fullName,
+        recordingUrl: sessionReq.recordingUrl || null,
+        createdAt: sessionReq.createdAt,
+        endTime: sessionReq.endTime
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
 module.exports = {
   initiateSessionRequest,
   cancelSessionRequest,
@@ -730,5 +778,6 @@ module.exports = {
   getPartnerPendingRequests,
   getPartnerAcceptedRequests,
   getUserRequestStatus,
-  getSessionSummary
+  getSessionSummary,
+  checkCallStatusAndSummary
 };
