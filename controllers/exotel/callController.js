@@ -1,10 +1,12 @@
 const Booking = require('../../models/Booking/Booking');
 const Partner = require('../../models/Partner/Partner');
 const User = require('../../models/User');
+const CallLog = require('../../models/CallLog/CallLog'); // Import missing tha, add kar diya
 const { triggerExotelCall } = require('../../services/exotelService');
 const mongoose = require("mongoose");
-const sendPushNotification = require("../../utils/notificationService")
+const sendPushNotification = require("../../utils/notificationService");
 
+// 1. INITIATE CALL
 exports.initiateCall = async (req, res) => {
     const { bookingId } = req.body;
     if (!req.user || !req.user.id) {
@@ -22,9 +24,9 @@ exports.initiateCall = async (req, res) => {
         }
 
         if (booking.user._id.toString() !== userId.toString() && 
-    booking.partner._id.toString() !== userId.toString()) {
-    return res.status(403).json({ message: "Access Denied: You are not authorized for this booking" });
-}
+            booking.partner._id.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "Access Denied: You are not authorized for this booking" });
+        }
 
         if (booking.status !== 'accepted' || booking.mode !== 'Voice Call') {
             return res.status(400).json({ message: "Invalid booking status or mode" });
@@ -32,29 +34,17 @@ exports.initiateCall = async (req, res) => {
 
         const user = booking.user;
         const partner = booking.partner;
-// if (partner.isAcceptingRequests === false) {
-//             await sendPushNotification(user.fcmToken, { type: 'PARTNER_UNAVAILABLE' }, {
-//                 title: "Partner Unavailable",
-//                 body: `Astrologer ${partner.fullName || 'Partner'} is not accepting calls right now.`
-//             });
 
-//             return res.status(403).json({ 
-//                 message: "Partner is not picking up calls right now. Please try again later." 
-//             });
-//         }
-
-  if (user.walletBalance < booking.totalFee) {
+        if (user.walletBalance < booking.totalFee) {
             return res.status(400).json({ 
-                message: `Insufficient balance. You need ₹${booking.totalFee} for this ${booking.duration} min session.` 
+                message: `Insufficient balance. You need ₹${booking.totalFee} for this session.` 
             });
         }
 
         const finalTimeLimit = booking.duration * 60; 
 
-
-
         if (partner.isBusy) {
-            return res.status(400).json({ message: "Partner is busy" });
+            return res.status(400).json({ message: "Partner is busy on another call" });
         }
 
         partner.isBusy = true;
@@ -65,20 +55,20 @@ exports.initiateCall = async (req, res) => {
         if (result.success) {
             booking.callSid = result.callSid;
             await booking.save();
-            res.status(200).json({ message: "Connecting your call...", callSid: result.callSid });
+            return res.status(200).json({ message: "Connecting your call...", callSid: result.callSid });
         } else {
             partner.isBusy = false;
             await partner.save();
-            res.status(500).json({ message: "Failed to connect via Exotel" });
+            return res.status(500).json({ message: "Failed to connect via Exotel" });
         }
 
     } catch (error) {
         console.error("Call Init Error:", error);
-        res.status(500).json({ message: "Internal Server Error" });
+        return res.status(500).json({ message: "Internal Server Error" });
     }
 };
 
-
+// 2. END CALL MANUALLY
 exports.endCallManually = async (req, res) => {
     const { bookingId } = req.body;
     const userId = req.user.id; 
@@ -106,17 +96,59 @@ exports.endCallManually = async (req, res) => {
         if (booking.partner) {
             booking.partner.isBusy = false;
             await booking.partner.save();
-            console.log("Partner marked as free (isBusy: false) - via endCallManually");
         }
 
-        res.status(200).json({ message: "Call ended. Partner is now free." });
+        return res.status(200).json({ message: "Call ended. Partner is now free." });
     } catch (error) {
         console.error("End Call Error:", error);
-        res.status(500).json({ message: "Internal Server Error" });
+        return res.status(500).json({ message: "Internal Server Error" });
     }
 };
 
+// 3. GET CALL SUMMARY (KITNE MINUTE BAAT HUI)
+exports.getCallSummary = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
 
+        const totalCount = await Booking.countDocuments();
+        
+        // सबसे ताज़ा 3 असली Bookings निकालें
+        const latestBookings = await Booking.find()
+            .select('_id status mode')
+            .sort({ createdAt: -1 })
+            .limit(3);
+
+        const booking = await Booking.findById(bookingId);
+
+        if (!booking) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "Booking not found",
+                dhoondhiGayiId: bookingId,
+                totalBookingsInDb: totalCount,
+                yeRahiAsliLatestIds: latestBookings // <--- यहाँ आपको असली IDs मिलेंगी
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                bookingId: booking._id,
+                status: booking.status,
+                kitneSecondBaatHui: booking.actualDuration || 0,
+                kitneMinuteKaChargeHua: booking.duration || 0,
+                ratePerMinute: booking.ratePerMinute,
+                totalRupeesCut: booking.totalFee,
+                partnerEarning: booking.partnerEarning || 0
+            }
+        });
+
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+};
+
+// 4. GET CALL HISTORY FOR LOGGED IN USER/PARTNER
 exports.getCallHistory = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -146,8 +178,7 @@ exports.getCallHistory = async (req, res) => {
     }
 };
 
-
-
+// 5. GET CALL HISTORY BY UID (ADMIN KE LIYE)
 exports.getCallHistoryByUid = async (req, res) => {
     try {
         const { uid } = req.params; 
@@ -177,7 +208,8 @@ exports.getCallHistoryByUid = async (req, res) => {
     }
 };
 
-exports.togglePartnerAvailability =  async (req, res) => {
+// 6. TOGGLE PARTNER ONLINE/OFFLINE
+exports.togglePartnerAvailability = async (req, res) => {
     try {
         if (!req.user || !req.user.id) {
             return res.status(401).json({ message: "Authentication failed. User not found in request." });
@@ -189,8 +221,8 @@ exports.togglePartnerAvailability =  async (req, res) => {
         if (!partner) {
             return res.status(404).json({ message: "Partner not found in database." });
         }
+
         partner.isAcceptingRequests = partner.isAcceptingRequests === undefined ? false : !partner.isAcceptingRequests;
-        
         await partner.save();
 
         return res.status(200).json({ 
@@ -201,11 +233,11 @@ exports.togglePartnerAvailability =  async (req, res) => {
 
     } catch (error) {
         console.error("TOGGLE_ERROR:", error); 
-        res.status(500).json({ message: "Internal Server Error", error: error.message });
+        return res.status(500).json({ message: "Internal Server Error", error: error.message });
     }
 };
 
-
+// 7. INITIATE CHAT
 exports.initiateChat = async (req, res) => {
     const { bookingId } = req.body;
     const userId = req.user.id || req.user._id;
@@ -248,7 +280,7 @@ exports.initiateChat = async (req, res) => {
         partner.isBusy = true;
         await partner.save();
 
-        res.status(200).json({ 
+        return res.status(200).json({ 
             success: true, 
             message: "Partner available. You can proceed to chat.",
             partnerName: partner.fullName,
@@ -257,6 +289,6 @@ exports.initiateChat = async (req, res) => {
 
     } catch (error) {
         console.error("Chat Init Error:", error);
-        res.status(500).json({ message: "Internal Server Error" });
+        return res.status(500).json({ message: "Internal Server Error" });
     }
 };

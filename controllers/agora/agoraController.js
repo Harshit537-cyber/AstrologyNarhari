@@ -4,8 +4,8 @@ const { generateAgoraTokens } = require('../../services/agoraService');
 const User = require("../../models/User");
 const moment = require('moment');
 const Booking = require('../../models/Booking/Booking');
-const admin = require('firebase-admin')
-const sendPushNotification = require('../../utils/notificationService')
+const admin = require('firebase-admin');
+const sendPushNotification = require('../../utils/notificationService');
 const crypto = require('crypto');
 
 // THESE API'S FOR LIVE STREAMING
@@ -24,12 +24,13 @@ exports.startLive = async (req, res) => {
 
         const { rtcToken, rtmToken } = generateAgoraTokens(channelName, uid);
 
-       const session = await LiveSession.create({
+        const session = await LiveSession.create({
             partnerId,
             channelName,
             topic,
             category,
             startTime: Date.now(),
+            lastActiveAt: new Date(),
             status: 'Active'
         });
 
@@ -44,8 +45,6 @@ exports.startLive = async (req, res) => {
     }
 };
 
-
-
 exports.joinLive = async (req, res) => {
     try {
         const { sessionId, userId } = req.body;
@@ -59,14 +58,13 @@ exports.joinLive = async (req, res) => {
 
         const { rtcToken, rtmToken } = generateAgoraTokens(session.channelName, uid);
 
-  await LiveSession.updateOne(
+        await LiveSession.updateOne(
             { _id: sessionId, viewers: { $ne: userId } }, 
             { 
                 $addToSet: { viewers: userId }, 
                 $inc: { viewerCount: 1 }        
             }
         );
-
 
         res.status(200).json({
             success: true,
@@ -84,6 +82,34 @@ exports.joinLive = async (req, res) => {
 
 exports.getActiveSessions = async (req, res) => {
     try {
+        // Auto-cleanup: Jo sessions 35 seconds se inactive hain unhe auto-end karo
+        const timeoutCutoff = new Date(Date.now() - 35 * 1000);
+
+        const deadSessions = await LiveSession.find({
+            status: 'Active',
+            lastActiveAt: { $lt: timeoutCutoff }
+        }).select('_id partnerId');
+
+        if (deadSessions.length > 0) {
+            const deadSessionIds = deadSessions.map(s => s._id);
+            const deadPartnerIds = deadSessions.map(s => s.partnerId);
+
+            await LiveSession.updateMany(
+                { _id: { $in: deadSessionIds } },
+                {
+                    status: 'Ended',
+                    endTime: Date.now(),
+                    viewers: [],
+                    viewerCount: 0
+                }
+            );
+
+            await Partner.updateMany(
+                { _id: { $in: deadPartnerIds } },
+                { isBusy: false }
+            );
+        }
+
         const { category } = req.query;
         let query = { status: 'Active' };
 
@@ -136,7 +162,6 @@ exports.endLive = async (req, res) => {
     }
 };
 
-
 exports.leaveLive = async (req, res) => {
     try {
         const { sessionId, userId } = req.body;
@@ -160,8 +185,6 @@ exports.leaveLive = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
-
 
 exports.likeSession = async (req, res) => {
     try {
@@ -254,12 +277,16 @@ exports.likeSession = async (req, res) => {
     }
 };
 
-
 exports.getViewerCount = async (req, res) => {
     try {
         const { sessionId } = req.params;
 
-        const session = await LiveSession.findById(sessionId).select('viewerCount');
+        // Har call par lastActiveAt update hoga (Heartbeat)
+        const session = await LiveSession.findByIdAndUpdate(
+            sessionId,
+            { lastActiveAt: new Date() },
+            { new: true }
+        ).select('viewerCount');
 
         if (!session) {
             return res.status(404).json({ success: false, message: "Session does not found" });
@@ -273,8 +300,6 @@ exports.getViewerCount = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
-
 
 exports.getLikeStats = async (req, res) => {
     try {
@@ -304,7 +329,7 @@ exports.getLikeStats = async (req, res) => {
 exports.submitFeedback = async (req, res) => {
     try {
         const { bookingId, rating, review } = req.body; 
-        const userId = req.user.id; n
+        const userId = req.user.id;
 
         if (!rating || rating < 1 || rating > 5) {
             return res.status(400).json({ 
@@ -370,14 +395,7 @@ exports.submitFeedback = async (req, res) => {
     }
 };
 
-
-
-// LIVE STREAMING API'S ENDING HERE
-
-
-//----------------------------------------------------------------------------------------------------------------------------------------------
-
-// AUDIO CALL API'S STARTING HERE 
+// AUDIO CALL API'S
 
 exports.startConsultation = async (req, res) => {
     try {
@@ -408,16 +426,12 @@ exports.startConsultation = async (req, res) => {
             });
         }
 
-        // ---------- TIME CHECK ----------
         const nowMs = Date.now();
         const endTimeMs = new Date(booking.endTime).getTime();
         
-        // "Time se pehle call na hone" wala check hata diya gaya hai.
-        // Bas ye check rakha hai ki End Time nikal chuka ho to call expired ho jaye.
         if (nowMs > endTimeMs) {
             return res.status(400).json({ success: false, message: 'Session expired.' });
         }
-        // ----------------------------------
 
         const channelName = `consultation_${bookingId}`;
         const uid = Math.floor(Math.random() * 1000000); 
@@ -485,7 +499,7 @@ exports.startConsultation = async (req, res) => {
     }
 };
 
-exports.endConsultation =  async (req, res) => {
+exports.endConsultation = async (req, res) => {
     try {
         const { bookingId } = req.body;
         const currentUserId = req.user.id;
@@ -556,7 +570,6 @@ exports.endConsultation =  async (req, res) => {
         res.status(500).json({ success: false, message: 'Error ending session' });
     }
 };
-
 
 exports.handleMissedCall = async (req, res) => {
     try {

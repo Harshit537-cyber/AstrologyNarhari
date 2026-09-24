@@ -25,12 +25,19 @@ const bankAccountSchema = new mongoose.Schema({
     ifscCode: {
         type: String,
         required: true,
-        trim: true
+        trim: true,
+        uppercase: true
     },
     branchName: {
         type: String,
         trim: true
+    },
+    aadhaarNumber: {
+        type: String,
+        trim: true
     }
-}, { timestamps: true });
+}, {
+    timestamps: true
+});
 
 module.exports = mongoose.model('BankAccount', bankAccountSchema);

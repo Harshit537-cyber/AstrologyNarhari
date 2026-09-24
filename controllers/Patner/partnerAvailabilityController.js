@@ -25,12 +25,11 @@ exports.getServiceAvailability = async (req, res) => {
     }
 };
 
-// 2. Toggle specific service (audio, video, or chat)
+
 exports.toggleServiceAvailability = async (req, res) => {
     try {
         const partnerId = req.user.id;
-        const { service, status } = req.body; // service: 'audio' | 'video' | 'chat', status: true | false
-
+        const { service, status } = req.body; 
         if (!service || typeof status !== 'boolean') {
             return res.status(400).json({ 
                 success: false, 

@@ -4,6 +4,7 @@ const razorpayInstance = require('../../config/razorpay');
 const Transaction = require('../../models/Transaction/Transaction');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
+const admin = require('../../config/firebase'); // Firebase Admin Import
 
 const chatSessionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -216,7 +217,7 @@ const startChat = async (req, res) => {
             message: "Chat session started",
             data: {
                 sessionId: chatSession._id,
-                partnerName: partner.fullName,
+                partnerName: partner.fullName || partner.name,
                 ratePerMinute: minRate,
                 startTime: chatSession.startTime,
                 walletBalance: user.walletBalance,
@@ -233,8 +234,11 @@ const endChat = async (req, res) => {
     session.startTransaction();
 
     try {
-        const { sessionId } = req.body;
+        // ✅ 1. Flutter se bheja hua conversationId bhi extract karein:
+        const { sessionId, conversationId } = req.body;
         const userId = req.user.id;
+
+        console.log("👉 /end-chat API hit! sessionId:", sessionId, "conversationId:", conversationId);
 
         if (!sessionId) {
             await session.abortTransaction();
@@ -290,6 +294,34 @@ const endChat = async (req, res) => {
 
         await session.commitTransaction();
         session.endSession();
+
+        // ─────────────────────────────────────────────────────────────
+        // 🔥 FIRESTORE STATUS UPDATE (Opens Pop-up Modal in Partner App)
+        // ─────────────────────────────────────────────────────────────
+        try {
+            const endPayload = {
+                status: 'ended',
+                endedBy: 'user',
+                durationMinutes: billedMinutes,
+                totalEarned: totalDeduct,
+                endedAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            // ✅ 1. Asli Firestore conversation document update karein:
+            if (conversationId) {
+                console.log("🔥 Direct updating Firestore conversation document:", conversationId);
+                await admin.firestore().collection("conversations").doc(conversationId).set(endPayload, { merge: true });
+            }
+
+            // 2. Safety ke liye sessionId par bhi update karein
+            if (sessionId) {
+                await admin.firestore().collection("conversations").doc(sessionId.toString()).set(endPayload, { merge: true });
+            }
+
+            console.log("✅ Successfully marked status as 'ended' in Firestore!");
+        } catch (firebaseErr) {
+            console.error("❌ Firestore update error in endChat:", firebaseErr);
+        }
 
         return res.status(200).json({
             success: true,
