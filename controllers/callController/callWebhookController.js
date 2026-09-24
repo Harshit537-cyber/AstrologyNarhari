@@ -10,6 +10,8 @@ const handleExotelWebhook = async (req, res) => {
         const query = req.query || {};
         const body = req.body || {};
         const payload = { ...query, ...body };
+        
+         console.log("🔥 EXOTEL WEBHOOK PAYLOAD RECEIVED:", JSON.stringify(payload));
 
         const requestId = payload.requestId;
         const auth = payload.auth;
