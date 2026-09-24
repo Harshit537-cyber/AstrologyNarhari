@@ -1,52 +1,46 @@
 const Booking = require('../../models/Booking/Booking');
-const SessionRequest = require('../../models/SessionRequest/SessionRequest'); // ✅ 1. Yeh model import karein
+const SessionRequest = require('../../models/SessionRequest/SessionRequest');
 const Partner = require('../../models/Partner/Partner');
 const User = require('../../models/User');
 const sendPushNotification = require('../../utils/notificationService');
-const mongoose = require('mongoose');
 const CallLog = require("../../models/CallLog/CallLog");
 
 exports.exotelWebhook = async (req, res) => {
-    const payload = { ...req.query, ...req.body };
-    const bookingId = payload.requestId || req.query.requestId;
-    const auth = payload.auth || req.query.auth;
-
-    const Status = payload.Status;
-    const RecordingUrl = payload.RecordingUrl;
-    const CallSid = payload.CallSid || payload.Sid;
-    const StartTime = payload.StartTime;
-    const EndTime = payload.EndTime;
-
-    if (auth !== process.env.MY_INTERNAL_API_KEY) {
-        return res.status(401).send("Unauthorized");
-    }
-
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
-        // ✅ 2. Check karein ki yeh ID Booking ki hai ya SessionRequest ki (Instant Booking)
-        let booking = await Booking.findById(bookingId).populate('user partner').session(session);
+        const payload = { ...req.query, ...req.body };
+        const bookingId = payload.requestId || req.query.requestId;
+        const auth = payload.auth || req.query.auth;
+
+        const Status = payload.Status;
+        const RecordingUrl = payload.RecordingUrl;
+        const CallSid = payload.CallSid || payload.Sid;
+        const StartTime = payload.StartTime;
+        const EndTime = payload.EndTime;
+
+        if (auth !== process.env.MY_INTERNAL_API_KEY) {
+            return res.status(401).send("Unauthorized");
+        }
+
+        // 1. Check Booking or SessionRequest
+        let booking = await Booking.findById(bookingId).populate('user partner');
         let isSessionRequest = false;
 
         if (!booking) {
-            booking = await SessionRequest.findById(bookingId).populate('user partner').session(session);
-            isSessionRequest = true; // Yeh Instant booking hai
+            booking = await SessionRequest.findById(bookingId).populate('user partner');
+            isSessionRequest = true;
         }
 
         if (!booking || booking.status === 'completed' || booking.status === 'missed') {
-            await session.abortTransaction();
-            session.endSession();
             return res.status(200).send("Already Processed");
         }
 
-        const user = await User.findById(booking.user._id || booking.user).session(session);
-        const partner = await Partner.findById(booking.partner._id || booking.partner).session(session);
-        const adminUser = await User.findOne({ role: 'admin' }).session(session);
+        const user = await User.findById(booking.user._id || booking.user);
+        const partner = await Partner.findById(booking.partner._id || booking.partner);
+        const adminUser = await User.findOne({ role: 'admin' });
 
         if (partner) {
             partner.isBusy = false;
-            await partner.save({ session });
+            await partner.save();
         }
 
         const rawSec = parseInt(
@@ -64,7 +58,6 @@ exports.exotelWebhook = async (req, res) => {
         let billedMins = 0;
         let isCallSuccessful = false;
 
-        // Instant booking me 'ratePerMin' hota hai, normal me 'ratePerMinute'
         const ratePerMinute = Number(booking.ratePerMinute || booking.ratePerMin || partner?.minRate || 10);
 
         if (statusLower === 'completed' && durationSeconds > 0) {
@@ -79,23 +72,23 @@ exports.exotelWebhook = async (req, res) => {
         let pEarning = 0;
         let aComm = 0;
 
-        // Total fee nikalne ke liye
-        const initialFee = isSessionRequest ? (billedMins * ratePerMinute) : (booking.totalFee || 0);
-
         if (isCallSuccessful) {
-            // Instant booking ke liye wallet deduction aur partner earning
-            aComm = parseFloat((finalCost * (booking.adminCommission ? booking.adminCommission / booking.totalFee : 0.1)).toFixed(2));
+            aComm = parseFloat((finalCost * 0.1).toFixed(2)); // Default 10% commission
             pEarning = parseFloat((finalCost - aComm).toFixed(2));
 
             if (user) {
-                // Wallet balance update for instant/normal
                 user.walletBalance = Math.max(0, parseFloat((user.walletBalance - finalCost).toFixed(2)));
-                await user.save({ session });
+                await user.save();
             }
 
             if (partner) {
                 partner.walletBalance = parseFloat((partner.walletBalance + pEarning).toFixed(2));
-                await partner.save({ session });
+                await partner.save();
+            }
+
+            if (adminUser && aComm > 0) {
+                adminUser.walletBalance = parseFloat((adminUser.walletBalance + aComm).toFixed(2));
+                await adminUser.save();
             }
 
             booking.status = 'completed';
@@ -120,9 +113,8 @@ exports.exotelWebhook = async (req, res) => {
 
         booking.actualDuration = durationSeconds;
         booking.durationInSeconds = durationSeconds;
-        await booking.save({ session });
+        await booking.save();
 
-        // Call Log save karein
         const newCallLog = new CallLog({
             bookingId: isSessionRequest ? null : booking._id,
             user: {
@@ -150,17 +142,19 @@ exports.exotelWebhook = async (req, res) => {
             endTime: EndTime || new Date()
         });
 
-        await newCallLog.save({ session });
+        await newCallLog.save();
 
-        await session.commitTransaction();
-        session.endSession();
+        if (booking.status === 'completed') {
+            await sendPushNotification(user?.fcmToken, { type: 'CALL_SUCCESS' }, {
+                title: "Consultation Done",
+                body: `Charged ₹${finalCost} for ${billedMins} mins session.`
+            });
+        }
 
         return res.status(200).send("Call Logged and Processed");
 
     } catch (error) {
-        if (session.inTransaction()) await session.abortTransaction();
-        session.endSession();
-        console.error("Webhook Error:", error);
-        return res.status(500).send("Internal Error");
+        console.error("Webhook Internal Error:", error); // Ye render logs me dikhega
+        return res.status(500).send("Internal Error: " + error.message);
     }
 };
