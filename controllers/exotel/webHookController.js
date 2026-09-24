@@ -154,7 +154,7 @@ exports.exotelWebhook = async (req, res) => {
         return res.status(200).send("Call Logged and Processed");
 
     } catch (error) {
-        console.error("Webhook Internal Error:", error); // Ye render logs me dikhega
+        console.error("Webhook Internal Error:", error); 
         return res.status(500).send("Internal Error: " + error.message);
     }
 };

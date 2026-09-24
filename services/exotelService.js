@@ -36,8 +36,11 @@ const triggerExotelCall = async (
     const baseUrl = process.env.BACKEND_URL || "";
     let callbackUrl = "";
 
+    // ✅ Fix: Use process.env.MY_INTERNAL_API_KEY directly to avoid 'undefined' auth issue
+    const internalApiKey = process.env.MY_INTERNAL_API_KEY || exotelConfig.INTERNAL_KEY;
+
     if (baseUrl && !baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1")) {
-      callbackUrl = `${baseUrl}/api/call/webhook?requestId=${requestId}&auth=${exotelConfig.INTERNAL_KEY}`;
+      callbackUrl = `${baseUrl}/api/call/webhook?requestId=${requestId}&auth=${internalApiKey}`;
     }
 
     const params = new URLSearchParams();
@@ -49,6 +52,8 @@ const triggerExotelCall = async (
 
     if (callbackUrl) {
       params.append("StatusCallback", callbackUrl);
+      // Optional: Agar aapko terminal me debug ke liye dekhna ho ki kya URL ja raha hai
+      console.log("👉 Exotel StatusCallback URL:", callbackUrl);
     }
 
     const response = await axios.post(url, params, {
