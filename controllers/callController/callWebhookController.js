@@ -36,7 +36,7 @@ const handleExotelWebhook = async (req, res) => {
         // ✅ 2. Exotel status aur duration ke sahi fields uthayein
         const callStatus = (payload.Status || payload.CallStatus || 'completed').toLowerCase();
         
-        const rawSec = parseInt(
+        let rawSec = parseInt(
             payload.ConversationDuration || 
             payload.DialCallDuration || 
             payload.Duration || 
@@ -45,7 +45,17 @@ const handleExotelWebhook = async (req, res) => {
             10
         );
 
-        const durationInSeconds = isNaN(rawSec) ? 0 : Math.max(0, rawSec);
+        let durationInSeconds = isNaN(rawSec) ? 0 : Math.max(0, rawSec);
+
+        // 🛡️ Fallback: Agar Exotel ne duration 0 bheji hai, lekin call successfully connect hui thi,
+        // toh hum StartTime aur EndTime ka difference nikal kar seconds calculate kar lenge.
+        if (durationInSeconds === 0 && payload.StartTime && payload.EndTime) {
+            const start = new Date(payload.StartTime).getTime();
+            const end = new Date(payload.EndTime).getTime();
+            if (!isNaN(start) && !isNaN(end) && end > start) {
+                durationInSeconds = Math.floor((end - start) / 1000);
+            }
+        }
 
         // Jab call cut ho jaye
         if (['completed', 'failed', 'busy', 'no-answer'].includes(callStatus)) {
@@ -61,9 +71,9 @@ const handleExotelWebhook = async (req, res) => {
             }
 
             sessionReq.status = (durationInSeconds > 0 && callStatus === 'completed') ? 'completed' : 'failed';
-            sessionReq.endTime = new Date();
+            sessionReq.endTime = payload.EndTime ? new Date(payload.EndTime) : new Date();
             sessionReq.durationInSeconds = durationInSeconds;
-            sessionReq.durationMinutes = durationMinutes; // ✅ Schema me add kiya tha, yahan save hoga
+            sessionReq.durationMinutes = durationMinutes; 
             sessionReq.totalDeductedAmount = totalDeductedAmount;
             await sessionReq.save();
 
