@@ -110,12 +110,24 @@ exports.getCallSummary = async (req, res) => {
     try {
         const { bookingId } = req.params;
 
-        const booking = await Booking.findById(bookingId)
-            .populate('partner', 'fullName mobile avatar')
-            .populate('user', 'fullName mobile');
+        const totalCount = await Booking.countDocuments();
+        
+        // सबसे ताज़ा 3 असली Bookings निकालें
+        const latestBookings = await Booking.find()
+            .select('_id status mode')
+            .sort({ createdAt: -1 })
+            .limit(3);
+
+        const booking = await Booking.findById(bookingId);
 
         if (!booking) {
-            return res.status(404).json({ success: false, message: "Booking not found" });
+            return res.status(404).json({ 
+                success: false, 
+                message: "Booking not found",
+                dhoondhiGayiId: bookingId,
+                totalBookingsInDb: totalCount,
+                yeRahiAsliLatestIds: latestBookings // <--- यहाँ आपको असली IDs मिलेंगी
+            });
         }
 
         return res.status(200).json({
@@ -127,15 +139,12 @@ exports.getCallSummary = async (req, res) => {
                 kitneMinuteKaChargeHua: booking.duration || 0,
                 ratePerMinute: booking.ratePerMinute,
                 totalRupeesCut: booking.totalFee,
-                partnerName: booking.partner?.fullName,
-                userName: booking.user?.fullName,
-                recordingUrl: booking.recordingUrl || null
+                partnerEarning: booking.partnerEarning || 0
             }
         });
 
     } catch (error) {
-        console.error("GET_SUMMARY_ERROR:", error);
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ error: error.message });
     }
 };
 

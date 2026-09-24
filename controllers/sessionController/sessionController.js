@@ -685,6 +685,42 @@ const getUserRequestStatus = async (req, res) => {
   }
 };
 
+// ✅ Instant Booking (SessionRequest) Summary API
+const getSessionSummary = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+
+    const sessionReq = await SessionRequest.findById(requestId)
+      .populate("partner", "fullName mobile avatar name")
+      .populate("user", "fullName mobile");
+
+    if (!sessionReq) {
+      return res.status(404).json({ success: false, message: "Session request not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        requestId: sessionReq._id,
+        type: sessionReq.type, // 'chat' ya 'call'
+        status: sessionReq.status, // 'completed', 'pending', etc.
+        durationMinutes: sessionReq.durationMinutes || 0, // kitne min baat hui
+        durationInSeconds: sessionReq.durationInSeconds || 0,
+        ratePerMin: sessionReq.ratePerMin || 10,
+        totalDeductedAmount: sessionReq.totalDeductedAmount || 0, // kitne paise kate
+        partnerName: sessionReq.partner?.fullName || sessionReq.partner?.name,
+        userName: sessionReq.user?.fullName,
+        recordingUrl: sessionReq.recordingUrl || null,
+        createdAt: sessionReq.createdAt,
+        endTime: sessionReq.endTime
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
 module.exports = {
   initiateSessionRequest,
   cancelSessionRequest,
@@ -694,4 +730,5 @@ module.exports = {
   getPartnerPendingRequests,
   getPartnerAcceptedRequests,
   getUserRequestStatus,
+  getSessionSummary
 };
