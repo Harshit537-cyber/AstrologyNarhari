@@ -258,7 +258,6 @@ const respondToSessionRequest = async (req, res) => {
         sessionReq.chatRoomId = chatRoomId;
         await sessionReq.save();
 
-        // 1. Realtime Database me banayein
         admin
           .database()
           .ref(`chats/${chatRoomId}`)
@@ -270,7 +269,6 @@ const respondToSessionRequest = async (req, res) => {
           })
           .catch(() => {});
 
-        // 2. ✅ FIRESTORE me conversation document banayein (ZAROORI)
         await admin
           .firestore()
           .collection("conversations")
@@ -292,7 +290,7 @@ const respondToSessionRequest = async (req, res) => {
             },
             { merge: true }
           )
-          .catch((err) => console.log("Firestore conversation create error:", err));
+          .catch(() => {});
 
         if (sessionReq.user && sessionReq.user.fcmToken) {
           admin
@@ -347,8 +345,7 @@ const respondToSessionRequest = async (req, res) => {
         if (userWallet < requiredAmount) {
           return res.status(400).json({
             success: false,
-            message:
-              "User wallet balance has dropped below required amount for this call duration.",
+            message: "User wallet balance has dropped below required amount for this call duration.",
           });
         }
 
@@ -421,104 +418,9 @@ const respondToSessionRequest = async (req, res) => {
   }
 };
 
-// const handleExotelCallWebhook = async (req, res) => {
-//   try {
-//     const payload = { ...req.query, ...req.body };
-//     const requestId = payload.requestId;
-//     const callSid = payload.CallSid || payload.Sid;
-
-//     let sessionReq = null;
-//     if (requestId) {
-//       sessionReq = await SessionRequest.findById(requestId);
-//     } else if (callSid) {
-//       sessionReq = await SessionRequest.findOne({ exotelCallSid: callSid });
-//     }
-
-//     if (!sessionReq) {
-//       return res.status(200).send("NO_SESSION_FOUND");
-//     }
-
-//     // Agar call pehle hi completed ya failed hai, toh dubara process mat karo (Duplicate webhook prevention)
-//     if (sessionReq.status === "completed" || sessionReq.status === "failed") {
-//       return res.status(200).send("ALREADY_PROCESSED");
-//     }
-
-//     const callStatus = (payload.Status || payload.CallStatus || 'completed').toLowerCase();
-
-//     // Exotel se duration nikalne ki koshish karein
-//     let rawSec = parseInt(
-//       payload.ConversationDuration ||
-//       payload.RecordingDuration ||
-//       payload.DialCallDuration ||
-//       payload.Duration ||
-//       payload.CallDuration ||
-//       0,
-//       10
-//     );
-
-//     let durationInSeconds = isNaN(rawSec) ? 0 : Math.max(0, rawSec);
-
-//     // 🔥 MAIN FIX: Agar Exotel 0 duration bhej raha hai, toh hum khud startTime se calculate karenge
-//     if (durationInSeconds === 0 && sessionReq.startTime) {
-//       const start = new Date(sessionReq.startTime).getTime();
-//       const end = new Date().getTime();
-//       durationInSeconds = Math.max(1, Math.floor((end - start) / 1000));
-//     }
-
-//     // Agar call cancel, busy ya no-answer thi ya duration bilkul kam hai
-//     if (durationInSeconds <= 5 || callStatus === 'busy' || callStatus === 'no-answer' || callStatus === 'failed') {
-//       sessionReq.status = 'failed';
-//       sessionReq.endTime = new Date();
-//       sessionReq.durationInSeconds = 0;
-//       sessionReq.durationMinutes = 0;
-//       sessionReq.totalDeductedAmount = 0;
-//       await sessionReq.save();
-//       return res.status(200).send("CALL_FAILED_OR_TOO_SHORT");
-//     }
-
-//     // 🧮 EXACT PER-MINUTE CALCULATION (Jaise 65 sec = 2 min)
-//     let durationMinutes = Math.ceil(durationInSeconds / 60);
-//     const ratePerMin = Number(sessionReq.ratePerMin || 10);
-//     let totalDeductedAmount = durationMinutes * ratePerMin;
-
-//     sessionReq.status = "completed";
-//     sessionReq.endTime = new Date();
-//     sessionReq.durationInSeconds = durationInSeconds;
-//     sessionReq.durationMinutes = durationMinutes;
-//     sessionReq.totalDeductedAmount = totalDeductedAmount;
-//     sessionReq.callStatus = callStatus;
-
-//     if (payload.RecordingUrl) {
-//       sessionReq.recordingUrl = payload.RecordingUrl;
-//     }
-
-//     await sessionReq.save();
-
-//     // 💰 EXACT WALLET DEDUCTION (Sirf ek baar chalega)
-//     if (totalDeductedAmount > 0) {
-//       await User.findByIdAndUpdate(sessionReq.user, {
-//         $inc: { walletBalance: -totalDeductedAmount },
-//       });
-
-//       await Partner.findByIdAndUpdate(sessionReq.partner, {
-//         $inc: { walletBalance: totalDeductedAmount },
-//       });
-//     }
-
-//     console.log(`>>> REVENUE CAPTURED! RequestId: ${requestId}, Duration: ${durationInSeconds}s (${durationMinutes} mins), Deducted: ₹${totalDeductedAmount} <<<`);
-
-//     return res.status(200).send("OK");
-//   } catch (error) {
-//     console.error("Exotel Webhook Error:", error.message);
-//     return res.status(500).send(error.message);
-//   }
-// };
-
 const endSession = async (req, res) => {
   try {
     const { requestId, conversationId, chatRoomId } = req.body;
-    console.log("👉 /end API Call aayi, Body:", req.body);
-
     const targetId = requestId || conversationId || chatRoomId;
 
     if (!targetId) {
@@ -540,7 +442,6 @@ const endSession = async (req, res) => {
       return res.status(404).json({ success: false, message: "Session not found" });
     }
 
-    // 🛡️ AGAR PEHLE SE COMPLETED HAI (Exotel webhook ya pehli request se)
     if (sessionReq.status === "completed") {
       return res.status(200).json({
         success: true,
@@ -559,9 +460,8 @@ const endSession = async (req, res) => {
     const ratePerMin = Number(sessionReq.ratePerMin || 10);
     let totalDeductedAmount = durationMinutes * ratePerMin;
 
-    // 🔒 ATOMIC UPDATE: Ek hi baar status completed hoga, agar koi doosri request aayi toh wo fail ho jayegi
     const updatedSession = await SessionRequest.findOneAndUpdate(
-      { _id: sessionReq._id, status: { $ne: "completed" } }, // Sirf tab update karo jab completed na ho
+      { _id: sessionReq._id, status: { $ne: "completed" } },
       {
         $set: {
           status: "completed",
@@ -574,7 +474,6 @@ const endSession = async (req, res) => {
       { new: true }
     );
 
-    // Agar kisi aur parallel request (jaise webhook) ne ise just abhi completed kar diya ho
     if (!updatedSession) {
       const freshReq = await SessionRequest.findById(sessionReq._id);
       return res.status(200).json({
@@ -585,7 +484,6 @@ const endSession = async (req, res) => {
       });
     }
 
-    // 💰 WALLET DEDUCTION (Sirf ek hi baar chalega)
     if (totalDeductedAmount > 0) {
       if (sessionReq.user) {
         await User.findByIdAndUpdate(sessionReq.user._id, {
@@ -627,7 +525,6 @@ const endSession = async (req, res) => {
       totalDeductedAmount,
     });
   } catch (error) {
-    console.error("❌ endSession Error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -704,7 +601,6 @@ const getUserRequestStatus = async (req, res) => {
   }
 };
 
-
 const getSessionSummary = async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -739,7 +635,43 @@ const getSessionSummary = async (req, res) => {
   }
 };
 
+// 🔒 TOKEN BASED USER SESSION HISTORY
+const getUserSessionHistory = async (req, res) => {
+  try {
+    const userId = req.user.id;
 
+    const sessionRequests = await SessionRequest.find({
+      user: userId,
+      status: { $in: ["completed", "failed", "rejected"] }
+    })
+      .populate("partner", "fullName mobile avatar name")
+      .populate("user", "fullName mobile")
+      .sort({ createdAt: -1 });
+
+    const formattedHistory = sessionRequests.map(sessionReq => ({
+      requestId: sessionReq._id,
+      type: sessionReq.type,
+      status: sessionReq.status,
+      durationMinutes: sessionReq.durationMinutes || 0,
+      durationInSeconds: sessionReq.durationInSeconds || 0,
+      ratePerMin: sessionReq.ratePerMin || 10,
+      totalDeductedAmount: sessionReq.totalDeductedAmount || 0,
+      partnerName: sessionReq.partner?.fullName || sessionReq.partner?.name,
+      userName: sessionReq.user?.fullName,
+      recordingUrl: sessionReq.recordingUrl || null,
+      createdAt: sessionReq.createdAt,
+      endTime: sessionReq.endTime
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: formattedHistory.length,
+      data: formattedHistory
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 const checkCallStatusAndSummary = async (req, res) => {
   try {
@@ -753,7 +685,6 @@ const checkCallStatusAndSummary = async (req, res) => {
       return res.status(404).json({ success: false, message: "Session request not found" });
     }
 
-  
     if (sessionReq.status === "accepted") {
       return res.status(200).json({
         success: true,
@@ -763,14 +694,13 @@ const checkCallStatusAndSummary = async (req, res) => {
       });
     }
 
-
     return res.status(200).json({
       success: true,
       isCallActive: false, 
       data: {
         requestId: sessionReq._id,
         type: sessionReq.type,
-        status: sessionReq.status, // 'completed' ya 'failed'
+        status: sessionReq.status,
         durationMinutes: sessionReq.durationMinutes || 0,
         durationInSeconds: sessionReq.durationInSeconds || 0,
         ratePerMin: sessionReq.ratePerMin || 10,
@@ -787,7 +717,6 @@ const checkCallStatusAndSummary = async (req, res) => {
   }
 };
 
-
 module.exports = {
   initiateSessionRequest,
   cancelSessionRequest,
@@ -797,5 +726,6 @@ module.exports = {
   getPartnerAcceptedRequests,
   getUserRequestStatus,
   getSessionSummary,
+  getUserSessionHistory,
   checkCallStatusAndSummary
 };
