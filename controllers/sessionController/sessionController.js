@@ -540,33 +540,52 @@ const endSession = async (req, res) => {
       return res.status(404).json({ success: false, message: "Session not found" });
     }
 
+    // 🛡️ AGAR PEHLE SE COMPLETED HAI (Exotel webhook ya pehli request se)
     if (sessionReq.status === "completed") {
       return res.status(200).json({
         success: true,
         message: "Session already ended",
-        durationMinutes: sessionReq.durationMinutes,
-        totalDeductedAmount: sessionReq.totalDeductedAmount,
+        durationMinutes: sessionReq.durationMinutes || 0,
+        totalDeductedAmount: sessionReq.totalDeductedAmount || 0,
       });
     }
 
     const endTime = new Date();
     const startTime = sessionReq.startTime ? new Date(sessionReq.startTime) : endTime;
     
-    // Seconds calculate karein
     let durationInSeconds = Math.max(1, Math.floor((endTime.getTime() - startTime.getTime()) / 1000));
     let durationMinutes = Math.ceil(durationInSeconds / 60);
 
     const ratePerMin = Number(sessionReq.ratePerMin || 10);
     let totalDeductedAmount = durationMinutes * ratePerMin;
 
-    sessionReq.status = "completed";
-    sessionReq.endTime = endTime;
-    sessionReq.durationInSeconds = durationInSeconds;
-    sessionReq.durationMinutes = durationMinutes;
-    sessionReq.totalDeductedAmount = totalDeductedAmount;
-    await sessionReq.save();
+    // 🔒 ATOMIC UPDATE: Ek hi baar status completed hoga, agar koi doosri request aayi toh wo fail ho jayegi
+    const updatedSession = await SessionRequest.findOneAndUpdate(
+      { _id: sessionReq._id, status: { $ne: "completed" } }, // Sirf tab update karo jab completed na ho
+      {
+        $set: {
+          status: "completed",
+          endTime: endTime,
+          durationInSeconds: durationInSeconds,
+          durationMinutes: durationMinutes,
+          totalDeductedAmount: totalDeductedAmount
+        }
+      },
+      { new: true }
+    );
 
-    // Wallet balance update
+    // Agar kisi aur parallel request (jaise webhook) ne ise just abhi completed kar diya ho
+    if (!updatedSession) {
+      const freshReq = await SessionRequest.findById(sessionReq._id);
+      return res.status(200).json({
+        success: true,
+        message: "Session already ended by another process",
+        durationMinutes: freshReq?.durationMinutes || durationMinutes,
+        totalDeductedAmount: freshReq?.totalDeductedAmount || totalDeductedAmount,
+      });
+    }
+
+    // 💰 WALLET DEDUCTION (Sirf ek hi baar chalega)
     if (totalDeductedAmount > 0) {
       if (sessionReq.user) {
         await User.findByIdAndUpdate(sessionReq.user._id, {
