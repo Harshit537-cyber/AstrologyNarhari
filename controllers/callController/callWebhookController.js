@@ -1,6 +1,7 @@
 const SessionRequest = require('../../models/SessionRequest/SessionRequest');
 const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
+const admin = require('firebase-admin');
 
 const handleExotelWebhook = async (req, res) => {
     try {
@@ -10,7 +11,6 @@ const handleExotelWebhook = async (req, res) => {
 
         console.log("📥 Exotel Webhook Payload Received:", payload);
 
-        // RequestId ko alag-alag key formats se dhundne ki koshish karein (Exotel CustomField ya query/body)
         const requestId = payload.requestId || payload.CustomField || payload.custom_field;
 
         if (!requestId) {
@@ -24,14 +24,12 @@ const handleExotelWebhook = async (req, res) => {
             return res.status(200).json({ success: true, message: "Session request not found" });
         }
 
-        // Agar pehle se processed hai toh dobara mat chalao
         if (sessionReq.status === 'completed' || sessionReq.status === 'failed' || sessionReq.status === 'rejected') {
             return res.status(200).json({ success: true, message: "Session already processed" });
         }
 
         const callStatus = (payload.Status || payload.CallStatus || 'completed').toLowerCase();
         
-        // Exotel ke alag-alag duration parameters check karo
         let rawSec = parseInt(
             payload.ConversationDuration || 
             payload.RecordingDuration ||  
@@ -44,14 +42,12 @@ const handleExotelWebhook = async (req, res) => {
 
         let durationInSeconds = isNaN(rawSec) ? 0 : Math.max(0, rawSec);
 
-        // 🔥 MAIN FIX: Agar Exotel duration 0 bhej raha hai, toh hum khud startTime aur current time ka difference nikalenge
         if (durationInSeconds <= 1 && sessionReq.startTime) {
             const start = new Date(sessionReq.startTime).getTime();
             const end = new Date().getTime();
             durationInSeconds = Math.max(1, Math.floor((end - start) / 1000));
         }
 
-        // Agar call bilkul hi nahi uthi ya failed thi
         if (durationInSeconds <= 3 || callStatus === 'busy' || callStatus === 'no-answer' || callStatus === 'failed') {
             sessionReq.status = 'failed';
             sessionReq.endTime = new Date();
@@ -59,10 +55,21 @@ const handleExotelWebhook = async (req, res) => {
             sessionReq.durationMinutes = 0;
             sessionReq.totalDeductedAmount = 0;
             await sessionReq.save();
+
+            try {
+                await admin.firestore().collection('conversations').doc(requestId).set({
+                    status: 'failed',
+                    durationMinutes: 0,
+                    totalEarned: 0,
+                    endedBy: 'exotel'
+                }, { merge: true });
+            } catch (fbErr) {
+                console.error("Firebase update error:", fbErr.message);
+            }
+
             return res.status(200).json({ success: true, message: "Call was not answered or too short" });
         }
 
-        // 🧮 EXACT PER-MINUTE CALCULATION (Jaise 65 sec = 2 min, 130 sec = 3 min)
         let durationMinutes = Math.ceil(durationInSeconds / 60);
         const ratePerMin = Number(sessionReq.ratePerMin || 10);
         let totalDeductedAmount = durationMinutes * ratePerMin;
@@ -74,7 +81,6 @@ const handleExotelWebhook = async (req, res) => {
         sessionReq.totalDeductedAmount = totalDeductedAmount;
         await sessionReq.save();
 
-        // 💰 EXACT WALLET DEDUCTION
         if (totalDeductedAmount > 0) {
             await User.findByIdAndUpdate(sessionReq.user, {
                 $inc: { walletBalance: -totalDeductedAmount }
@@ -83,6 +89,17 @@ const handleExotelWebhook = async (req, res) => {
             await Partner.findByIdAndUpdate(sessionReq.partner, {
                 $inc: { walletBalance: totalDeductedAmount }
             });
+        }
+
+        try {
+            await admin.firestore().collection('conversations').doc(requestId).set({
+                status: 'completed',
+                durationMinutes: durationMinutes,
+                totalEarned: totalDeductedAmount,
+                endedBy: 'exotel'
+            }, { merge: true });
+        } catch (fbErr) {
+            console.error("Firebase update error:", fbErr.message);
         }
 
         console.log(`>>> REVENUE CAPTURED! RequestId: ${requestId}, Exact Duration: ${durationInSeconds}s (${durationMinutes} mins), Deducted: ₹${totalDeductedAmount} <<<`);
