@@ -52,7 +52,7 @@ const triggerExotelCall = async (
 
     if (callbackUrl) {
       params.append("StatusCallback", callbackUrl);
-      // Optional: Agar aapko terminal me debug ke liye dekhna ho ki kya URL ja raha hai
+     
       console.log("👉 Exotel StatusCallback URL:", callbackUrl);
     }
 
