@@ -773,7 +773,6 @@ module.exports = {
   initiateSessionRequest,
   cancelSessionRequest,
   respondToSessionRequest,
-  handleExotelCallWebhook,
   endSession,
   getPartnerPendingRequests,
   getPartnerAcceptedRequests,
