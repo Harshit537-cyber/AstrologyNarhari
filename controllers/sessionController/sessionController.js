@@ -635,18 +635,23 @@ const getSessionSummary = async (req, res) => {
   }
 };
 
-// 🔒 TOKEN BASED USER SESSION HISTORY
 const getUserSessionHistory = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const currentId = req.user.id;
+    console.log("🔍 Fetching history for ID from token:", currentId);
 
+    // Pehle bina kisi status filter ke check karte hain ki is ID se koi record hai bhi ya nahi
     const sessionRequests = await SessionRequest.find({
-      user: userId,
-      status: { $in: ["completed", "failed", "rejected"] }
+      $or: [
+        { user: currentId },
+        { partner: currentId }
+      ]
     })
       .populate("partner", "fullName mobile avatar name")
       .populate("user", "fullName mobile")
       .sort({ createdAt: -1 });
+
+    console.log("📦 Total records found in DB for this ID:", sessionRequests.length);
 
     const formattedHistory = sessionRequests.map(sessionReq => ({
       requestId: sessionReq._id,
@@ -669,6 +674,7 @@ const getUserSessionHistory = async (req, res) => {
       data: formattedHistory
     });
   } catch (error) {
+    console.error("❌ getUserSessionHistory Error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
