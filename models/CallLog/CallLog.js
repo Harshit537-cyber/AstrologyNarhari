@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const callLogSchema = new mongoose.Schema({
-    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', required: true },
+    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking',  required: false,default: null },
     
     user: {
         id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

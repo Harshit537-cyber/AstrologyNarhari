@@ -4,7 +4,7 @@ const razorpayInstance = require('../../config/razorpay');
 const Transaction = require('../../models/Transaction/Transaction');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const admin = require('../../config/firebase'); // Firebase Admin Import
+const admin = require('../../config/firebase');
 
 const chatSessionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -36,13 +36,13 @@ const addMoney = async (req, res) => {
         user.walletBalance = (user.walletBalance || 0) + Number(amount);
         await user.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'Money added to wallet successfully',
             walletBalance: user.walletBalance
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -55,12 +55,12 @@ const getBalance = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             walletBalance: user.walletBalance || 0
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -72,7 +72,8 @@ const createOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: "Minimum amount should be ₹1" });
         }
 
-        const userExists = await User.findById(userId);
+        const targetUserId = userId || req.user.id;
+        const userExists = await User.findById(targetUserId);
         if (!userExists) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
@@ -81,24 +82,24 @@ const createOrder = async (req, res) => {
             amount: Math.round(amount * 100), 
             currency: "INR",
             receipt: `rcpt_${Date.now()}`,
-            notes: { userId } 
+            notes: { userId: targetUserId } 
         };
 
         const order = await razorpayInstance.orders.create(options);
 
         await Transaction.create({
-            user: userId,
+            user: targetUserId,
             razorpay_order_id: order.id,
             amount: amount, 
             status: 'pending',
             type: 'deposit'
         });
 
-        res.status(200).json({ success: true, order });
+        return res.status(200).json({ success: true, order });
 
     } catch (error) {
         console.error("CRITICAL: Razorpay Order Creation Failed", error);
-        res.status(500).json({ success: false, message: "Could not initiate payment. Try again." });
+        return res.status(500).json({ success: false, message: "Could not initiate payment. Try again." });
     }
 };
 
@@ -110,6 +111,8 @@ const verifyPayment = async (req, res) => {
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
         if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ success: false, message: "Missing payment details" });
         }
 
@@ -117,11 +120,13 @@ const verifyPayment = async (req, res) => {
         
         if (!transaction) {
             await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ success: false, message: "Transaction record not found" });
         }
 
         if (transaction.status !== 'pending') {
             await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ success: false, message: "Payment already processed or invalid" });
         }
 
@@ -134,6 +139,7 @@ const verifyPayment = async (req, res) => {
             transaction.status = 'failed';
             await transaction.save({ session });
             await session.commitTransaction();
+            session.endSession();
             return res.status(400).json({ success: false, message: "Payment verification failed: Signature Mismatch" });
         }
 
@@ -156,7 +162,7 @@ const verifyPayment = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: "Wallet recharged successfully!",
             balance: updatedUser.walletBalance
@@ -165,7 +171,7 @@ const verifyPayment = async (req, res) => {
     } catch (error) {
         await session.abortTransaction();
         session.endSession();
-        res.status(500).json({ success: false, message: "An error occurred during verification" });
+        return res.status(500).json({ success: false, message: "An error occurred during verification" });
     }
 };
 
@@ -190,7 +196,7 @@ const startChat = async (req, res) => {
             return res.status(400).json({ success: false, message: "Astrologer is busy with someone else" });
         }
 
-        const minRate = partner.minRate || 5;
+        const minRate = partner.minRate || partner.ratePerMinute || 5;
 
         if ((user.walletBalance || 0) < minRate) {
             return res.status(400).json({
@@ -234,25 +240,25 @@ const endChat = async (req, res) => {
     session.startTransaction();
 
     try {
-        // ✅ 1. Flutter se bheja hua conversationId bhi extract karein:
         const { sessionId, conversationId } = req.body;
         const userId = req.user.id;
 
-        console.log("👉 /end-chat API hit! sessionId:", sessionId, "conversationId:", conversationId);
-
         if (!sessionId) {
             await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ success: false, message: "sessionId is required" });
         }
 
         const chat = await ChatSession.findById(sessionId).session(session);
         if (!chat) {
             await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ success: false, message: "Chat session not found" });
         }
 
         if (chat.status !== 'active') {
             await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ success: false, message: "This chat session has already ended" });
         }
 
@@ -265,12 +271,17 @@ const endChat = async (req, res) => {
         const user = await User.findById(userId).session(session);
         const partner = await Partner.findById(chat.partnerId).session(session);
 
+        if (!user || !partner) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ success: false, message: "User or Partner not found" });
+        }
+
         if (user.walletBalance < totalDeduct) {
             totalDeduct = user.walletBalance > 0 ? user.walletBalance : 0;
         }
 
         user.walletBalance -= totalDeduct;
-
         partner.walletBalance = (partner.walletBalance || 0) + totalDeduct;
         partner.isBusy = false; 
 
@@ -295,9 +306,6 @@ const endChat = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        // ─────────────────────────────────────────────────────────────
-        // 🔥 FIRESTORE STATUS UPDATE (Opens Pop-up Modal in Partner App)
-        // ─────────────────────────────────────────────────────────────
         try {
             const endPayload = {
                 status: 'ended',
@@ -307,20 +315,15 @@ const endChat = async (req, res) => {
                 endedAt: admin.firestore.FieldValue.serverTimestamp()
             };
 
-            // ✅ 1. Asli Firestore conversation document update karein:
             if (conversationId) {
-                console.log("🔥 Direct updating Firestore conversation document:", conversationId);
                 await admin.firestore().collection("conversations").doc(conversationId).set(endPayload, { merge: true });
             }
 
-            // 2. Safety ke liye sessionId par bhi update karein
             if (sessionId) {
                 await admin.firestore().collection("conversations").doc(sessionId.toString()).set(endPayload, { merge: true });
             }
-
-            console.log("✅ Successfully marked status as 'ended' in Firestore!");
         } catch (firebaseErr) {
-            console.error("❌ Firestore update error in endChat:", firebaseErr);
+            console.error("Firestore update error in endChat:", firebaseErr);
         }
 
         return res.status(200).json({

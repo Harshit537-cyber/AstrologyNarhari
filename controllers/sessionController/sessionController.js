@@ -258,7 +258,6 @@ const respondToSessionRequest = async (req, res) => {
         sessionReq.chatRoomId = chatRoomId;
         await sessionReq.save();
 
-        // 1. Realtime Database me banayein
         admin
           .database()
           .ref(`chats/${chatRoomId}`)
@@ -270,7 +269,6 @@ const respondToSessionRequest = async (req, res) => {
           })
           .catch(() => {});
 
-        // 2. ✅ FIRESTORE me conversation document banayein (ZAROORI)
         await admin
           .firestore()
           .collection("conversations")
@@ -292,7 +290,7 @@ const respondToSessionRequest = async (req, res) => {
             },
             { merge: true }
           )
-          .catch((err) => console.log("Firestore conversation create error:", err));
+          .catch(() => {});
 
         if (sessionReq.user && sessionReq.user.fcmToken) {
           admin
@@ -347,8 +345,7 @@ const respondToSessionRequest = async (req, res) => {
         if (userWallet < requiredAmount) {
           return res.status(400).json({
             success: false,
-            message:
-              "User wallet balance has dropped below required amount for this call duration.",
+            message: "User wallet balance has dropped below required amount for this call duration.",
           });
         }
 
@@ -421,75 +418,9 @@ const respondToSessionRequest = async (req, res) => {
   }
 };
 
-const handleExotelCallWebhook = async (req, res) => {
-  try {
-    const payload = { ...req.query, ...req.body };
-    const requestId = payload.requestId;
-    const callSid = payload.CallSid || payload.Sid;
-
-    let sessionReq = null;
-    if (requestId) {
-      sessionReq = await SessionRequest.findById(requestId);
-    } else if (callSid) {
-      sessionReq = await SessionRequest.findOne({ exotelCallSid: callSid });
-    }
-
-    if (!sessionReq) {
-      return res.status(200).send("NO_SESSION_FOUND");
-    }
-
-    if (sessionReq.status === "completed") {
-      return res.status(200).send("ALREADY_COMPLETED");
-    }
-
-    const rawDurationSec = Number(
-      payload.ConversationDuration ||
-        payload.DialCallDuration ||
-        payload.Duration ||
-        0
-    );
-
-    const durationInSeconds = Math.max(0, rawDurationSec);
-    const billedMinutes =
-      durationInSeconds > 0 ? Math.ceil(durationInSeconds / 60) : 0;
-    const ratePerMin = Number(sessionReq.ratePerMin || 10);
-    const totalDeductedAmount = billedMinutes * ratePerMin;
-
-    sessionReq.status = "completed";
-    sessionReq.endTime = new Date();
-    sessionReq.durationInSeconds = durationInSeconds;
-    sessionReq.durationMinutes = billedMinutes;
-    sessionReq.totalDeductedAmount = totalDeductedAmount;
-    sessionReq.callStatus = payload.Status || "completed";
-
-    if (payload.RecordingUrl) {
-      sessionReq.recordingUrl = payload.RecordingUrl;
-    }
-
-    await sessionReq.save();
-
-    if (totalDeductedAmount > 0) {
-      await User.findByIdAndUpdate(sessionReq.user, {
-        $inc: { walletBalance: -totalDeductedAmount },
-      });
-
-      await Partner.findByIdAndUpdate(sessionReq.partner, {
-        $inc: { walletBalance: totalDeductedAmount },
-      });
-    }
-
-    return res.status(200).send("OK");
-  } catch (error) {
-    return res.status(500).send(error.message);
-  }
-};
-
-// ✅ UPDATED ROBUST endSession Function
 const endSession = async (req, res) => {
   try {
     const { requestId, conversationId, chatRoomId } = req.body;
-    console.log("👉 /end API Call aayi, Body:", req.body);
-
     const targetId = requestId || conversationId || chatRoomId;
 
     if (!targetId) {
@@ -499,7 +430,6 @@ const endSession = async (req, res) => {
       });
     }
 
-    // 1. Session request dhundein (requestId se ya chatRoomId se)
     const isMongoId = /^[0-9a-fA-F]{24}$/.test(targetId);
     let sessionReq = await SessionRequest.findOne({
       $or: [
@@ -509,7 +439,6 @@ const endSession = async (req, res) => {
     }).populate("partner user");
 
     if (!sessionReq) {
-      console.log("❌ MongoDB me session request nahi mili for ID:", targetId);
       return res.status(404).json({ success: false, message: "Session not found" });
     }
 
@@ -517,37 +446,44 @@ const endSession = async (req, res) => {
       return res.status(200).json({
         success: true,
         message: "Session already ended",
-        durationMinutes: sessionReq.durationMinutes,
-        totalDeductedAmount: sessionReq.totalDeductedAmount,
+        durationMinutes: sessionReq.durationMinutes || 0,
+        totalDeductedAmount: sessionReq.totalDeductedAmount || 0,
       });
     }
 
     const endTime = new Date();
-    const startTime = sessionReq.startTime || new Date();
-    const durationInSeconds = Math.max(
-      1,
-      Math.ceil((endTime - startTime) / 1000)
-    );
+    const startTime = sessionReq.startTime ? new Date(sessionReq.startTime) : endTime;
+    
+    let durationInSeconds = Math.max(1, Math.floor((endTime.getTime() - startTime.getTime()) / 1000));
     let durationMinutes = Math.ceil(durationInSeconds / 60);
 
-    if (
-      sessionReq.durationMinutes &&
-      durationMinutes > sessionReq.durationMinutes
-    ) {
-      durationMinutes = sessionReq.durationMinutes;
+    const ratePerMin = Number(sessionReq.ratePerMin || 10);
+    let totalDeductedAmount = durationMinutes * ratePerMin;
+
+    const updatedSession = await SessionRequest.findOneAndUpdate(
+      { _id: sessionReq._id, status: { $ne: "completed" } },
+      {
+        $set: {
+          status: "completed",
+          endTime: endTime,
+          durationInSeconds: durationInSeconds,
+          durationMinutes: durationMinutes,
+          totalDeductedAmount: totalDeductedAmount
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedSession) {
+      const freshReq = await SessionRequest.findById(sessionReq._id);
+      return res.status(200).json({
+        success: true,
+        message: "Session already ended by another process",
+        durationMinutes: freshReq?.durationMinutes || durationMinutes,
+        totalDeductedAmount: freshReq?.totalDeductedAmount || totalDeductedAmount,
+      });
     }
 
-    const ratePerMin = Number(sessionReq.ratePerMin || 10);
-    const totalDeductedAmount = durationMinutes * ratePerMin;
-
-    sessionReq.status = "completed";
-    sessionReq.endTime = endTime;
-    sessionReq.durationInSeconds = durationInSeconds;
-    sessionReq.durationMinutes = durationMinutes;
-    sessionReq.totalDeductedAmount = totalDeductedAmount;
-    await sessionReq.save();
-
-    // Wallet balance update
     if (totalDeductedAmount > 0) {
       if (sessionReq.user) {
         await User.findByIdAndUpdate(sessionReq.user._id, {
@@ -562,43 +498,24 @@ const endSession = async (req, res) => {
     }
 
     const currentUserId = req.user?.id || req.user?._id;
-    const isUser =
-      sessionReq.user &&
-      currentUserId &&
-      currentUserId.toString() === sessionReq.user._id.toString();
+    const isUser = sessionReq.user && currentUserId && currentUserId.toString() === sessionReq.user._id.toString();
     const endedBy = isUser ? "user" : "partner";
-
     const activeRoomId = sessionReq.chatRoomId || targetId;
 
-    
     if (activeRoomId) {
-      console.log("🔥 Updating Firestore conversation document:", activeRoomId);
-      await admin
-        .firestore()
-        .collection("conversations")
-        .doc(activeRoomId)
-        .set(
-          {
-            status: "ended",
-            endedBy: endedBy,
-            durationMinutes: durationMinutes,
-            totalEarned: totalDeductedAmount,
-            endedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        )
-        .catch((err) => console.error("Firestore update error:", err));
+      await admin.firestore().collection("conversations").doc(activeRoomId).set({
+        status: "ended",
+        endedBy: endedBy,
+        durationMinutes: durationMinutes,
+        totalEarned: totalDeductedAmount,
+        endedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(() => {});
 
-      // Realtime Database me bhi update kar dein
-      admin
-        .database()
-        .ref(`chats/${activeRoomId}`)
-        .update({
-          status: "ended",
-          durationMinutes: durationMinutes,
-          totalEarned: totalDeductedAmount,
-        })
-        .catch(() => {});
+      admin.database().ref(`chats/${activeRoomId}`).update({
+        status: "ended",
+        durationMinutes: durationMinutes,
+        totalEarned: totalDeductedAmount,
+      }).catch(() => {});
     }
 
     return res.status(200).json({
@@ -608,7 +525,6 @@ const endSession = async (req, res) => {
       totalDeductedAmount,
     });
   } catch (error) {
-    console.error("❌ endSession Error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -685,7 +601,6 @@ const getUserRequestStatus = async (req, res) => {
   }
 };
 
-// ✅ Instant Booking (SessionRequest) Summary API
 const getSessionSummary = async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -702,12 +617,12 @@ const getSessionSummary = async (req, res) => {
       success: true,
       data: {
         requestId: sessionReq._id,
-        type: sessionReq.type, // 'chat' ya 'call'
-        status: sessionReq.status, // 'completed', 'pending', etc.
-        durationMinutes: sessionReq.durationMinutes || 0, // kitne min baat hui
+        type: sessionReq.type, 
+        status: sessionReq.status, 
+        durationMinutes: sessionReq.durationMinutes || 0, 
         durationInSeconds: sessionReq.durationInSeconds || 0,
         ratePerMin: sessionReq.ratePerMin || 10,
-        totalDeductedAmount: sessionReq.totalDeductedAmount || 0, // kitne paise kate
+        totalDeductedAmount: sessionReq.totalDeductedAmount || 0, 
         partnerName: sessionReq.partner?.fullName || sessionReq.partner?.name,
         userName: sessionReq.user?.fullName,
         recordingUrl: sessionReq.recordingUrl || null,
@@ -720,15 +635,103 @@ const getSessionSummary = async (req, res) => {
   }
 };
 
+const getUserSessionHistory = async (req, res) => {
+  try {
+    const currentId = req.user.id;
+    console.log("🔍 Fetching history for ID from token:", currentId);
+
+    // Pehle bina kisi status filter ke check karte hain ki is ID se koi record hai bhi ya nahi
+    const sessionRequests = await SessionRequest.find({
+      $or: [
+        { user: currentId },
+        { partner: currentId }
+      ]
+    })
+      .populate("partner", "fullName mobile avatar name")
+      .populate("user", "fullName mobile")
+      .sort({ createdAt: -1 });
+
+    console.log("📦 Total records found in DB for this ID:", sessionRequests.length);
+
+    const formattedHistory = sessionRequests.map(sessionReq => ({
+      requestId: sessionReq._id,
+      type: sessionReq.type,
+      status: sessionReq.status,
+      durationMinutes: sessionReq.durationMinutes || 0,
+      durationInSeconds: sessionReq.durationInSeconds || 0,
+      ratePerMin: sessionReq.ratePerMin || 10,
+      totalDeductedAmount: sessionReq.totalDeductedAmount || 0,
+      partnerName: sessionReq.partner?.fullName || sessionReq.partner?.name,
+      userName: sessionReq.user?.fullName,
+      recordingUrl: sessionReq.recordingUrl || null,
+      createdAt: sessionReq.createdAt,
+      endTime: sessionReq.endTime
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: formattedHistory.length,
+      data: formattedHistory
+    });
+  } catch (error) {
+    console.error("❌ getUserSessionHistory Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const checkCallStatusAndSummary = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+
+    const sessionReq = await SessionRequest.findById(requestId)
+      .populate("partner", "fullName mobile avatar name")
+      .populate("user", "fullName mobile");
+
+    if (!sessionReq) {
+      return res.status(404).json({ success: false, message: "Session request not found" });
+    }
+
+    if (sessionReq.status === "accepted") {
+      return res.status(200).json({
+        success: true,
+        isCallActive: true, 
+        status: sessionReq.status,
+        message: "Call is currently active..."
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      isCallActive: false, 
+      data: {
+        requestId: sessionReq._id,
+        type: sessionReq.type,
+        status: sessionReq.status,
+        durationMinutes: sessionReq.durationMinutes || 0,
+        durationInSeconds: sessionReq.durationInSeconds || 0,
+        ratePerMin: sessionReq.ratePerMin || 10,
+        totalDeductedAmount: sessionReq.totalDeductedAmount || 0,
+        partnerName: sessionReq.partner?.fullName || sessionReq.partner?.name,
+        userName: sessionReq.user?.fullName,
+        recordingUrl: sessionReq.recordingUrl || null,
+        createdAt: sessionReq.createdAt,
+        endTime: sessionReq.endTime
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 module.exports = {
   initiateSessionRequest,
   cancelSessionRequest,
   respondToSessionRequest,
-  handleExotelCallWebhook,
   endSession,
   getPartnerPendingRequests,
   getPartnerAcceptedRequests,
   getUserRequestStatus,
-  getSessionSummary
+  getSessionSummary,
+  getUserSessionHistory,
+  checkCallStatusAndSummary
 };
