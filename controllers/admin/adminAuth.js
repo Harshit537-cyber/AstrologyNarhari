@@ -34,10 +34,12 @@ const verifyOtp = async (req, res) => {
   try {
     const { idToken, mobile: bodyMobile } = req.body;
     let mobile;
+    let firebaseUid; // Firebase UID ke liye
 
     if (idToken) {
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       mobile = decodedToken.phone_number;
+      firebaseUid = decodedToken.uid; // Token se UID nikaali
     } else if (bodyMobile) {
       mobile = bodyMobile;
     }
@@ -60,11 +62,15 @@ const verifyOtp = async (req, res) => {
         });
       }
 
-      adminUser = await User.create({
+      // User create karte waqt firebaseUid pass karein
+      const newAdminData = {
         mobile,
         role: "admin",
         isActive: true,
-      });
+      };
+      if (firebaseUid) newAdminData.firebaseUid = firebaseUid;
+
+      adminUser = await User.create(newAdminData);
     } else {
       if (adminUser.role !== "admin") {
         return res.status(400).json({
@@ -78,6 +84,12 @@ const verifyOtp = async (req, res) => {
           success: false,
           message: "This admin account is deactivated",
         });
+      }
+
+      // Agar pehle se admin hai aur firebaseUid nahi thi, toh update karein
+      if (firebaseUid && !adminUser.firebaseUid) {
+        adminUser.firebaseUid = firebaseUid;
+        await adminUser.save();
       }
     }
 
@@ -106,10 +118,9 @@ const verifyOtp = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(401).json({
+    return res.status(500).json({
       success: false,
-      message: "Invalid or expired Firebase token",
-      error: error.message,
+      message: error.message,
     });
   }
 };
