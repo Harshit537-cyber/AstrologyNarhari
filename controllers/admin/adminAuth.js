@@ -6,6 +6,7 @@ const Partner = require("../../models/Partner/Partner");
 const Pandit = require('../../models/Pandit/Pandit');
 const cloudinary = require("../../config/cloudinary");
 const admin = require("../../config/firebase");
+const sendPushNotification = require("../../utils/notificationService");
 
 const uploadToCloudinary = async (filePath, folder) => {
     try {
@@ -1395,6 +1396,85 @@ const updatePanditApprovalStatusByAdmin = async (req, res) => {
     }
 };
 
+
+const updatePartnerMinRateByAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { minRate } = req.body;
+
+    if (minRate === undefined || minRate === null || isNaN(minRate) || Number(minRate) < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid positive minimum rate is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Partner ID format",
+      });
+    }
+
+    // fcmToken ke sath fetch karein taaki notification send kiya ja sake
+    const partner = await Partner.findById(id);
+
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        message: "Partner not found",
+      });
+    }
+
+    const oldRate = partner.minRate;
+    const newRate = Number(minRate);
+
+    // Rate update
+    partner.minRate = newRate;
+    partner.minRateApprovalStatus = "Approved";
+    partner.requestedMinRate = null; // agar koi pending request thi to use clear kar dein
+
+    await partner.save();
+
+    // Push notification bhejein agar partner ke paas FCM token available hai
+    if (partner.fcmToken) {
+      const notificationData = {
+        type: "MIN_RATE_UPDATED",
+        partnerId: partner._id.toString(),
+        minRate: String(newRate),
+      };
+
+      const notificationPayload = {
+        title: "Minimum Rate Updated",
+        body: `Admin ne aapka minimum consultation rate update karke ₹${newRate}/min kar diya hai.`,
+        channelId: "rate_update_channel",
+      };
+
+      // Background me notification send karein
+      sendPushNotification(partner.fcmToken, notificationData, notificationPayload).catch((err) => {
+        console.error("Failed to send minRate push notification:", err.message);
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Partner minimum rate successfully updated from ₹${oldRate ?? 0} to ₹${newRate}`,
+      data: {
+        partnerId: partner._id,
+        fullName: partner.fullName,
+        minRate: partner.minRate,
+        minRateApprovalStatus: partner.minRateApprovalStatus,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
+
 module.exports = {
   verifyOtp,
   register,
@@ -1425,5 +1505,6 @@ module.exports = {
   getAllPartnersStatus,
   getAllPanditsForAdmin,
   getPanditByIdForAdmin,
-  updatePanditApprovalStatusByAdmin
+  updatePanditApprovalStatusByAdmin,
+  updatePartnerMinRateByAdmin
 };
