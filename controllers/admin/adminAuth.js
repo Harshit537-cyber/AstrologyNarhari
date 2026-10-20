@@ -34,12 +34,12 @@ const verifyOtp = async (req, res) => {
   try {
     const { idToken, mobile: bodyMobile } = req.body;
     let mobile;
-    let firebaseUid; // Firebase UID ke liye
+    let firebaseUid;
 
     if (idToken) {
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       mobile = decodedToken.phone_number;
-      firebaseUid = decodedToken.uid; // Token se UID nikaali
+      firebaseUid = decodedToken.uid;
     } else if (bodyMobile) {
       mobile = bodyMobile;
     }
@@ -62,7 +62,6 @@ const verifyOtp = async (req, res) => {
         });
       }
 
-      // User create karte waqt firebaseUid pass karein
       const newAdminData = {
         mobile,
         role: "admin",
@@ -86,7 +85,6 @@ const verifyOtp = async (req, res) => {
         });
       }
 
-      // Agar pehle se admin hai aur firebaseUid nahi thi, toh update karein
       if (firebaseUid && !adminUser.firebaseUid) {
         adminUser.firebaseUid = firebaseUid;
         await adminUser.save();
@@ -426,7 +424,9 @@ const getAllPartners = async (req, res) => {
       filter.profileApprovalStatus = status;
     }
 
-    const partners = await Partner.find(filter).sort({ createdAt: -1 });
+    const partners = await Partner.find(filter)
+      .select("-otp -otpExpiry -fcmToken")
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -441,7 +441,7 @@ const getPartnerById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const partner = await Partner.findById(id);
+    const partner = await Partner.findById(id).select("-otp -otpExpiry -fcmToken");
 
     if (!partner) {
       return res.status(404).json({
@@ -485,6 +485,7 @@ const updatePartner = async (req, res) => {
       experience,
       qualification,
       expectedSalary,
+      minRate,
       bio,
       isVerified,
       isProfileComplete,
@@ -509,21 +510,22 @@ const updatePartner = async (req, res) => {
     if (dateOfBirth) partner.dateOfBirth = dateOfBirth;
     if (gender) partner.gender = gender;
     if (city) partner.city = city;
-    if (experience) partner.experience = Number(experience);
+    if (experience !== undefined) partner.experience = Number(experience);
     if (qualification) partner.qualification = qualification;
-    if (expectedSalary) partner.expectedSalary = Number(expectedSalary);
+    if (expectedSalary !== undefined) partner.expectedSalary = Number(expectedSalary);
+    if (minRate !== undefined) partner.minRate = Number(minRate);
     if (bio) partner.bio = bio;
 
     if (req.body.specialties) {
-      partner.specialties = JSON.parse(req.body.specialties);
+      partner.specialties = typeof req.body.specialties === 'string' ? JSON.parse(req.body.specialties) : req.body.specialties;
     }
 
     if (req.body.languages) {
-      partner.languages = JSON.parse(req.body.languages);
+      partner.languages = typeof req.body.languages === 'string' ? JSON.parse(req.body.languages) : req.body.languages;
     }
 
     if (req.body.additionalPhotos) {
-      partner.additionalPhotos = JSON.parse(req.body.additionalPhotos);
+      partner.additionalPhotos = typeof req.body.additionalPhotos === 'string' ? JSON.parse(req.body.additionalPhotos) : req.body.additionalPhotos;
     }
 
     if (req.file) {
@@ -817,6 +819,7 @@ const deactivatePartner = async (req, res) => {
       data: {
         partnerId: partner._id,
         fullName: partner.fullName,
+        minRate: partner.minRate,
         isActive: partner.isActive,
         deactivatedBy: partner.deactivatedBy,
         deactivatedAt: partner.deactivatedAt,
@@ -862,6 +865,7 @@ const activatePartner = async (req, res) => {
       data: {
         partnerId: partner._id,
         fullName: partner.fullName,
+        minRate: partner.minRate,
         isActive: partner.isActive,
       },
     });
@@ -921,6 +925,7 @@ const togglePartnerStatus = async (req, res) => {
         partnerId: partner._id,
         fullName: partner.fullName || "N/A",
         mobile: partner.mobile,
+        minRate: partner.minRate,
         isActive: partner.isActive,
         status: partner.isActive ? "Active" : "Deactivated",
         deactivationReason: partner.deactivationReason,
@@ -948,7 +953,11 @@ const getPendingKycPartners = async (req, res) => {
     };
 
     const [partners, total] = await Promise.all([
-      Partner.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Partner.find(filter)
+        .select("-otp -otpExpiry -fcmToken")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
       Partner.countDocuments(filter),
     ]);
 
@@ -1024,6 +1033,7 @@ const getPendingMinRatePartners = async (req, res) => {
 
     const [partners, total] = await Promise.all([
       Partner.find(filter)
+        .select("-otp -otpExpiry -fcmToken")
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -1133,9 +1143,7 @@ const getPartnersStatusList = async (req, res) => {
     }
 
     const partners = await Partner.find(filter)
-      .select(
-        "fullName mobile email profilePic profileApprovalStatus kycStatus isActive isOnline deactivationReason deactivatedAt deactivatedBy reactivateAt createdAt",
-      )
+      .select("-otp -otpExpiry -fcmToken")
       .sort({ createdAt: -1 })
       .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit))
@@ -1145,6 +1153,10 @@ const getPartnersStatusList = async (req, res) => {
       const isActive = partner.isActive !== false;
       return {
         ...partner,
+        partnerId: partner._id,
+        minRate: partner.minRate ?? 25,
+        requestedMinRate: partner.requestedMinRate ?? null,
+        minRateApprovalStatus: partner.minRateApprovalStatus ?? null,
         isActive: isActive,
         status: isActive ? "Active" : "Deactivated",
       };
@@ -1183,9 +1195,7 @@ const getPartnerStatusById = async (req, res) => {
     }
 
     const partner = await Partner.findById(id)
-      .select(
-        "fullName mobile email isActive isOnline isBusy deactivationReason deactivationReasonNote deactivatedAt deactivatedBy reactivateAt profileApprovalStatus kycStatus createdAt",
-      )
+      .select("-otp -otpExpiry -fcmToken")
       .lean();
 
     if (!partner) {
@@ -1200,6 +1210,7 @@ const getPartnerStatusById = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
+        ...partner,
         partnerId: partner._id,
         fullName: partner.fullName || "N/A",
         mobile: partner.mobile,
@@ -1208,6 +1219,9 @@ const getPartnerStatusById = async (req, res) => {
         isActive: isActive,
         isOnline: partner.isOnline || false,
         isBusy: partner.isBusy || false,
+        minRate: partner.minRate ?? 25,
+        requestedMinRate: partner.requestedMinRate ?? null,
+        minRateApprovalStatus: partner.minRateApprovalStatus ?? null,
         deactivationDetails: !isActive
           ? {
               reason: partner.deactivationReason || "N/A",
@@ -1232,9 +1246,7 @@ const getPartnerStatusById = async (req, res) => {
 const getAllPartnersStatus = async (req, res) => {
   try {
     const partners = await Partner.find()
-      .select(
-        "fullName mobile email isActive isOnline deactivationReason deactivationReasonNote deactivatedAt deactivatedBy reactivateAt profileApprovalStatus kycStatus createdAt",
-      )
+      .select("-otp -otpExpiry -fcmToken")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -1251,6 +1263,7 @@ const getAllPartnersStatus = async (req, res) => {
       }
 
       return {
+        ...partner,
         partnerId: partner._id,
         fullName: partner.fullName || "N/A",
         mobile: partner.mobile,
@@ -1258,6 +1271,10 @@ const getAllPartnersStatus = async (req, res) => {
         status: isCurrentActive ? "Active" : "Inactive",
         isActive: isCurrentActive,
         isOnline: partner.isOnline || false,
+        isBusy: partner.isBusy || false,
+        minRate: partner.minRate ?? 25,
+        requestedMinRate: partner.requestedMinRate ?? null,
+        minRateApprovalStatus: partner.minRateApprovalStatus ?? null,
         deactivationDetails: !isCurrentActive
           ? {
               reason: partner.deactivationReason || "N/A",
