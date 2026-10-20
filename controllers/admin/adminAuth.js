@@ -116,7 +116,7 @@ const verifyOtp = async (req, res) => {
       }
     );
 
-    // DB me refresh token save karein
+    
     adminUser.refreshToken = refreshToken;
     await adminUser.save();
 
