@@ -92,6 +92,7 @@ const verifyOtp = async (req, res) => {
       }
     }
 
+    // Access Token (1 Day)
     const token = jwt.sign(
       {
         id: adminUser._id,
@@ -100,13 +101,31 @@ const verifyOtp = async (req, res) => {
       process.env.JWT_SECRET || "secretkey",
       {
         expiresIn: "1d",
-      },
+      }
     );
+
+    // Refresh Token (7 Days)
+    const refreshToken = jwt.sign(
+      {
+        id: adminUser._id,
+        role: adminUser.role,
+      },
+      process.env.JWT_REFRESH_SECRET || "refreshsecretkey",
+      {
+        expiresIn: "7d",
+      }
+    );
+
+    // DB me refresh token save karein
+    adminUser.refreshToken = refreshToken;
+    await adminUser.save();
 
     return res.status(200).json({
       success: true,
       message: "Authentication successful",
       token,
+      accessToken: token,
+      refreshToken,
       admin: {
         id: adminUser._id,
         mobile: adminUser.mobile,
@@ -123,6 +142,83 @@ const verifyOtp = async (req, res) => {
     });
   }
 };
+
+
+
+const refreshAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Refresh token is required",
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(
+        refreshToken,
+        process.env.JWT_REFRESH_SECRET || "refreshsecretkey"
+      );
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired refresh token",
+      });
+    }
+
+    const adminUser = await User.findById(decoded.id);
+
+    if (!adminUser || adminUser.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Admin account not found",
+      });
+    }
+
+    if (!adminUser.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "This admin account is deactivated",
+      });
+    }
+
+    if (adminUser.refreshToken && adminUser.refreshToken !== refreshToken) {
+      return res.status(403).json({
+        success: false,
+        message: "Refresh token is no longer valid",
+      });
+    }
+
+    // Naya Access Token generate karein
+    const newAccessToken = jwt.sign(
+      {
+        id: adminUser._id,
+        role: adminUser.role,
+      },
+      process.env.JWT_SECRET || "secretkey",
+      {
+        expiresIn: "1d",
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Token refreshed successfully",
+      token: newAccessToken,
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
 
 const register = async (req, res) => {
   try {
@@ -1416,7 +1512,7 @@ const updatePartnerMinRateByAdmin = async (req, res) => {
       });
     }
 
-    // fcmToken ke sath fetch karein taaki notification send kiya ja sake
+  
     const partner = await Partner.findById(id);
 
     if (!partner) {
@@ -1429,14 +1525,13 @@ const updatePartnerMinRateByAdmin = async (req, res) => {
     const oldRate = partner.minRate;
     const newRate = Number(minRate);
 
-    // Rate update
+   
     partner.minRate = newRate;
     partner.minRateApprovalStatus = "Approved";
-    partner.requestedMinRate = null; // agar koi pending request thi to use clear kar dein
-
+    partner.requestedMinRate = null; 
     await partner.save();
 
-    // Push notification bhejein agar partner ke paas FCM token available hai
+    
     if (partner.fcmToken) {
       const notificationData = {
         type: "MIN_RATE_UPDATED",
@@ -1450,7 +1545,7 @@ const updatePartnerMinRateByAdmin = async (req, res) => {
         channelId: "rate_update_channel",
       };
 
-      // Background me notification send karein
+      
       sendPushNotification(partner.fcmToken, notificationData, notificationPayload).catch((err) => {
         console.error("Failed to send minRate push notification:", err.message);
       });
@@ -1477,6 +1572,7 @@ const updatePartnerMinRateByAdmin = async (req, res) => {
 
 module.exports = {
   verifyOtp,
+  refreshAccessToken,
   register,
   getDashboardStats,
   getRecentUsers,

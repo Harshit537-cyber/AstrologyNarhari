@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   verifyOtp,
+  refreshAccessToken,
   register,
   getDashboardStats,
   getRecentUsers,
@@ -38,6 +39,9 @@ const { verifyToken, isAdmin } = require("../../middleware/auth");
 const upload = require("../../middleware/upload");
 
 router.post("/verify-otp", verifyOtp);
+
+router.post("/refresh-token", refreshAccessToken);
+
 router.post("/register", verifyToken, isAdmin, register);
 
 router.put("/test-upload", upload.single("profilePic"), (req, res) => {
