@@ -6,6 +6,7 @@ const Transaction = require('../../models/Transaction/Transaction');
 const mongoose = require('mongoose');
 const sendPushNotification = require('../../utils/notificationService');
 const createGoogleMeet = require('../../utils/googleMeetHelper');
+const { sendBookingConfirmedEvent } = require('../../services/bookingEventsService');
 
 const getRituals = async (req, res) => {
     try {
@@ -96,7 +97,7 @@ const createRitualBooking = async (req, res) => {
             schedule,
             shippingDetails,
             paymentDetails: {
-                amount: bookingAmount,
+                totalAmount: bookingAmount,
                 paymentMode: 'Wallet',
                 status: 'Pending'
             },
@@ -182,7 +183,7 @@ const acceptRitualRequestByPandit = async (req, res) => {
         }
 
         const userId = booking.userId;
-        const bookingAmount = booking.paymentDetails?.amount || 0;
+        const bookingAmount = booking.paymentDetails?.totalAmount || 0;
 
         const user = await User.findById(userId).session(session);
         if (!user) {
@@ -241,6 +242,21 @@ const acceptRitualRequestByPandit = async (req, res) => {
 
         await session.commitTransaction();
         session.endSession();
+
+        try {
+            const ritual = await Ritual.findById(booking.ritualId).select('title');
+            await sendBookingConfirmedEvent({
+                eventId: `ritual_${booking._id}_confirmed`,
+                user,
+                service: ritual?.title || 'Ritual booking',
+                astrologer: pandit.fullName || 'Pandit ji',
+                date: booking.schedule?.isoDateTime || booking.schedule?.date,
+                time: booking.schedule?.isoDateTime ? undefined : booking.schedule?.time,
+                amount: bookingAmount
+            });
+        } catch (error) {
+            console.error('Pandit booking event integration failed:', error.message);
+        }
 
         if (user && user.fcmToken) {
             await sendPushNotification(

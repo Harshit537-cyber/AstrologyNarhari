@@ -3,6 +3,7 @@ const Partner = require("../../models/Partner/Partner");
 const User = require("../../models/User");
 const admin = require("../../config/firebase");
 const { triggerExotelCall } = require("../../services/exotelService");
+const { sendBookingConfirmedEvent } = require("../../services/bookingEventsService");
 
 const initiateSessionRequest = async (req, res) => {
   try {
@@ -258,6 +259,19 @@ const respondToSessionRequest = async (req, res) => {
         sessionReq.chatRoomId = chatRoomId;
         await sessionReq.save();
 
+        try {
+          await sendBookingConfirmedEvent({
+            eventId: `session_${sessionReq._id}_confirmed`,
+            user: sessionReq.user,
+            service: "Instant Chat",
+            astrologer: sessionReq.partner.fullName || sessionReq.partner.name || "Astrologer",
+            date: sessionReq.startTime,
+            amount: sessionReq.durationMinutes * sessionReq.ratePerMin,
+          });
+        } catch (error) {
+          console.error("Instant booking event integration failed:", error.message);
+        }
+
         admin
           .database()
           .ref(`chats/${chatRoomId}`)
@@ -366,6 +380,19 @@ const respondToSessionRequest = async (req, res) => {
 
         sessionReq.exotelCallSid = callResult.callSid;
         await sessionReq.save();
+
+        try {
+          await sendBookingConfirmedEvent({
+            eventId: `session_${sessionReq._id}_confirmed`,
+            user: sessionReq.user,
+            service: "Instant Call",
+            astrologer: sessionReq.partner.fullName || sessionReq.partner.name || "Astrologer",
+            date: sessionReq.startTime,
+            amount: durationMinutes * sessionReq.ratePerMin,
+          });
+        } catch (error) {
+          console.error("Instant booking event integration failed:", error.message);
+        }
 
         if (sessionReq.user && sessionReq.user.fcmToken) {
           admin

@@ -6,6 +6,7 @@ const moment = require('moment');
 const { validateBookingTime } = require('../../utils/dateValidator');
 const sendPushNotification = require("../../utils/notificationService");
 const CommissionConfig = require('../../models/Partner/CommissionConfig');
+const { sendBookingConfirmedEvent } = require('../../services/bookingEventsService');
 
 
 const scheduleBooking = async (req, res) => {
@@ -170,7 +171,9 @@ const respondToBooking = async (req, res) => {
             });
         }
 
-        const booking = await Booking.findOne({ _id: bookingId, partner: partnerId }).populate('user');
+        const booking = await Booking.findOne({ _id: bookingId, partner: partnerId })
+            .populate('user')
+            .populate('partner');
         if (!booking) {
             return res.status(404).json({
                 success: false,
@@ -192,7 +195,7 @@ const respondToBooking = async (req, res) => {
 
 
         if (action === 'accepted') {
-            const user = await User.findById(booking.user);
+            const user = await User.findById(booking.user._id || booking.user);
             if (!user) {
                 return res.status(404).json({ success: false, message: 'User not found' });
             }
@@ -216,6 +219,21 @@ const respondToBooking = async (req, res) => {
         }
 
         await booking.save();
+
+        if (action === 'accepted') {
+            try {
+                await sendBookingConfirmedEvent({
+                    eventId: `booking_${booking._id}_confirmed`,
+                    user,
+                    service: booking.mode,
+                    astrologer: booking.partner?.fullName || booking.partner?.name || 'Astrologer',
+                    date: booking.startTime || booking.date,
+                    amount: booking.totalFee
+                });
+            } catch (error) {
+                console.error('Scheduled booking event integration failed:', error.message);
+            }
+        }
 
 
         if (user && user.fcmToken) {

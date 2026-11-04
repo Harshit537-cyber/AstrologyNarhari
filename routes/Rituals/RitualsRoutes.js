@@ -16,6 +16,8 @@ router.post(
 
 router.put('/:id', verifyToken,isAdmin,upload.single('image'),  adminRitualController.updateRitual);
 
+router.delete('/:id', verifyToken, isAdmin, adminRitualController.deleteRitual);
+
 
 router.get('/rituals', verifyToken, ritualController.getRituals);
 
