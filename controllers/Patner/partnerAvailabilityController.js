@@ -1,5 +1,13 @@
 const Partner = require('../../models/Partner/Partner');
 
+const getAvailabilityData = (partner) => ({
+    audio: partner.allowAudioCalls,
+    video: partner.allowVideoCalls,
+    chat: partner.allowChat,
+    allowAudioCalls: partner.allowAudioCalls,
+    allowVideoCalls: partner.allowVideoCalls,
+    allowChat: partner.allowChat
+});
 
 exports.getServiceAvailability = async (req, res) => {
     try {
@@ -13,9 +21,7 @@ exports.getServiceAvailability = async (req, res) => {
         return res.status(200).json({
             success: true,
             data: {
-                allowAudioCalls: partner.allowAudioCalls,
-                allowVideoCalls: partner.allowVideoCalls,
-                allowChat: partner.allowChat,
+                ...getAvailabilityData(partner),
                 isAcceptingRequests: partner.isAcceptingRequests
             }
         });
@@ -61,11 +67,7 @@ exports.toggleServiceAvailability = async (req, res) => {
         return res.status(200).json({
             success: true,
             message,
-            data: {
-                allowAudioCalls: partner.allowAudioCalls,
-                allowVideoCalls: partner.allowVideoCalls,
-                allowChat: partner.allowChat
-            }
+            data: getAvailabilityData(partner)
         });
 
     } catch (error) {

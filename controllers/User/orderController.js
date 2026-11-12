@@ -2,7 +2,9 @@ const Cart = require("../../models/E-comm/Cart");
 const Product = require("../../models/E-comm/Product");
 const Coupon = require("../../models/E-comm/Coupon");
 const Order = require("../../models/E-comm/Order");
+const Transaction = require("../../models/Transaction/Transaction");
 const PDFDocument = require("pdfkit");
+const { verifyCapturedPayment } = require("../../utils/razorpayPayment");
 
 exports.createOrder = async (req, res) => {
     try {
@@ -22,6 +24,12 @@ exports.createOrder = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Payment method is required."
+            });
+        }
+        if (!["COD", "ONLINE"].includes(paymentMethod)) {
+            return res.status(400).json({
+                success: false,
+                message: "Unsupported payment method."
             });
         }
 
@@ -167,9 +175,46 @@ exports.createOrder = async (req, res) => {
         const gst = 0;
 
         const totalAmount = Math.max(
-            subtotal - discount + shippingCharge + gst,
+            Math.round((subtotal - discount + shippingCharge + gst) * 100) / 100,
             0
         );
+
+        let verifiedPaymentId = null;
+        if (paymentMethod === "ONLINE") {
+            verifiedPaymentId = paymentDetails?.transactionId;
+            if (
+                typeof verifiedPaymentId !== "string" ||
+                !verifiedPaymentId.trim() ||
+                totalAmount <= 0
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A positive order amount and Razorpay payment ID are required for online orders."
+                });
+            }
+
+            const [alreadyUsedOrder, alreadyUsedTransaction] = await Promise.all([
+                Order.findOne({ "paymentDetails.transactionId": verifiedPaymentId }),
+                Transaction.findOne({ razorpay_payment_id: verifiedPaymentId })
+            ]);
+            if (alreadyUsedOrder || alreadyUsedTransaction) {
+                return res.status(409).json({
+                    success: false,
+                    message: "This Razorpay payment has already been used."
+                });
+            }
+
+            const isCaptured = await verifyCapturedPayment({
+                paymentId: verifiedPaymentId,
+                expectedAmountPaise: Math.round(totalAmount * 100)
+            });
+            if (!isCaptured) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Razorpay payment is not captured for the order amount."
+                });
+            }
+        }
 
         // Generate Order Number
         const orderNumber =
@@ -221,7 +266,7 @@ exports.createOrder = async (req, res) => {
             paymentDetails:
                 paymentMethod === "ONLINE"
                     ? {
-                        transactionId: paymentDetails?.transactionId || "",
+                        transactionId: verifiedPaymentId,
                         paymentGateway: "Razorpay",
                         paymentDate: new Date()
                     }

@@ -3,10 +3,13 @@ const RitualBooking = require('../../models/Ritual/RitualBooking');
 const Pandit = require('../../models/Pandit/Pandit');
 const User = require('../../models/User');
 const Transaction = require('../../models/Transaction/Transaction');
+const Order = require('../../models/E-comm/Order');
 const mongoose = require('mongoose');
 const sendPushNotification = require('../../utils/notificationService');
 const createGoogleMeet = require('../../utils/googleMeetHelper');
 const { sendBookingConfirmedEvent } = require('../../services/bookingEventsService');
+const razorpayInstance = require('../../config/razorpay');
+const { isValidSignature, verifyCapturedPayment } = require('../../utils/razorpayPayment');
 
 const getRituals = async (req, res) => {
     try {
@@ -192,7 +195,8 @@ const acceptRitualRequestByPandit = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        if ((user.walletBalance || 0) < bookingAmount) {
+        const isWalletPayment = booking.paymentDetails?.paymentMode !== 'Razorpay';
+        if (isWalletPayment && (user.walletBalance || 0) < bookingAmount) {
             await session.abortTransaction();
             session.endSession();
             return res.status(400).json({ 
@@ -208,7 +212,9 @@ const acceptRitualRequestByPandit = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Pandit not found' });
         }
 
-        user.walletBalance = Number(user.walletBalance) - Number(bookingAmount);
+        if (isWalletPayment) {
+            user.walletBalance = Number(user.walletBalance) - Number(bookingAmount);
+        }
         await user.save({ session });
 
         pandit.walletBalance = Number(pandit.walletBalance || 0) + Number(bookingAmount);
@@ -262,7 +268,12 @@ const acceptRitualRequestByPandit = async (req, res) => {
             await sendPushNotification(
                 user.fcmToken,
                 { bookingId: booking._id, meetingLink: meetingLink, type: 'RITUAL_ACCEPTED' },
-                { title: 'Pooja Booking Accepted! 🎉', body: `Pandit ji has accepted your ritual booking (${booking.bookingId}). Amount of ₹${bookingAmount} deducted from wallet.` }
+                {
+                    title: 'Pooja Booking Accepted! 🎉',
+                    body: isWalletPayment
+                        ? `Pandit ji has accepted your ritual booking (${booking.bookingId}). Amount of ₹${bookingAmount} deducted from wallet.`
+                        : `Pandit ji has accepted your ritual booking (${booking.bookingId}).`
+                }
             );
         }
 
@@ -309,17 +320,211 @@ const rejectRitualRequestByPandit = async (req, res) => {
 
 const createRitualOrder = async (req, res) => {
     try {
-        return res.status(200).json({ success: true, message: 'Order created' });
+        const { ritualId, panditId, sankalp, personalDetails, schedule, shippingDetails } = req.body;
+        const userId = req.user.id;
+
+        if (
+            !mongoose.Types.ObjectId.isValid(ritualId) ||
+            !mongoose.Types.ObjectId.isValid(panditId) ||
+            !schedule?.date ||
+            !schedule?.time ||
+            Number.isNaN(new Date(schedule.date).getTime())
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid ritualId, panditId, schedule date, and schedule time are required.'
+            });
+        }
+
+        const [ritual, pandit, user] = await Promise.all([
+            Ritual.findOne({ _id: ritualId, isLive: true }),
+            Pandit.findById(panditId),
+            User.findById(userId)
+        ]);
+        if (!ritual) {
+            return res.status(404).json({ success: false, message: 'Ritual not found or unavailable.' });
+        }
+        if (!pandit) {
+            return res.status(404).json({ success: false, message: 'Pandit not found.' });
+        }
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        const amountInPaise = Math.round(Number(ritual.price) * 100);
+        if (!Number.isSafeInteger(amountInPaise) || amountInPaise < 100) {
+            return res.status(400).json({ success: false, message: 'Ritual price is invalid.' });
+        }
+
+        const order = await razorpayInstance.orders.create({
+            amount: amountInPaise,
+            currency: 'INR',
+            receipt: `ritual_${Date.now()}`,
+            notes: { userId: userId.toString(), ritualId: ritual._id.toString() }
+        });
+
+        await Transaction.create({
+            user: userId,
+            razorpay_order_id: order.id,
+            amount: amountInPaise / 100,
+            status: 'pending',
+            type: 'ritual_payment',
+            description: `Ritual payment for ${ritual.title}`,
+            metadata: {
+                ritualId: ritual._id,
+                panditId: pandit._id,
+                sankalp,
+                personalDetails,
+                schedule,
+                shippingDetails
+            }
+        });
+
+        return res.status(200).json({ success: true, order });
     } catch (error) {
-        return res.status(500).json({ success: error.message });
+        console.error('Ritual Razorpay order creation failed:', error);
+        return res.status(500).json({ success: false, message: 'Could not initiate ritual payment.' });
     }
 };
 
 const verifyRitualPayment = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    session.lowTransaction();
+
     try {
-        return res.status(200).json({ success: true, message: 'Payment verified' });
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+        if (
+            typeof razorpay_order_id !== 'string' ||
+            typeof razorpay_payment_id !== 'string' ||
+            typeof razorpay_signature !== 'string' ||
+            !razorpay_order_id ||
+            !razorpay_payment_id ||
+            !razorpay_signature
+        ) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: 'Missing payment details.' });
+        }
+
+        const transaction = await Transaction.findOne({
+            razorpay_order_id,
+            user: req.user.id,
+            type: 'ritual_payment'
+        }).session(session);
+        if (!transaction) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ success: false, message: 'Ritual payment order not found.' });
+        }
+
+        if (transaction.status === 'success' && transaction.metadata?.bookingId) {
+            if (transaction.razorpay_payment_id !== razorpay_payment_id) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({ success: false, message: 'Payment does not match this ritual order.' });
+            }
+            const existingBooking = await RitualBooking.findById(transaction.metadata.bookingId).session(session);
+            await session.abortTransaction();
+            session.endSession();
+            if (existingBooking) {
+                return res.status(200).json({ success: true, message: 'Payment already verified.', data: existingBooking });
+            }
+            return res.status(409).json({ success: false, message: 'Verified ritual booking could not be found.' });
+        }
+
+        if (transaction.status !== 'pending') {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: 'Ritual payment order is not pending.' });
+        }
+        if (!isValidSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: 'Payment signature verification failed.' });
+        }
+
+        const isCaptured = await verifyCapturedPayment({
+            paymentId: razorpay_payment_id,
+            expectedAmountPaise: Math.round(transaction.amount * 100),
+            expectedOrderId: razorpay_order_id
+        });
+        if (!isCaptured) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: 'Ritual payment has not been captured.' });
+        }
+
+        const [reusedPayment, reusedOrderPayment] = await Promise.all([
+            Transaction.findOne({
+                razorpay_payment_id,
+                _id: { $ne: transaction._id }
+            }).session(session),
+            Order.findOne({ "paymentDetails.transactionId": razorpay_payment_id }).session(session)
+        ]);
+        if (reusedPayment || reusedOrderPayment) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: 'Payment has already been processed.' });
+        }
+
+        const metadata = transaction.metadata || {};
+        if (
+            !mongoose.Types.ObjectId.isValid(metadata.ritualId) ||
+            !mongoose.Types.ObjectId.isValid(metadata.panditId)
+        ) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(409).json({ success: false, message: 'Ritual order details are invalid.' });
+        }
+
+        const bookingId = `RB${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
+        const [booking] = await RitualBooking.create([{
+            bookingId,
+            userId: req.user.id,
+            ritualId: metadata.ritualId,
+            panditId: metadata.panditId,
+            sankalp: metadata.sankalp,
+            personalDetails: metadata.personalDetails,
+            schedule: metadata.schedule,
+            shippingDetails: metadata.shippingDetails,
+            paymentDetails: {
+                ritualPrice: transaction.amount,
+                totalAmount: transaction.amount,
+                paymentMode: 'Razorpay',
+                status: 'Success',
+                transactionId: razorpay_payment_id
+            },
+            status: 'Pending'
+        }], { session });
+
+        transaction.razorpay_payment_id = razorpay_payment_id;
+        transaction.status = 'success';
+        transaction.metadata = { ...metadata, bookingId: booking._id };
+        await transaction.save({ session });
+        await session.commitTransaction();
+        session.endSession();
+
+        try {
+            const pandit = await Pandit.findById(booking.panditId).select('fcmToken');
+            if (pandit?.fcmToken) {
+                await sendPushNotification(
+                    pandit.fcmToken,
+                    { bookingId: booking._id, type: 'RITUAL_BOOKING' },
+                    { title: 'New Pooja Booking Request!', body: `A new ritual booking request (${bookingId}) has arrived.` }
+                );
+            }
+        } catch (notificationError) {
+            console.error('Ritual booking notification failed:', notificationError.message);
+        }
+
+        return res.status(200).json({ success: true, message: 'Payment verified and ritual booking created.', data: booking });
     } catch (error) {
-        return res.status(500).json({ success: error.message });
+        await session.abortTransaction();
+        session.endSession();
+        console.error('Ritual Razorpay payment verification failed:', error);
+        return res.status(500).json({ success: false, message: 'Could not verify ritual payment.' });
     }
 };
 

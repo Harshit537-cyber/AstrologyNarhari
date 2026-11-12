@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const ritualController = require('../../controllers/User/userRitualController');
-const { verifyToken, isAdmin, isPandit } = require('../../middleware/auth');
+const { verifyToken, isAdmin, isPandit, isUser } = require('../../middleware/auth');
 const adminRitualController = require("../../controllers/admin/adminRitualController");
 const upload = require("../../middleware/upload");
 
@@ -41,8 +41,8 @@ router.patch('/pandit/request/accept/:id', verifyToken, isPandit, ritualControll
 
 router.patch('/pandit/request/reject/:id', verifyToken, isPandit, ritualController.rejectRitualRequestByPandit);
 
-router.post('/rituals/payment/create-order', verifyToken, ritualController.createRitualOrder);
+router.post('/rituals/payment/create-order', verifyToken, isUser, ritualController.createRitualOrder);
 
-router.post('/rituals/payment/verify', verifyToken, ritualController.verifyRitualPayment);
+router.post('/rituals/payment/verify', verifyToken, isUser, ritualController.verifyRitualPayment);
 
 module.exports = router;

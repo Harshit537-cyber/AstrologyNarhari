@@ -12,8 +12,8 @@ const {
 
 router.post('/add-money', verifyToken, isUser, addMoney);
 router.get('/balance', verifyToken, isUser, getBalance);
-router.post("/create-order", verifyToken, createOrder);
-router.post("/verify-payment", verifyToken, verifyPayment);
+router.post("/create-order", verifyToken, isUser, createOrder);
+router.post("/verify-payment", verifyToken, isUser, verifyPayment);
 
 router.post("/start-chat", verifyToken, isUser, startChat);
 router.post("/end-chat", verifyToken, isUser, endChat);

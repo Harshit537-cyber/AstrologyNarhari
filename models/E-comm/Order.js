@@ -103,4 +103,14 @@ const orderSchema = new mongoose.Schema(
     },
     { timestamps: true });
 
+orderSchema.index(
+    { "paymentDetails.transactionId": 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            "paymentDetails.transactionId": { $type: "string", $gt: "" }
+        }
+    }
+);
+
 module.exports = mongoose.model("Order", orderSchema);
