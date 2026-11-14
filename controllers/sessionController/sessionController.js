@@ -1,6 +1,7 @@
 const SessionRequest = require("../../models/SessionRequest/SessionRequest");
 const Partner = require("../../models/Partner/Partner");
 const User = require("../../models/User");
+const { FieldValue } = require("firebase-admin/firestore");
 const admin = require("../../config/firebase");
 const { triggerExotelCall } = require("../../services/exotelService");
 const { sendBookingConfirmedEvent } = require("../../services/bookingEventsService");
@@ -257,7 +258,6 @@ const respondToSessionRequest = async (req, res) => {
       if (sessionReq.type === "chat") {
         const chatRoomId = `chat_${sessionReq.user._id}_${partnerId}_${Date.now()}`;
         sessionReq.chatRoomId = chatRoomId;
-        await sessionReq.save();
 
         try {
           await sendBookingConfirmedEvent({
@@ -284,7 +284,7 @@ const respondToSessionRequest = async (req, res) => {
           .catch(() => {});
 
         await admin
-          .firestore()
+          .firestore
           .collection("conversations")
           .doc(chatRoomId)
           .set(
@@ -300,11 +300,12 @@ const respondToSessionRequest = async (req, res) => {
               clientName: sessionReq.user.fullName || "Client",
               partnerName: sessionReq.partner.name || "Astrologer",
               sessionType: "chat",
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              createdAt: FieldValue.serverTimestamp(),
             },
             { merge: true }
-          )
-          .catch(() => {});
+          );
+
+        await sessionReq.save();
 
         if (sessionReq.user && sessionReq.user.fcmToken) {
           admin
@@ -345,7 +346,10 @@ const respondToSessionRequest = async (req, res) => {
           success: true,
           message: "Chat request accepted",
           chatRoomId,
+          conversationId: chatRoomId,
           sessionType: "chat",
+          clientId: sessionReq.user._id.toString(),
+          clientName: sessionReq.user.fullName || "Client",
         });
       }
 
@@ -530,13 +534,13 @@ const endSession = async (req, res) => {
     const activeRoomId = sessionReq.chatRoomId || targetId;
 
     if (activeRoomId) {
-      await admin.firestore().collection("conversations").doc(activeRoomId).set({
+      await admin.firestore.collection("conversations").doc(activeRoomId).set({
         status: "ended",
         endedBy: endedBy,
         durationMinutes: durationMinutes,
         totalEarned: totalDeductedAmount,
-        endedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true }).catch(() => {});
+        endedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
 
       admin.database().ref(`chats/${activeRoomId}`).update({
         status: "ended",
