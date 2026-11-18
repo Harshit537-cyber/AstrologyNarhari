@@ -82,7 +82,7 @@ exports.joinLive = async (req, res) => {
 
 exports.getActiveSessions = async (req, res) => {
     try {
-        // Auto-cleanup: Jo sessions 35 seconds se inactive hain unhe auto-end karo
+      
         const timeoutCutoff = new Date(Date.now() - 35 * 1000);
 
         const deadSessions = await LiveSession.find({
