@@ -1,8 +1,10 @@
 const SessionRequest = require("../../models/SessionRequest/SessionRequest");
 const Partner = require("../../models/Partner/Partner");
 const User = require("../../models/User");
+const { FieldValue } = require("firebase-admin/firestore");
 const admin = require("../../config/firebase");
 const { triggerExotelCall } = require("../../services/exotelService");
+const { sendBookingConfirmedEvent } = require("../../services/bookingEventsService");
 
 const initiateSessionRequest = async (req, res) => {
   try {
@@ -194,7 +196,13 @@ const respondToSessionRequest = async (req, res) => {
     const sessionReq =
       await SessionRequest.findById(requestId).populate("user partner");
 
-    if (!sessionReq || sessionReq.status !== "pending") {
+    const isRetryingAcceptedChat =
+      sessionReq &&
+      sessionReq.status === "accepted" &&
+      action === "accept" &&
+      sessionReq.type === "chat";
+
+    if (!sessionReq || (sessionReq.status !== "pending" && !isRetryingAcceptedChat)) {
       return res.status(400).json({
         success: false,
         message: "Request expired, cancelled or already processed",
@@ -250,49 +258,117 @@ const respondToSessionRequest = async (req, res) => {
     }
 
     if (action === "accept") {
-      sessionReq.status = "accepted";
-      sessionReq.startTime = new Date();
-
       if (sessionReq.type === "chat") {
-        const chatRoomId = `chat_${sessionReq.user._id}_${partnerId}_${Date.now()}`;
-        sessionReq.chatRoomId = chatRoomId;
-        await sessionReq.save();
+        const partner = await Partner.findById(partnerId);
+        const requestPartnerId = sessionReq.partner?._id?.toString();
 
-        admin
-          .database()
-          .ref(`chats/${chatRoomId}`)
-          .set({
-            user: sessionReq.user._id.toString(),
-            partner: partnerId,
-            status: "active",
-            createdAt: Date.now(),
-          })
-          .catch(() => {});
+        if (!partner || requestPartnerId !== partnerId.toString()) {
+          return res.status(403).json({
+            success: false,
+            message: "This chat request does not belong to the authenticated partner",
+          });
+        }
 
-        await admin
-          .firestore()
-          .collection("conversations")
-          .doc(chatRoomId)
-          .set(
-            {
+        const clientUid = sessionReq.user && sessionReq.user.firebaseUid;
+        const partnerUid = partner.firebaseUid;
+        if (!clientUid || !partnerUid) {
+          return res.status(500).json({
+            success: false,
+            message: "Unable to resolve Firebase UID for the client or partner",
+          });
+        }
+
+        const chatRoomId =
+          sessionReq.chatRoomId ||
+          `chat_${sessionReq.user._id}_${partner._id}_${sessionReq._id}`;
+        const clientName = sessionReq.user.fullName || "Client";
+        const partnerName =
+          partner.fullName || partner.name || sessionReq.partner.name || "Astrologer";
+
+        try {
+          const firestore = admin.firestore;
+          const conversationRef = firestore
+            .collection("conversations")
+            .doc(chatRoomId);
+
+          await firestore.runTransaction(async (transaction) => {
+            const conversation = await transaction.get(conversationRef);
+            const conversationData = {
               id: chatRoomId,
-              status: "active",
-              participants: [
-                partnerId.toString(),
-                sessionReq.user._id.toString(),
-              ],
-              userId: sessionReq.user._id.toString(),
-              partnerId: partnerId.toString(),
-              clientName: sessionReq.user.fullName || "Client",
-              partnerName: sessionReq.partner.name || "Astrologer",
+              participants: FieldValue.arrayUnion(clientUid, partnerUid),
+              userId: clientUid,
+              partnerId: partnerUid,
+              clientName,
+              partnerName,
               sessionType: "chat",
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          )
-          .catch(() => {});
+            };
 
-        if (sessionReq.user && sessionReq.user.fcmToken) {
+            if (!conversation.exists) {
+              conversationData.status = "active";
+              conversationData.createdAt = FieldValue.serverTimestamp();
+            }
+
+            transaction.set(conversationRef, conversationData, { merge: true });
+          });
+        } catch (error) {
+          return res.status(500).json({
+            success: false,
+            message: "Failed to create or update the chat conversation",
+          });
+        }
+
+        const shouldSaveSession =
+          !isRetryingAcceptedChat || !sessionReq.chatRoomId;
+
+        if (sessionReq.status !== "accepted") {
+          sessionReq.status = "accepted";
+          sessionReq.startTime = new Date();
+          sessionReq.chatRoomId = chatRoomId;
+        } else if (!sessionReq.chatRoomId) {
+          sessionReq.chatRoomId = chatRoomId;
+        }
+
+        if (!isRetryingAcceptedChat) {
+          try {
+            await sendBookingConfirmedEvent({
+              eventId: `session_${sessionReq._id}_confirmed`,
+              user: sessionReq.user,
+              service: "Instant Chat",
+              astrologer:
+                sessionReq.partner.fullName ||
+                sessionReq.partner.name ||
+                "Astrologer",
+              date: sessionReq.startTime,
+              amount: sessionReq.durationMinutes * sessionReq.ratePerMin,
+            });
+          } catch (error) {
+            console.error(
+              "Instant booking event integration failed:",
+              error.message
+            );
+          }
+
+          admin
+            .database()
+            .ref(`chats/${chatRoomId}`)
+            .update({
+              user: sessionReq.user._id.toString(),
+              partner: partner._id.toString(),
+              status: "active",
+              createdAt: Date.now(),
+            })
+            .catch(() => {});
+        }
+
+        if (shouldSaveSession) {
+          await sessionReq.save();
+        }
+
+        if (
+          !isRetryingAcceptedChat &&
+          sessionReq.user &&
+          sessionReq.user.fcmToken
+        ) {
           admin
             .messaging()
             .send({
@@ -331,11 +407,17 @@ const respondToSessionRequest = async (req, res) => {
           success: true,
           message: "Chat request accepted",
           chatRoomId,
+          conversationId: chatRoomId,
           sessionType: "chat",
+          clientId: sessionReq.user._id.toString(),
+          clientUid,
+          clientName,
         });
       }
 
       if (sessionReq.type === "call") {
+        sessionReq.status = "accepted";
+        sessionReq.startTime = new Date();
         const durationMinutes = sessionReq.durationMinutes || 5;
         const timeLimitSec = durationMinutes * 60;
 
@@ -366,6 +448,19 @@ const respondToSessionRequest = async (req, res) => {
 
         sessionReq.exotelCallSid = callResult.callSid;
         await sessionReq.save();
+
+        try {
+          await sendBookingConfirmedEvent({
+            eventId: `session_${sessionReq._id}_confirmed`,
+            user: sessionReq.user,
+            service: "Instant Call",
+            astrologer: sessionReq.partner.fullName || sessionReq.partner.name || "Astrologer",
+            date: sessionReq.startTime,
+            amount: durationMinutes * sessionReq.ratePerMin,
+          });
+        } catch (error) {
+          console.error("Instant booking event integration failed:", error.message);
+        }
 
         if (sessionReq.user && sessionReq.user.fcmToken) {
           admin
@@ -503,13 +598,13 @@ const endSession = async (req, res) => {
     const activeRoomId = sessionReq.chatRoomId || targetId;
 
     if (activeRoomId) {
-      await admin.firestore().collection("conversations").doc(activeRoomId).set({
+      await admin.firestore.collection("conversations").doc(activeRoomId).set({
         status: "ended",
         endedBy: endedBy,
         durationMinutes: durationMinutes,
         totalEarned: totalDeductedAmount,
-        endedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true }).catch(() => {});
+        endedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
 
       admin.database().ref(`chats/${activeRoomId}`).update({
         status: "ended",

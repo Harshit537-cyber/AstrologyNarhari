@@ -39,6 +39,7 @@ const ritualBookingSchema = new mongoose.Schema({
         logisticsFee: Number,
         tax: Number,
         totalAmount: Number,
+        paymentMode: String,
         status: { type: String, enum: ['Pending', 'Success', 'Failed'], default: 'Pending' },
         transactionId: String
     },

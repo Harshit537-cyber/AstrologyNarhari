@@ -6,7 +6,7 @@ const path = require('path');
 
 exports.uploadPalmAndScan = async (req, res) => {
     try {
-        const userId = req.user.id; // token se aaya hua (auth middleware se)
+        const userId = req.user.id; 
 
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Palm image is required (field name: 'image')" });
@@ -14,23 +14,23 @@ exports.uploadPalmAndScan = async (req, res) => {
 
         const { hand } = req.body;
         if (!hand || !['left', 'right'].includes(hand.toLowerCase())) {
-            // Invalid request hai to uploaded file cleanup kar do
+         
             fs.unlink(req.file.path, () => {});
             return res.status(400).json({ success: false, message: "hand must be 'left' or 'right'" });
         }
 
         const normalizedHand = hand.toLowerCase();
 
-        // Purani active scan isi hand ke liye deactivate karo
+       
         await Palm.updateMany(
             { user: userId, hand: normalizedHand, isActive: true },
             { $set: { isActive: false } }
         );
 
-        // Local disk path (multer diskStorage se milta hai)
+        
         const imageUrl = req.file.path;
 
-        // Pehle pending status ke saath record banao
+      
         const palmRecord = await Palm.create({
             user: userId,
             imageUrl,

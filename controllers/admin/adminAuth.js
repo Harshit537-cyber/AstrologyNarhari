@@ -6,6 +6,7 @@ const Partner = require("../../models/Partner/Partner");
 const Pandit = require('../../models/Pandit/Pandit');
 const cloudinary = require("../../config/cloudinary");
 const admin = require("../../config/firebase");
+const sendPushNotification = require("../../utils/notificationService");
 
 const uploadToCloudinary = async (filePath, folder) => {
     try {
@@ -34,10 +35,12 @@ const verifyOtp = async (req, res) => {
   try {
     const { idToken, mobile: bodyMobile } = req.body;
     let mobile;
+    let firebaseUid;
 
     if (idToken) {
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       mobile = decodedToken.phone_number;
+      firebaseUid = decodedToken.uid;
     } else if (bodyMobile) {
       mobile = bodyMobile;
     }
@@ -60,11 +63,14 @@ const verifyOtp = async (req, res) => {
         });
       }
 
-      adminUser = await User.create({
+      const newAdminData = {
         mobile,
         role: "admin",
         isActive: true,
-      });
+      };
+      if (firebaseUid) newAdminData.firebaseUid = firebaseUid;
+
+      adminUser = await User.create(newAdminData);
     } else {
       if (adminUser.role !== "admin") {
         return res.status(400).json({
@@ -79,8 +85,14 @@ const verifyOtp = async (req, res) => {
           message: "This admin account is deactivated",
         });
       }
+
+      if (firebaseUid && !adminUser.firebaseUid) {
+        adminUser.firebaseUid = firebaseUid;
+        await adminUser.save();
+      }
     }
 
+    // Access Token (1 Day)
     const token = jwt.sign(
       {
         id: adminUser._id,
@@ -89,13 +101,31 @@ const verifyOtp = async (req, res) => {
       process.env.JWT_SECRET || "secretkey",
       {
         expiresIn: "1d",
-      },
+      }
     );
+
+    // Refresh Token (7 Days)
+    const refreshToken = jwt.sign(
+      {
+        id: adminUser._id,
+        role: adminUser.role,
+      },
+      process.env.JWT_REFRESH_SECRET || "refreshsecretkey",
+      {
+        expiresIn: "7d",
+      }
+    );
+
+    
+    adminUser.refreshToken = refreshToken;
+    await adminUser.save();
 
     return res.status(200).json({
       success: true,
       message: "Authentication successful",
       token,
+      accessToken: token,
+      refreshToken,
       admin: {
         id: adminUser._id,
         mobile: adminUser.mobile,
@@ -106,13 +136,89 @@ const verifyOtp = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(401).json({
+    return res.status(500).json({
       success: false,
-      message: "Invalid or expired Firebase token",
-      error: error.message,
+      message: error.message,
     });
   }
 };
+
+
+
+const refreshAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Refresh token is required",
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(
+        refreshToken,
+        process.env.JWT_REFRESH_SECRET || "refreshsecretkey"
+      );
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired refresh token",
+      });
+    }
+
+    const adminUser = await User.findById(decoded.id);
+
+    if (!adminUser || adminUser.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Admin account not found",
+      });
+    }
+
+    if (!adminUser.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "This admin account is deactivated",
+      });
+    }
+
+    if (adminUser.refreshToken && adminUser.refreshToken !== refreshToken) {
+      return res.status(403).json({
+        success: false,
+        message: "Refresh token is no longer valid",
+      });
+    }
+
+    // Naya Access Token generate karein
+    const newAccessToken = jwt.sign(
+      {
+        id: adminUser._id,
+        role: adminUser.role,
+      },
+      process.env.JWT_SECRET || "secretkey",
+      {
+        expiresIn: "1d",
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Token refreshed successfully",
+      token: newAccessToken,
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
 
 const register = async (req, res) => {
   try {
@@ -415,7 +521,9 @@ const getAllPartners = async (req, res) => {
       filter.profileApprovalStatus = status;
     }
 
-    const partners = await Partner.find(filter).sort({ createdAt: -1 });
+    const partners = await Partner.find(filter)
+      .select("-otp -otpExpiry -fcmToken")
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -430,7 +538,7 @@ const getPartnerById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const partner = await Partner.findById(id);
+    const partner = await Partner.findById(id).select("-otp -otpExpiry -fcmToken");
 
     if (!partner) {
       return res.status(404).json({
@@ -474,6 +582,7 @@ const updatePartner = async (req, res) => {
       experience,
       qualification,
       expectedSalary,
+      minRate,
       bio,
       isVerified,
       isProfileComplete,
@@ -498,21 +607,22 @@ const updatePartner = async (req, res) => {
     if (dateOfBirth) partner.dateOfBirth = dateOfBirth;
     if (gender) partner.gender = gender;
     if (city) partner.city = city;
-    if (experience) partner.experience = Number(experience);
+    if (experience !== undefined) partner.experience = Number(experience);
     if (qualification) partner.qualification = qualification;
-    if (expectedSalary) partner.expectedSalary = Number(expectedSalary);
+    if (expectedSalary !== undefined) partner.expectedSalary = Number(expectedSalary);
+    if (minRate !== undefined) partner.minRate = Number(minRate);
     if (bio) partner.bio = bio;
 
     if (req.body.specialties) {
-      partner.specialties = JSON.parse(req.body.specialties);
+      partner.specialties = typeof req.body.specialties === 'string' ? JSON.parse(req.body.specialties) : req.body.specialties;
     }
 
     if (req.body.languages) {
-      partner.languages = JSON.parse(req.body.languages);
+      partner.languages = typeof req.body.languages === 'string' ? JSON.parse(req.body.languages) : req.body.languages;
     }
 
     if (req.body.additionalPhotos) {
-      partner.additionalPhotos = JSON.parse(req.body.additionalPhotos);
+      partner.additionalPhotos = typeof req.body.additionalPhotos === 'string' ? JSON.parse(req.body.additionalPhotos) : req.body.additionalPhotos;
     }
 
     if (req.file) {
@@ -806,6 +916,7 @@ const deactivatePartner = async (req, res) => {
       data: {
         partnerId: partner._id,
         fullName: partner.fullName,
+        minRate: partner.minRate,
         isActive: partner.isActive,
         deactivatedBy: partner.deactivatedBy,
         deactivatedAt: partner.deactivatedAt,
@@ -851,6 +962,7 @@ const activatePartner = async (req, res) => {
       data: {
         partnerId: partner._id,
         fullName: partner.fullName,
+        minRate: partner.minRate,
         isActive: partner.isActive,
       },
     });
@@ -910,6 +1022,7 @@ const togglePartnerStatus = async (req, res) => {
         partnerId: partner._id,
         fullName: partner.fullName || "N/A",
         mobile: partner.mobile,
+        minRate: partner.minRate,
         isActive: partner.isActive,
         status: partner.isActive ? "Active" : "Deactivated",
         deactivationReason: partner.deactivationReason,
@@ -937,7 +1050,11 @@ const getPendingKycPartners = async (req, res) => {
     };
 
     const [partners, total] = await Promise.all([
-      Partner.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Partner.find(filter)
+        .select("-otp -otpExpiry -fcmToken")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
       Partner.countDocuments(filter),
     ]);
 
@@ -1013,6 +1130,7 @@ const getPendingMinRatePartners = async (req, res) => {
 
     const [partners, total] = await Promise.all([
       Partner.find(filter)
+        .select("-otp -otpExpiry -fcmToken")
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -1122,9 +1240,7 @@ const getPartnersStatusList = async (req, res) => {
     }
 
     const partners = await Partner.find(filter)
-      .select(
-        "fullName mobile email profilePic profileApprovalStatus kycStatus isActive isOnline deactivationReason deactivatedAt deactivatedBy reactivateAt createdAt",
-      )
+      .select("-otp -otpExpiry -fcmToken")
       .sort({ createdAt: -1 })
       .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit))
@@ -1134,6 +1250,10 @@ const getPartnersStatusList = async (req, res) => {
       const isActive = partner.isActive !== false;
       return {
         ...partner,
+        partnerId: partner._id,
+        minRate: partner.minRate ?? 25,
+        requestedMinRate: partner.requestedMinRate ?? null,
+        minRateApprovalStatus: partner.minRateApprovalStatus ?? null,
         isActive: isActive,
         status: isActive ? "Active" : "Deactivated",
       };
@@ -1172,9 +1292,7 @@ const getPartnerStatusById = async (req, res) => {
     }
 
     const partner = await Partner.findById(id)
-      .select(
-        "fullName mobile email isActive isOnline isBusy deactivationReason deactivationReasonNote deactivatedAt deactivatedBy reactivateAt profileApprovalStatus kycStatus createdAt",
-      )
+      .select("-otp -otpExpiry -fcmToken")
       .lean();
 
     if (!partner) {
@@ -1189,6 +1307,7 @@ const getPartnerStatusById = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
+        ...partner,
         partnerId: partner._id,
         fullName: partner.fullName || "N/A",
         mobile: partner.mobile,
@@ -1197,6 +1316,9 @@ const getPartnerStatusById = async (req, res) => {
         isActive: isActive,
         isOnline: partner.isOnline || false,
         isBusy: partner.isBusy || false,
+        minRate: partner.minRate ?? 25,
+        requestedMinRate: partner.requestedMinRate ?? null,
+        minRateApprovalStatus: partner.minRateApprovalStatus ?? null,
         deactivationDetails: !isActive
           ? {
               reason: partner.deactivationReason || "N/A",
@@ -1221,9 +1343,7 @@ const getPartnerStatusById = async (req, res) => {
 const getAllPartnersStatus = async (req, res) => {
   try {
     const partners = await Partner.find()
-      .select(
-        "fullName mobile email isActive isOnline deactivationReason deactivationReasonNote deactivatedAt deactivatedBy reactivateAt profileApprovalStatus kycStatus createdAt",
-      )
+      .select("-otp -otpExpiry -fcmToken")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -1240,6 +1360,7 @@ const getAllPartnersStatus = async (req, res) => {
       }
 
       return {
+        ...partner,
         partnerId: partner._id,
         fullName: partner.fullName || "N/A",
         mobile: partner.mobile,
@@ -1247,6 +1368,10 @@ const getAllPartnersStatus = async (req, res) => {
         status: isCurrentActive ? "Active" : "Inactive",
         isActive: isCurrentActive,
         isOnline: partner.isOnline || false,
+        isBusy: partner.isBusy || false,
+        minRate: partner.minRate ?? 25,
+        requestedMinRate: partner.requestedMinRate ?? null,
+        minRateApprovalStatus: partner.minRateApprovalStatus ?? null,
         deactivationDetails: !isCurrentActive
           ? {
               reason: partner.deactivationReason || "N/A",
@@ -1367,8 +1492,87 @@ const updatePanditApprovalStatusByAdmin = async (req, res) => {
     }
 };
 
+
+const updatePartnerMinRateByAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { minRate } = req.body;
+
+    if (minRate === undefined || minRate === null || isNaN(minRate) || Number(minRate) < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid positive minimum rate is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Partner ID format",
+      });
+    }
+
+  
+    const partner = await Partner.findById(id);
+
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        message: "Partner not found",
+      });
+    }
+
+    const oldRate = partner.minRate;
+    const newRate = Number(minRate);
+
+   
+    partner.minRate = newRate;
+    partner.minRateApprovalStatus = "Approved";
+    partner.requestedMinRate = null; 
+    await partner.save();
+
+    
+    if (partner.fcmToken) {
+      const notificationData = {
+        type: "MIN_RATE_UPDATED",
+        partnerId: partner._id.toString(),
+        minRate: String(newRate),
+      };
+
+      const notificationPayload = {
+        title: "Minimum Rate Updated",
+        body: `Admin ne aapka minimum consultation rate update karke ₹${newRate}/min kar diya hai.`,
+        channelId: "rate_update_channel",
+      };
+
+      
+      sendPushNotification(partner.fcmToken, notificationData, notificationPayload).catch((err) => {
+        console.error("Failed to send minRate push notification:", err.message);
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Partner minimum rate successfully updated from ₹${oldRate ?? 0} to ₹${newRate}`,
+      data: {
+        partnerId: partner._id,
+        fullName: partner.fullName,
+        minRate: partner.minRate,
+        minRateApprovalStatus: partner.minRateApprovalStatus,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
+
 module.exports = {
   verifyOtp,
+  refreshAccessToken,
   register,
   getDashboardStats,
   getRecentUsers,
@@ -1397,5 +1601,6 @@ module.exports = {
   getAllPartnersStatus,
   getAllPanditsForAdmin,
   getPanditByIdForAdmin,
-  updatePanditApprovalStatusByAdmin
+  updatePanditApprovalStatusByAdmin,
+  updatePartnerMinRateByAdmin
 };

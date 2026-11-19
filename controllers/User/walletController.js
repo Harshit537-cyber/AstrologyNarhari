@@ -2,9 +2,10 @@ const User = require('../../models/User');
 const Partner = require('../../models/Partner/Partner');
 const razorpayInstance = require('../../config/razorpay');
 const Transaction = require('../../models/Transaction/Transaction');
-const crypto = require('crypto');
+const Order = require('../../models/E-comm/Order');
 const mongoose = require('mongoose');
 const admin = require('../../config/firebase');
+const { isValidSignature, verifyCapturedPayment } = require('../../utils/razorpayPayment');
 
 const chatSessionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -20,30 +21,10 @@ const chatSessionSchema = new mongoose.Schema({
 const ChatSession = mongoose.models.ChatSession || mongoose.model('ChatSession', chatSessionSchema);
 
 const addMoney = async (req, res) => {
-    try {
-        const { amount } = req.body;
-        const userId = req.user.id;
-
-        if (!amount || Number(amount) <= 0) {
-            return res.status(400).json({ success: false, message: 'Invalid amount' });
-        }
-
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        user.walletBalance = (user.walletBalance || 0) + Number(amount);
-        await user.save();
-
-        return res.status(200).json({
-            success: true,
-            message: 'Money added to wallet successfully',
-            walletBalance: user.walletBalance
-        });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
+    return res.status(400).json({
+        success: false,
+        message: 'Direct wallet credits are disabled. Use the Razorpay create-order and verify-payment flow.'
+    });
 };
 
 const getBalance = async (req, res) => {
@@ -66,31 +47,40 @@ const getBalance = async (req, res) => {
 
 const createOrder = async (req, res) => {
     try {
-        const { amount, userId } = req.body;
+        const amount = Number(req.body.amount);
+        const userId = req.user.id;
 
-        if (!amount || amount < 1) {
-            return res.status(400).json({ success: false, message: "Minimum amount should be ₹1" });
+        if (
+            !Number.isFinite(amount) ||
+            amount < 1 ||
+            amount > 1000000 ||
+            Math.round(amount * 100) / 100 !== amount
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Amount must be between ₹1 and ₹10,00,000, with at most two decimal places."
+            });
         }
 
-        const targetUserId = userId || req.user.id;
-        const userExists = await User.findById(targetUserId);
+        const userExists = await User.findById(userId);
         if (!userExists) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
+        const amountInPaise = Math.round(amount * 100);
         const options = {
-            amount: Math.round(amount * 100), 
+            amount: amountInPaise,
             currency: "INR",
             receipt: `rcpt_${Date.now()}`,
-            notes: { userId: targetUserId } 
+            notes: { userId: userId.toString() }
         };
 
         const order = await razorpayInstance.orders.create(options);
 
         await Transaction.create({
-            user: targetUserId,
+            user: userId,
             razorpay_order_id: order.id,
-            amount: amount, 
+            amount: amountInPaise / 100,
             status: 'pending',
             type: 'deposit'
         });
@@ -109,14 +99,26 @@ const verifyPayment = async (req, res) => {
 
     try {
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+        const userId = req.user.id;
 
-        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        if (
+            typeof razorpay_order_id !== 'string' ||
+            typeof razorpay_payment_id !== 'string' ||
+            typeof razorpay_signature !== 'string' ||
+            !razorpay_order_id ||
+            !razorpay_payment_id ||
+            !razorpay_signature
+        ) {
             await session.abortTransaction();
             session.endSession();
             return res.status(400).json({ success: false, message: "Missing payment details" });
         }
 
-        const transaction = await Transaction.findOne({ razorpay_order_id }).session(session);
+        const transaction = await Transaction.findOne({
+            razorpay_order_id,
+            user: userId,
+            type: 'deposit'
+        }).session(session);
         
         if (!transaction) {
             await session.abortTransaction();
@@ -130,20 +132,37 @@ const verifyPayment = async (req, res) => {
             return res.status(400).json({ success: false, message: "Payment already processed or invalid" });
         }
 
-        const generated_signature = crypto
-            .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-            .update(razorpay_order_id + "|" + razorpay_payment_id)
-            .digest("hex");
-
-        if (generated_signature !== razorpay_signature) {
-            transaction.status = 'failed';
-            await transaction.save({ session });
-            await session.commitTransaction();
+        if (!isValidSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)) {
+            await session.abortTransaction();
             session.endSession();
             return res.status(400).json({ success: false, message: "Payment verification failed: Signature Mismatch" });
         }
 
-        const amountToCredit = transaction.amount; 
+        const isCaptured = await verifyCapturedPayment({
+            paymentId: razorpay_payment_id,
+            expectedAmountPaise: Math.round(transaction.amount * 100),
+            expectedOrderId: razorpay_order_id
+        });
+        if (!isCaptured) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: "Payment has not been captured for this order" });
+        }
+
+        const reusedPayment = await Transaction.findOne({
+            razorpay_payment_id,
+            _id: { $ne: transaction._id }
+        }).session(session);
+        const reusedOrderPayment = await Order.findOne({
+            "paymentDetails.transactionId": razorpay_payment_id
+        }).session(session);
+        if (reusedPayment || reusedOrderPayment) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: "Payment has already been processed" });
+        }
+
+        const amountToCredit = transaction.amount;
 
         const updatedUser = await User.findByIdAndUpdate(
             transaction.user,

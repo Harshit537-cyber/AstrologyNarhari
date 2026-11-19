@@ -1,6 +1,7 @@
 // config/firebase.js
 const { initializeApp, getApps, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
+const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getDatabase } = require('firebase-admin/database');
 
@@ -36,11 +37,13 @@ if (getApps().length === 0) {
 }
 
 const authService = app ? getAuth(app) : null;
+const firestoreService = app ? getFirestore(app) : null;
 const messagingService = app ? getMessaging(app) : null;
 const databaseService = app ? getDatabase(app) : null;
 
 module.exports = {
   auth: () => authService,
+  firestore: firestoreService,
   messaging: () => messagingService,
   database: () => databaseService
 };

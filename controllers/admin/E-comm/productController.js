@@ -1,7 +1,22 @@
 const Product = require("../../../models/E-comm/Product");
 const Category = require("../../../models/E-comm/productCategory");
-const cloudinary = require("../../../config/cloudinary")
+const cloudinary = require("../../../config/cloudinary");
+const fs = require("fs");
 
+const cleanupUploadedFiles = (files = []) => {
+    for (const file of files) {
+        try {
+            if (file.path && fs.existsSync(file.path)) {
+                fs.unlinkSync(file.path);
+            }
+        } catch (error) {
+            console.error("Product upload temporary-file cleanup failed:", error);
+        }
+    }
+};
+
+const createSlug = (value) =>
+    value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "product";
 
 // ==========================
 // Add Product
@@ -24,7 +39,7 @@ exports.addProduct = async (req, res) => {
             slug
         } = req.body;
 
-        if (!name || !description || !category || !price || !slug) {
+        if (!name || !description || !category || price === undefined || price === null || price === "") {
             return res.status(400).json({
                 success: false,
                 message: "Required fields are missing.",
@@ -42,10 +57,8 @@ exports.addProduct = async (req, res) => {
 
         let images = [];
 
-        if (req.files && req.files.length > 0) {
-
+        if (req.files?.length > 0) {
             for (const file of req.files) {
-
                 const uploadedImage = await cloudinary.uploader.upload(
                     file.path,
                     {
@@ -74,7 +87,7 @@ exports.addProduct = async (req, res) => {
             careInstructions,
             isFeatured,
             isActive,
-            slug
+            slug: slug?.trim() || createSlug(name)
         });
 
         return res.status(201).json({
@@ -84,12 +97,12 @@ exports.addProduct = async (req, res) => {
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message,
         });
-
+    } finally {
+        cleanupUploadedFiles(req.files);
     }
 };
 
@@ -236,6 +249,8 @@ exports.updateProduct = async (req, res) => {
             success: false,
             message: error.message,
         });
+    } finally {
+        cleanupUploadedFiles(req.files);
     }
 };
 

@@ -288,3 +288,159 @@ exports.getActiveTopBanners = async (req, res) => {
     });
   }
 };
+
+
+exports.getHomeData = async (req, res) => {
+    try {
+        const [banners, categories, featuredProducts, latestProducts] = await Promise.all([
+            TopBanner.find({ isActive: true })
+                .select("title subtitle image buttonText redirectType redirectValue displayOrder")
+                .sort({ displayOrder: 1, createdAt: -1 })
+                .lean(),
+
+            Category.find({ isActive: true })
+                .select("_id name description image")
+                .sort({ createdAt: -1 })
+                .lean(),
+
+            Product.find({ isFeatured: true, isActive: true })
+                .populate("category", "name")
+                .sort({ createdAt: -1 })
+                .lean(),
+
+            Product.find({ isActive: true })
+                .populate("category", "name")
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean(),
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            message: "Home data fetched successfully.",
+            data: {
+                banners,
+                categories,
+                featuredProducts,
+                latestProducts,
+            },
+        });
+    } catch (error) {
+        console.error("getHomeData error:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Something went wrong",
+        });
+    }
+};
+
+
+exports.getProducts = async (req, res) => {
+    try {
+        const productId = req.params.id || req.query.productId;
+
+        
+        if (productId) {
+            if (!mongoose.isValidObjectId(productId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid product ID.",
+                });
+            }
+
+            const product = await Product.findOne({
+                _id: productId,
+                isActive: true,
+            })
+                .populate("category", "name")
+                .lean();
+
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Product not found.",
+                });
+            }
+
+            const relatedProducts = await Product.find({
+                category: product.category?._id || product.category,
+                _id: { $ne: product._id },
+                isActive: true,
+            })
+                .populate("category", "name")
+                .limit(8)
+                .lean();
+
+            return res.status(200).json({
+                success: true,
+                message: "Product details fetched successfully.",
+                data: {
+                    product,
+                    relatedProducts,
+                },
+            });
+        }
+
+        // 2. Product Listing / Filter / Search Mode
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.max(1, parseInt(req.query.limit, 10) || 10);
+        const skip = (page - 1) * limit;
+
+        const { categoryId, keyword, isFeatured } = req.query;
+
+        const filter = { isActive: true };
+
+        if (categoryId) {
+            if (!mongoose.isValidObjectId(categoryId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid category ID.",
+                });
+            }
+            filter.category = categoryId;
+        }
+
+        if (keyword && keyword.trim() !== "") {
+            filter.name = {
+                $regex: keyword.trim(),
+                $options: "i",
+            };
+        }
+
+        if (isFeatured === "true") {
+            filter.isFeatured = true;
+        }
+
+        const [totalProducts, products] = await Promise.all([
+            Product.countDocuments(filter),
+            Product.find(filter)
+                .populate("category", "name")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+        ]);
+
+        const totalPages = Math.ceil(totalProducts / limit);
+
+        return res.status(200).json({
+            success: true,
+            message: "Products fetched successfully.",
+            data: products,
+            pagination: {
+                currentPage: page,
+                totalPages,
+                totalProducts,
+                limit,
+                hasNextPage: page < totalPages,
+                hasPreviousPage: page > 1,
+            },
+        });
+    } catch (error) {
+        console.error("getProducts error:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Something went wrong",
+        });
+    }
+};

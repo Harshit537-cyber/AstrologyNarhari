@@ -3,9 +3,7 @@ const Pandit = require("../../models/Pandit/Pandit");
 const cloudinary = require("../../config/cloudinary");
 const fs = require("fs");
 
-// =====================================================
-// CREATE PANDIT
-// =====================================================
+
 const createPandit = async (req, res) => {
     try {
         const {

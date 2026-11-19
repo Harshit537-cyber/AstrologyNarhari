@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema({
     hasClaimedFirstCoupon: { type: Boolean, default: false },
     walletBalance: { type: Number, default: 0 },
     fcmToken: { type: String, default: null },
-   firebaseUid: { type: String, unique: true, sparse: true, default: null }, 
+  firebaseUid: { type: String, unique: true, sparse: true }, 
 
 }, { timestamps: true });
 

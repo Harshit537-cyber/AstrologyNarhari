@@ -208,7 +208,8 @@ const updateProfile = async (req, res) => {
 
   try {
     const partnerId = req.user.id;
-    const { fullName, specialties, languages, experience, minRate, bio } = req.body;
+  
+    const { fullName, specialties, languages, experience, bio } = req.body;
 
     let partner = await Partner.findById(partnerId);
     if (!partner) {
@@ -218,8 +219,9 @@ const updateProfile = async (req, res) => {
 
     if (fullName !== undefined) partner.fullName = fullName;
     if (experience !== undefined) partner.experience = Number(experience);
-    if (minRate !== undefined) partner.minRate = Number(minRate);
     if (bio !== undefined) partner.bio = bio;
+
+  
 
     if (specialties !== undefined) {
       partner.specialties =

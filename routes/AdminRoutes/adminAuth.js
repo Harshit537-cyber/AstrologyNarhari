@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   verifyOtp,
+  refreshAccessToken,
   register,
   getDashboardStats,
   getRecentUsers,
@@ -30,13 +31,17 @@ const {
   getAllPartnersStatus,
   getAllPanditsForAdmin,
   getPanditByIdForAdmin,
-  updatePanditApprovalStatusByAdmin
+  updatePanditApprovalStatusByAdmin,
+  updatePartnerMinRateByAdmin
 } = require("../../controllers/admin/adminAuth");
 
 const { verifyToken, isAdmin } = require("../../middleware/auth");
 const upload = require("../../middleware/upload");
 
 router.post("/verify-otp", verifyOtp);
+
+router.post("/refresh-token", refreshAccessToken);
+
 router.post("/register", verifyToken, isAdmin, register);
 
 router.put("/test-upload", upload.single("profilePic"), (req, res) => {
@@ -137,5 +142,13 @@ router.put(
 router.get("/dashboard/pandits", verifyToken, isAdmin, getAllPanditsForAdmin);
 router.get("/dashboard/pandits/:id", verifyToken, isAdmin, getPanditByIdForAdmin);
 router.put("/dashboard/pandits/:id/approval", verifyToken, isAdmin, updatePanditApprovalStatusByAdmin);
+
+
+router.put(
+  "/dashboard/partners/:id/min-rate",
+  verifyToken,
+  isAdmin,
+  updatePartnerMinRateByAdmin
+);
 
 module.exports = router;

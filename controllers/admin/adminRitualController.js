@@ -209,9 +209,13 @@ exports.deleteRitual = async (req, res) => {
                 const publicId = fileNameWithExtension.split('.')[0];
                 const fullPublicId = `rituals_banners/${publicId}`;
                 
-                await cloudinary.uploader.destroy(fullPublicId);
+                const result = await cloudinary.uploader.destroy(fullPublicId);
+                if (!["ok", "not found"].includes(result.result)) {
+                    throw new Error(`Cloudinary did not delete ritual image: ${result.result}`);
+                }
             } catch (cloudinaryErr) {
-                console.error("Cloudinary Delete Error (ignoring):", cloudinaryErr);
+                console.error("Cloudinary Delete Error:", cloudinaryErr);
+                throw cloudinaryErr;
             }
         }
 
