@@ -32,7 +32,14 @@ const partnerEarningsRoutes = require("./routes/PatnerRoutes/partnerRatingRoutes
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+    limit: '50mb',
+    verify: (req, res, buffer) => {
+        if (req.method === 'POST' && req.path === '/api/crm/webhooks/events') {
+            req.rawBody = Buffer.from(buffer);
+        }
+    }
+}));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
@@ -49,6 +56,7 @@ app.use("/api/pandit", panditWalletRoutes);
 app.use("/api/user/profile", require("./routes/UserRoutes/userProfileRoutes"));
 app.use("/api/review", require("./routes/review/reviewRoutes"));
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/crm", require("./routes/crmRoutes"));
 app.use("/api/wallet", require("./routes/UserRoutes/walletRoutes"));
 app.use("/api/match", require("./routes/UserRoutes/kundaliMatchMakingRoutes"));
 app.use("/api/coupon", require("./routes/UserRoutes/couponRoutes"));

@@ -224,6 +224,7 @@ const respondToBooking = async (req, res) => {
             try {
                 await sendBookingConfirmedEvent({
                     eventId: `booking_${booking._id}_confirmed`,
+                    ref: String(booking._id),
                     user,
                     service: booking.mode,
                     astrologer: booking.partner?.fullName || booking.partner?.name || 'Astrologer',

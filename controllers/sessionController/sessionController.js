@@ -332,6 +332,7 @@ const respondToSessionRequest = async (req, res) => {
           try {
             await sendBookingConfirmedEvent({
               eventId: `session_${sessionReq._id}_confirmed`,
+              ref: String(sessionReq._id),
               user: sessionReq.user,
               service: "Instant Chat",
               astrologer:
@@ -452,6 +453,7 @@ const respondToSessionRequest = async (req, res) => {
         try {
           await sendBookingConfirmedEvent({
             eventId: `session_${sessionReq._id}_confirmed`,
+            ref: String(sessionReq._id),
             user: sessionReq.user,
             service: "Instant Call",
             astrologer: sessionReq.partner.fullName || sessionReq.partner.name || "Astrologer",

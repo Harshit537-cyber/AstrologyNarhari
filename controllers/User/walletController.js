@@ -6,6 +6,7 @@ const Order = require('../../models/E-comm/Order');
 const mongoose = require('mongoose');
 const admin = require('../../config/firebase');
 const { isValidSignature, verifyCapturedPayment } = require('../../utils/razorpayPayment');
+const { sendCrmEvent } = require('../../services/bookingEventsService');
 
 const chatSessionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -180,6 +181,17 @@ const verifyPayment = async (req, res) => {
 
         await session.commitTransaction();
         session.endSession();
+
+        sendCrmEvent({
+            event: 'wallet.recharged',
+            eventId: `wallet_recharged_${transaction._id}`,
+            ref: String(transaction._id),
+            user: updatedUser,
+            data: {
+                amount: String(amountToCredit),
+                balance: String(updatedUser.walletBalance)
+            }
+        });
 
         return res.status(200).json({
             success: true,

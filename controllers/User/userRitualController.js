@@ -254,6 +254,7 @@ const acceptRitualRequestByPandit = async (req, res) => {
             const ritual = await Ritual.findById(booking.ritualId).select('title');
             await sendBookingConfirmedEvent({
                 eventId: `ritual_${booking._id}_confirmed`,
+                ref: String(booking._id),
                 user,
                 service: ritual?.title || 'Ritual booking',
                 astrologer: pandit.fullName || 'Pandit ji',
