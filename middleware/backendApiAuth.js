@@ -1,8 +1,8 @@
 const crypto = require('node:crypto');
 
 const backendApiAuth = (req, res, next) => {
-    const secret = process.env.BACKEND_API_KEY;
-    const headerName = process.env.BACKEND_API_HEADER || 'X-Backend-Api-Key';
+    const secret = (process.env.BACKEND_API_KEY || '').trim();
+    const headerName = (process.env.BACKEND_API_HEADER || 'X-Backend-Api-Key').trim();
 
     if (!secret) {
         return res.status(503).json({
@@ -19,10 +19,11 @@ const backendApiAuth = (req, res, next) => {
         });
     }
 
-    const suppliedKey = req.get(headerName);
-    if (typeof suppliedKey !== 'string' || !suppliedKey) {
+    const rawSuppliedKey = req.get(headerName);
+    if (typeof rawSuppliedKey !== 'string' || !rawSuppliedKey.trim()) {
         return res.status(401).json({ success: false, message: 'Invalid API key' });
     }
+    const suppliedKey = rawSuppliedKey.trim();
 
     const expectedHash = crypto.createHash('sha256').update(secret).digest();
     const suppliedHash = crypto.createHash('sha256').update(suppliedKey).digest();
