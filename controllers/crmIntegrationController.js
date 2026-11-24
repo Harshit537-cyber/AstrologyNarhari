@@ -236,6 +236,7 @@ const createPaymentLink = async (req, res) => {
 
         await Transaction.create({
             user: user._id,
+            razorpay_order_id: paymentLink.order_id || paymentLink.id,
             razorpay_payment_link_id: paymentLink.id,
             amount: amount,
             currency: 'INR',
@@ -290,7 +291,11 @@ const receiveRazorpayWebhook = async (req, res) => {
 
         try {
             const transaction = await Transaction.findOne({
-                razorpay_payment_link_id: paymentLinkId,
+                $or: [
+                    { razorpay_payment_link_id: paymentLinkId },
+                    { razorpay_order_id: paymentLinkId },
+                    { "metadata.payment_link_id": paymentLinkId }
+                ],
                 type: 'deposit'
             }).session(session);
 

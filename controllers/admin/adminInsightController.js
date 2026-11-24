@@ -7,7 +7,7 @@ const uploadToCloudinary = async (filePath) => {
   try {
     const result = await cloudinary.uploader.upload(filePath, {
       folder: "cosmic_insights",
-          resource_type: "auto",
+      resource_type: "auto",
     });
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     return result.secure_url;
@@ -28,7 +28,7 @@ exports.createArticle = async (req, res) => {
       });
     }
 
-    const BACKEND_URL = "https://api.namahastro.com/article"  || "http://localhost:5000/article";
+    const BACKEND_URL = "https://api.namahastro.com/article" || "http://localhost:5000/article";
 
     const uploadPromises = [
       req.files?.thumbnail
@@ -43,12 +43,12 @@ exports.createArticle = async (req, res) => {
         ? uploadToCloudinary(req.files.authorProfilePic[0].path)
         : Promise.resolve(""),
 
-         req.files?.video
+      req.files?.video
         ? uploadToCloudinary(req.files.video[0].path)
         : Promise.resolve(""),
     ];
 
-    
+
 
     const contentImageFiles = req.files?.contentImages || req.files?.contentImage || [];
     const contentImagesPromises = contentImageFiles.map(file => uploadToCloudinary(file.path));
@@ -75,7 +75,7 @@ exports.createArticle = async (req, res) => {
 
       thumbnail: thumbnailUrl,
       bannerImage: bannerUrl,
-       video: videoUrl,
+      video: videoUrl,
 
       author: {
         name: req.body.authorName,
@@ -227,7 +227,7 @@ exports.updateArticle = async (req, res) => {
 
     const articleId = req.params.id;
 
-    const BACKEND_URL = "https://api.namahastro.com/article"                                                       
+    const BACKEND_URL = "https://api.namahastro.com/article"
 
     const currentArticle = await Article.findById(articleId);
 
@@ -250,7 +250,7 @@ exports.updateArticle = async (req, res) => {
       req.files?.authorProfilePic
         ? uploadToCloudinary(req.files.authorProfilePic[0].path)
         : Promise.resolve(null),
-        req.files?.video
+      req.files?.video
         ? uploadToCloudinary(req.files.video[0].path)
         : Promise.resolve(null),
     ];
