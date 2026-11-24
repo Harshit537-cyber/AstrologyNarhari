@@ -20,9 +20,20 @@ router.post(
     { name: "thumbnail", maxCount: 1 },
     { name: "bannerImage", maxCount: 1 },
     { name: "authorProfilePic", maxCount: 1 },
-     { name: "video", maxCount: 1 }, 
+    { name: "video", maxCount: 1 }, 
+    { name: "contentImages", maxCount: 10 },
+    { name: "contentImage", maxCount: 10 },
   ]),
   articleController.createArticle
+);
+
+// Upload Editor Image (for rich text editor inline images)
+router.post(
+  "/upload-image",
+  verifyToken,
+  isAdmin,
+  upload.single("image"),
+  articleController.uploadEditorImage
 );
 
 // Get All Articles - Admin
@@ -50,7 +61,9 @@ router.put(
     { name: "thumbnail", maxCount: 1 },
     { name: "bannerImage", maxCount: 1 },
     { name: "authorProfilePic", maxCount: 1 },
-      { name: "video", maxCount: 1 }, 
+    { name: "video", maxCount: 1 }, 
+    { name: "contentImages", maxCount: 10 },
+    { name: "contentImage", maxCount: 10 },
   ]),
   articleController.updateArticle
 );

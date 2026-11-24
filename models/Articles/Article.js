@@ -31,7 +31,7 @@ const articleSchema = new mongoose.Schema(
       author: { type: String },
     },
     mainContent: { type: String, required: true },
-    mainContent: { type: String, required: true },
+    contentImages: [{ type: String }],
 
     keyTakeaways: [
       {

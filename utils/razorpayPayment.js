@@ -60,4 +60,30 @@ const verifyCapturedPayment = async ({ paymentId, expectedAmountPaise, expectedO
         order.amount === expectedAmountPaise;
 };
 
-module.exports = { isValidSignature, verifyCapturedPayment };
+const verifyRazorpayWebhookSignature = (rawBody, signature, secret) => {
+    const webhookSecret = secret || process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
+    if (
+        !webhookSecret ||
+        !rawBody ||
+        typeof signature !== 'string' ||
+        !/^[a-f\d]{64}$/i.test(signature)
+    ) {
+        return false;
+    }
+
+    const expected = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(rawBody)
+        .digest();
+
+    let received;
+    try {
+        received = Buffer.from(signature, 'hex');
+    } catch {
+        return false;
+    }
+
+    return received.length === expected.length && crypto.timingSafeEqual(received, expected);
+};
+
+module.exports = { isValidSignature, verifyCapturedPayment, verifyRazorpayWebhookSignature };

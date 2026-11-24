@@ -1,8 +1,12 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Booking = require('../models/Booking/Booking');
+const Transaction = require('../models/Transaction/Transaction');
 const CrmWebhookEvent = require('../models/CrmWebhookEvent');
+const razorpayInstance = require('../config/razorpay');
 const { verifyWebhookSignature } = require('../utils/crmWebhookSecurity');
+const { verifyRazorpayWebhookSignature } = require('../utils/razorpayPayment');
+const { sendCrmEvent } = require('../services/bookingEventsService');
 
 const normalizePhone = (value) => {
     if (typeof value !== 'string' || !/^\+?[0-9()\s.-]+$/.test(value.trim())) {
@@ -178,9 +182,182 @@ const receiveWebhook = async (req, res) => {
     }
 };
 
+const createPaymentLink = async (req, res) => {
+    try {
+        const phone = normalizePhone(req.body?.phone);
+        const amount = Number(req.body?.amount);
+
+        if (!phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'A valid phone number with country code is required'
+            });
+        }
+
+        if (
+            !Number.isFinite(amount) ||
+            amount < 1 ||
+            amount > 1000000 ||
+            Math.round(amount * 100) / 100 !== amount
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'Amount must be between ₹1 and ₹10,00,000, with at most two decimal places.'
+            });
+        }
+
+        const user = await findUserByPhone(phone);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const amountInPaise = Math.round(amount * 100);
+        const customerContact = phone.startsWith('+') ? phone : `+${phone}`;
+
+        const paymentLink = await razorpayInstance.paymentLink.create({
+            amount: amountInPaise,
+            currency: 'INR',
+            accept_partial: false,
+            description: 'Wallet Recharge via CRM',
+            customer: {
+                name: user.fullName || user.name || 'Customer',
+                contact: customerContact
+            },
+            notify: {
+                sms: false,
+                email: false
+            },
+            notes: {
+                userId: String(user._id),
+                phone: phone,
+                source: 'crm_payment_link'
+            }
+        });
+
+        await Transaction.create({
+            user: user._id,
+            razorpay_payment_link_id: paymentLink.id,
+            amount: amount,
+            currency: 'INR',
+            status: 'pending',
+            type: 'deposit',
+            description: 'Wallet recharge link generated via CRM',
+            metadata: {
+                source: 'crm',
+                phone: phone,
+                payment_link_id: paymentLink.id,
+                payment_link_url: paymentLink.short_url
+            }
+        });
+
+        return res.status(201).json({
+            success: true,
+            url: paymentLink.short_url,
+            payment_link_id: paymentLink.id,
+            amount: amount
+        });
+    } catch (error) {
+        console.error('CRM create payment link error:', error);
+        return res.status(500).json({
+            success: false,
+            message: error?.error?.description || error.message || 'Could not generate payment link'
+        });
+    }
+};
+
+const receiveRazorpayWebhook = async (req, res) => {
+    const signature = req.get('x-razorpay-signature');
+    const rawBody = req.rawBody;
+
+    if (!verifyRazorpayWebhookSignature(rawBody, signature)) {
+        return res.status(401).json({ success: false, message: 'Invalid webhook signature' });
+    }
+
+    const event = req.body?.event;
+
+    if (event === 'payment_link.paid') {
+        const paymentLink = req.body?.payload?.payment_link?.entity;
+        const payment = req.body?.payload?.payment?.entity;
+        const paymentLinkId = paymentLink?.id;
+        const paymentId = payment?.id;
+
+        if (!paymentLinkId) {
+            return res.status(400).json({ success: false, message: 'Missing payment link id' });
+        }
+
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const transaction = await Transaction.findOne({
+                razorpay_payment_link_id: paymentLinkId,
+                type: 'deposit'
+            }).session(session);
+
+            if (!transaction) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(200).json({ success: true, message: 'No matching transaction found' });
+            }
+
+            if (transaction.status === 'success') {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(200).json({ success: true, message: 'Payment already processed' });
+            }
+
+            const amountToCredit = transaction.amount;
+            const updatedUser = await User.findByIdAndUpdate(
+                transaction.user,
+                { $inc: { walletBalance: amountToCredit } },
+                { new: true, session }
+            );
+
+            if (!updatedUser) {
+                throw new Error('User not found during wallet balance update');
+            }
+
+            transaction.status = 'success';
+            if (paymentId) {
+                transaction.razorpay_payment_id = paymentId;
+            }
+            await transaction.save({ session });
+
+            await session.commitTransaction();
+            session.endSession();
+
+            sendCrmEvent({
+                event: 'wallet.recharged',
+                eventId: `wallet_recharged_${transaction._id}`,
+                ref: String(transaction._id),
+                user: updatedUser,
+                data: {
+                    amount: String(amountToCredit),
+                    balance: String(updatedUser.walletBalance)
+                }
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: 'Wallet credited successfully',
+                balance: updatedUser.walletBalance
+            });
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            console.error('Razorpay payment link webhook processing failed:', error);
+            return res.status(500).json({ success: false, message: 'Could not process payment link event' });
+        }
+    }
+
+    return res.status(200).json({ success: true, message: `Event ${event} acknowledged` });
+};
+
 module.exports = {
     lookupUserByPhone,
     getBookingById,
     getBookingsByPhone,
-    receiveWebhook
+    receiveWebhook,
+    createPaymentLink,
+    receiveRazorpayWebhook
 };

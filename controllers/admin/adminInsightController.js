@@ -50,8 +50,11 @@ exports.createArticle = async (req, res) => {
 
     
 
-    const [thumbnailUrl, bannerUrl, authorPicUrl,videoUrl] =
-      await Promise.all(uploadPromises);
+    const contentImageFiles = req.files?.contentImages || req.files?.contentImage || [];
+    const contentImagesPromises = contentImageFiles.map(file => uploadToCloudinary(file.path));
+
+    const [thumbnailUrl, bannerUrl, authorPicUrl, videoUrl, ...contentImageUrls] =
+      await Promise.all([...uploadPromises, ...contentImagesPromises]);
 
     const parseSafely = (data) => {
       try {
@@ -67,6 +70,8 @@ exports.createArticle = async (req, res) => {
 
     const articleData = {
       ...req.body,
+      mainContent: req.body.mainContent || req.body.content,
+      contentImages: contentImageUrls.length > 0 ? contentImageUrls : undefined,
 
       thumbnail: thumbnailUrl,
       bannerImage: bannerUrl,
@@ -250,10 +255,24 @@ exports.updateArticle = async (req, res) => {
         : Promise.resolve(null),
     ];
 
-    const [newThumbnail, newBanner, newAuthorPic,newVideo] =
-      await Promise.all(uploadPromises);
+    const contentImageFiles = req.files?.contentImages || req.files?.contentImage || [];
+    const contentImagesPromises = contentImageFiles.map(file => uploadToCloudinary(file.path));
+
+    const [newThumbnail, newBanner, newAuthorPic, newVideo, ...newContentImageUrls] =
+      await Promise.all([...uploadPromises, ...contentImagesPromises]);
 
     let updateData = { ...req.body };
+
+    if (req.body.mainContent || req.body.content) {
+      updateData.mainContent = req.body.mainContent || req.body.content;
+    }
+
+    if (newContentImageUrls.length > 0) {
+      updateData.contentImages = [
+        ...(currentArticle.contentImages || []),
+        ...newContentImageUrls
+      ];
+    }
 
     if (newThumbnail) {
       updateData.thumbnail = newThumbnail;
@@ -553,6 +572,41 @@ exports.getAllArticles = async (req, res) => {
       success: false,
       message: "Failed to fetch articles",
       error: error.message,
+    });
+  }
+};
+
+exports.uploadEditorImage = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Admins only",
+      });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select an image to upload",
+      });
+    }
+
+    const imageUrl = await uploadToCloudinary(file.path);
+
+    return res.status(200).json({
+      success: true,
+      message: "Image uploaded successfully",
+      url: imageUrl,
+      location: imageUrl,
+      link: imageUrl,
+    });
+  } catch (error) {
+    console.error("Editor Image Upload Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to upload image",
     });
   }
 };

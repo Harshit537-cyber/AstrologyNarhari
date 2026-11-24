@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const transactionSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     razorpay_order_id: { type: String, sparse: true }, 
+    razorpay_payment_link_id: { type: String, sparse: true },
     razorpay_payment_id: { type: String },
     pandit: { type: mongoose.Schema.Types.ObjectId, ref: 'Pandit' }, 
     amount: { type: Number, required: true },
@@ -18,6 +19,13 @@ transactionSchema.index(
     {
         unique: true,
         partialFilterExpression: { razorpay_payment_id: { $type: 'string', $gt: '' } }
+    }
+);
+
+transactionSchema.index(
+    { razorpay_payment_link_id: 1 },
+    {
+        sparse: true
     }
 );
 

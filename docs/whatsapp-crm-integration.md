@@ -39,6 +39,29 @@ X-Backend-Api-Key: <BACKEND_API_KEY>
 
 The first returns one booking; the second returns up to 50 bookings for that phone, newest first. Booking data includes `status`, `payment_status`, `date`, `time`, `astrologer`, `service`, and `amount`.
 
+### CRM Payment Links
+
+```http
+POST https://api.namahastro.com/api/crm/payment-links
+X-Backend-Api-Key: <BACKEND_API_KEY>
+Content-Type: application/json
+
+{
+  "phone": "919876543210",
+  "amount": 500
+}
+```
+
+Returns `{ success: true, url: "https://rzp.io/i/xxxxxx", payment_link_id: "plink_xxxx", amount: 500 }`.
+When paid by the user, the Razorpay webhook automatically credits the user's wallet balance and emits `wallet.recharged` to the CRM.
+
+### Razorpay Webhook Configuration for Payment Links
+
+In the Razorpay Dashboard (Settings -> Webhooks):
+- **URL**: `https://api.namahastro.com/api/crm/webhooks/razorpay`
+- **Active Events**: `payment_link.paid`
+- **Secret**: Configure in backend as `RAZORPAY_WEBHOOK_SECRET`
+
 ### CRM webhook receiver
 
 Configure the CRM with:

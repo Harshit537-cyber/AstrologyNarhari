@@ -35,7 +35,7 @@ app.use(cors());
 app.use(express.json({
     limit: '50mb',
     verify: (req, res, buffer) => {
-        if (req.method === 'POST' && req.path === '/api/crm/webhooks/events') {
+        if (req.method === 'POST' && (req.path.includes('/webhooks/') || req.path.includes('webhook'))) {
             req.rawBody = Buffer.from(buffer);
         }
     }
