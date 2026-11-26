@@ -76,6 +76,7 @@ app.use("/api/tickets", ticketRoutes);
 app.use("/api/palm", require("./routes/palm/palmRoutes"));
 
 app.use("/article", require("./routes/AdminRoutes/blogRoutes"));
+app.use("/", require("./routes/AdminRoutes/blogRoutes"));
 
 app.use("/api/admin", adminAuthRoutes);
 app.use("/api/admin/notifications", adminNotificationRoutes);
