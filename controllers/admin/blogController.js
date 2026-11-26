@@ -54,7 +54,7 @@ exports.renderBlogPage = async (req, res) => {
     console.log("ARTICLE AUTHOR:", article.author);
     console.log("ARTICLE TAGS:", article.tags);
 
-    // Fetch recent blogs for the popup modal
+    // Fetch recent blogs for the sidebar
     const recentBlogs = await Article.find({
       isPublished: true,
       slug: { $ne: slug },
@@ -63,8 +63,6 @@ exports.renderBlogPage = async (req, res) => {
       .limit(6)
       .select("title slug thumbnail bannerImage category readTime publishedDate")
       .lean();
-
-    // Blog HTML render starts here
 
     const html = `
       <!DOCTYPE html>
@@ -80,7 +78,7 @@ exports.renderBlogPage = async (req, res) => {
           content="width=device-width, initial-scale=1.0"
         >
 
-        <title>${article.title || "Blog"}</title>
+        <title>${article.title || "Blog"} - NamahAstro</title>
 
         <link rel="icon" type="image/png" href="${NAMAH_ASTRO_LOGO}">
 
@@ -120,7 +118,7 @@ exports.renderBlogPage = async (req, res) => {
 
         <style>
 
-          * {
+          *, *::before, *::after {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
@@ -133,32 +131,197 @@ exports.renderBlogPage = async (req, res) => {
           }
 
           body {
-            background-color: #f1f4f9;
+            background-color: #f8fafc;
             color: #2d3748;
             font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             line-height: 1.8;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
-            padding: 40px 16px;
           }
 
-          /* Main Unified Frame with Grey Blur Border */
-          .page-wrapper {
-            max-width: 860px;
+          /* Full Width Navbar */
+          .full-navbar {
+            width: 100%;
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+          }
+
+          .nav-container {
+            max-width: 1400px;
             width: 100%;
             margin: 0 auto;
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             box-sizing: border-box;
           }
 
+          .brand-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+          }
+
+          .brand-logo-img {
+            width: 38px;
+            height: 38px;
+            object-fit: contain;
+            display: inline-block;
+          }
+
+          .logo-text {
+            font-size: 22px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.02em;
+          }
+
+          .logo-text span {
+            color: #b48a14;
+          }
+
+          .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+          }
+
+          .nav-link {
+            font-size: 14.5px;
+            font-weight: 600;
+            color: #475569;
+            text-decoration: none;
+            transition: color 0.15s ease;
+          }
+
+          .nav-link:hover, .nav-link.active {
+            color: #b48a14;
+          }
+
+          /* Full Page Frame Container */
+          .full-page-frame {
+            max-width: 1400px;
+            width: 100%;
+            margin: 35px auto 60px;
+            padding: 0 28px;
+            box-sizing: border-box;
+          }
+
+          /* 2-Column Layout: Left Sidebar + Right Main Blog */
+          .blog-grid-layout {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+            width: 100%;
+          }
+
+          /* Left Side: Recent Posts Sidebar */
+          .recent-posts-sidebar {
+            flex: 0 0 340px;
+            width: 340px;
+            box-sizing: border-box;
+          }
+
+          .recent-sidebar-sticky {
+            position: sticky;
+            top: 24px;
+          }
+
+          .recent-heading {
+            color: #d97706;
+            font-size: 21px;
+            font-weight: 700;
+            margin: 0 0 20px 0;
+            letter-spacing: -0.01em;
+          }
+
+          .recent-list {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+          }
+
+          .recent-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.15s ease;
+          }
+
+          .recent-card:hover {
+            transform: translateX(3px);
+          }
+
+          .recent-card-thumb {
+            width: 95px;
+            height: 68px;
+            border-radius: 8px;
+            overflow: hidden;
+            flex-shrink: 0;
+            background: #f1f5f9;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+          }
+
+          .recent-card-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+          }
+
+          .recent-thumb-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fdf8eb;
+            font-size: 22px;
+          }
+
+          .recent-card-body {
+            flex: 1;
+            min-width: 0;
+          }
+
+          .recent-card-title {
+            color: #d97706;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.45;
+            margin: 0;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            transition: color 0.15s ease;
+          }
+
+          .recent-card:hover .recent-card-title {
+            color: #b45309;
+          }
+
+          .no-recent {
+            color: #64748b;
+            font-size: 14px;
+            font-style: italic;
+          }
+
+          /* Right Side: Main Blog Content Card */
           .blog-card {
+            flex: 1;
+            min-width: 0;
             background: #ffffff;
             border-radius: 20px;
-            padding: 50px 45px;
+            padding: 48px 45px;
             border: 1.5px solid #cbd5e1;
-            box-shadow: 0 0 28px 6px rgba(148, 163, 184, 0.45), 0 12px 40px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 0 28px 6px rgba(148, 163, 184, 0.35), 0 10px 30px rgba(0, 0, 0, 0.04);
             overflow: hidden;
-            width: 100%;
-            max-width: 100%;
             box-sizing: border-box;
           }
 
@@ -227,7 +390,7 @@ exports.renderBlogPage = async (req, res) => {
 
           .banner {
             width: 100%;
-            max-height: 480px;
+            max-height: 520px;
             object-fit: cover;
             display: block;
           }
@@ -542,93 +705,58 @@ exports.renderBlogPage = async (req, res) => {
             border: 1px solid #e2e8f0;
           }
 
-          /* Blog Header Navigation */
-          .blog-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 24px;
-            padding: 16px 26px;
-            background: #ffffff;
-            border-radius: 18px;
-            border: 1.5px solid #cbd5e1;
-            box-shadow: 0 0 25px rgba(148, 163, 184, 0.25), 0 4px 15px rgba(0, 0, 0, 0.04);
+          /* Full Width Footer */
+          .full-footer {
             width: 100%;
-            box-sizing: border-box;
-          }
-
-          .brand-logo {
-            display: inline-flex;
-            align-items: center;
-            gap: 9px;
-            font-size: 22px;
-            font-weight: 800;
-            color: #0f172a;
-            text-decoration: none;
-            letter-spacing: -0.02em;
-          }
-
-          .brand-logo .logo-gem {
-            font-size: 22px;
-          }
-
-          .brand-logo .logo-text span {
-            color: #b48a14;
-          }
-
-          .recent-blogs-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            border-radius: 50px;
-            background: #fdf8eb;
-            color: #926f0d;
-            border: 1.5px solid #e9d5a4;
-            font-family: inherit;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s ease;
-          }
-
-          .recent-blogs-btn:hover {
-            background: #b48a14;
-            color: #ffffff;
-            border-color: #b48a14;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 14px rgba(180, 138, 20, 0.28);
-          }
-
-          /* Blog Footer */
-          .blog-footer {
-            margin-top: 35px;
-            padding: 32px 30px 24px;
             background: #ffffff;
-            border-radius: 20px;
-            border: 1.5px solid #cbd5e1;
-            box-shadow: 0 0 25px rgba(148, 163, 184, 0.2), 0 4px 15px rgba(0, 0, 0, 0.03);
+            border-top: 1px solid #e2e8f0;
+            padding: 38px 28px 30px;
+            box-sizing: border-box;
+            margin-top: 60px;
+          }
+
+          .footer-container {
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
             text-align: center;
-            width: 100%;
-            box-sizing: border-box;
           }
 
-          .footer-logo {
-            font-size: 20px;
+          .footer-logo-wrapper {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 8px;
+          }
+
+          .footer-logo-img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+            display: inline-block;
+          }
+
+          .footer-logo-text {
+            font-size: 21px;
             font-weight: 800;
             color: #0f172a;
+          }
+
+          .footer-logo-text span {
+            color: #b48a14;
           }
 
           .footer-tagline {
             font-size: 14px;
             color: #64748b;
-            margin-top: 6px;
+            margin-top: 4px;
           }
 
           .footer-divider {
             height: 1px;
             background: #e2e8f0;
-            margin: 22px 0 18px;
+            margin: 24px 0 20px;
           }
 
           .footer-bottom {
@@ -662,256 +790,48 @@ exports.renderBlogPage = async (req, res) => {
             color: #cbd5e1;
           }
 
-          /* Recent Blogs Popup Modal */
-          .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(15, 23, 42, 0.55);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 99999;
-            padding: 20px;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.25s ease, visibility 0.25s ease;
-          }
-
-          .modal-overlay.is-open {
-            opacity: 1;
-            visibility: visible;
-          }
-
-          .modal-container {
-            background: #ffffff;
-            border-radius: 22px;
-            max-width: 600px;
-            width: 100%;
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 25px 60px rgba(15, 23, 42, 0.25), 0 0 35px rgba(148, 163, 184, 0.3);
-            border: 1.5px solid #cbd5e1;
-            transform: scale(0.95);
-            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            overflow: hidden;
-          }
-
-          .modal-overlay.is-open .modal-container {
-            transform: scale(1);
-          }
-
-          .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px 24px;
-            border-bottom: 1px solid #f1f5f9;
-            background: #f8fafc;
-          }
-
-          .modal-title-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-          }
-
-          .modal-title {
-            font-size: 20px;
-            font-weight: 800;
-            color: #0f172a;
-            margin: 0;
-          }
-
-          .modal-close-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border: 1px solid #e2e8f0;
-            background: #ffffff;
-            color: #64748b;
-            font-size: 16px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.15s ease;
-          }
-
-          .modal-close-btn:hover {
-            background: #f1f5f9;
-            color: #0f172a;
-            transform: rotate(90deg);
-          }
-
-          .modal-body {
-            padding: 18px 22px;
-            overflow-y: auto;
-            max-height: calc(85vh - 78px);
-          }
-
-          .recent-blogs-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-          }
-
-          .recent-blog-item {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 14px 16px;
-            border-radius: 14px;
-            border: 1px solid #e2e8f0;
-            background: #ffffff;
-            text-decoration: none;
-            color: inherit;
-            transition: all 0.2s ease;
-          }
-
-          .recent-blog-item:hover {
-            transform: translateY(-2px);
-            border-color: #cbd5e1;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-            background: #fdfbf7;
-          }
-
-          .item-thumb-wrapper {
-            width: 84px;
-            height: 68px;
-            border-radius: 10px;
-            overflow: hidden;
-            flex-shrink: 0;
-            background: #f1f5f9;
-          }
-
-          .item-thumb {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-          }
-
-          .item-thumb-placeholder {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            background: #f8fafc;
-          }
-
-          .item-info {
-            flex: 1;
-            min-width: 0;
-          }
-
-          .item-meta {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 12px;
-            margin-bottom: 5px;
-          }
-
-          .item-category {
-            font-weight: 700;
-            color: #b48a14;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-          }
-
-          .item-read-time {
-            color: #64748b;
-          }
-
-          .item-title {
-            font-size: 15.5px;
-            font-weight: 700;
-            color: #0f172a;
-            line-height: 1.35;
-            margin: 0 0 4px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-          }
-
-          .item-date {
-            font-size: 12px;
-            color: #94a3b8;
-          }
-
-          .no-recent-blogs {
-            text-align: center;
-            padding: 30px;
-            color: #64748b;
-          }
-
-          @media (max-width: 768px) {
-            body {
-              padding: 16px 8px;
-            }
-
-            .blog-header {
-              padding: 12px 16px;
-              margin-bottom: 18px;
-            }
-
-            .brand-logo {
-              font-size: 19px;
-            }
-
-            .recent-blogs-btn {
-              padding: 8px 14px;
-              font-size: 13px;
-            }
-
-            .blog-footer {
-              padding: 24px 18px 20px;
-              margin-top: 25px;
-            }
-
-            .footer-bottom {
+          /* Responsive Breakpoints */
+          @media (max-width: 992px) {
+            .blog-grid-layout {
               flex-direction: column;
-              text-align: center;
-              gap: 8px;
+              gap: 30px;
             }
 
-            .modal-container {
-              max-height: 90vh;
-              border-radius: 18px;
+            .recent-posts-sidebar {
+              width: 100%;
+              flex: auto;
+              order: 2;
+              margin-top: 20px;
             }
 
-            .modal-header {
-              padding: 16px 18px;
-            }
-
-            .modal-body {
-              padding: 14px 14px;
-            }
-
-            .item-thumb-wrapper {
-              width: 70px;
-              height: 58px;
-            }
-
-            .item-title {
-              font-size: 14px;
+            .recent-sidebar-sticky {
+              position: static;
             }
 
             .blog-card {
-              padding: 26px 16px;
-              border-radius: 18px;
-              border: 1px solid #cbd5e1;
-              box-shadow: 0 0 20px rgba(100, 116, 139, 0.2);
+              order: 1;
+              width: 100%;
+              padding: 30px 22px;
+            }
+
+            .full-page-frame {
+              margin: 20px auto 40px;
+              padding: 0 16px;
+            }
+          }
+
+          @media (max-width: 768px) {
+            .nav-container {
+              padding: 14px 18px;
+            }
+
+            .logo-text {
+              font-size: 19px;
+            }
+
+            .brand-logo-img {
+              width: 32px;
+              height: 32px;
             }
 
             h1.blog-title {
@@ -936,6 +856,16 @@ exports.renderBlogPage = async (req, res) => {
               padding: 20px 18px;
               font-size: 17px;
             }
+
+            .full-footer {
+              padding: 28px 18px 24px;
+            }
+
+            .footer-bottom {
+              flex-direction: column;
+              text-align: center;
+              gap: 8px;
+            }
           }
 
         </style>
@@ -944,237 +874,283 @@ exports.renderBlogPage = async (req, res) => {
 
       <body>
 
-        <div class="page-wrapper">
-          <!-- Top Header Navigation -->
-          <header class="blog-header">
+        <!-- Full Width Top Navbar -->
+        <header class="full-navbar">
+          <div class="nav-container">
             <a href="/" class="brand-logo" title="NamahAstro">
               <img src="${NAMAH_ASTRO_LOGO}" alt="NamahAstro Logo" class="brand-logo-img" />
               <span class="logo-text">Namah<span>Astro</span></span>
             </a>
 
-            <button type="button" class="recent-blogs-btn" id="openRecentModalBtn" aria-label="Open Recent Blogs">
-              <span class="btn-icon">📚</span>
-              <span>Recent Blogs</span>
-            </button>
-          </header>
+            <nav class="nav-links">
+              <a href="/" class="nav-link">Home</a>
+              <a href="/article/blog/${article.slug}" class="nav-link active">Articles</a>
+            </nav>
+          </div>
+        </header>
 
-          <main class="blog-card">
+        <!-- Full Page Frame Container -->
+        <div class="full-page-frame">
+          <div class="blog-grid-layout">
 
-            ${
-              article.category
-                ? `
-                  <div class="blog-category">
-                    ${article.category}
-                  </div>
-                `
-                : ""
-            }
+            <!-- Left Side: Recent Posts Sidebar -->
+            <aside class="recent-posts-sidebar">
+              <div class="recent-sidebar-sticky">
+                <h3 class="recent-heading">Recent Post:</h3>
 
-            <h1 class="blog-title">
-              ${article.title || ""}
-            </h1>
+                ${
+                  recentBlogs && recentBlogs.length > 0
+                    ? `
+                      <div class="recent-list">
+                        ${recentBlogs
+                          .map(
+                            (item) => `
+                              <a href="/article/blog/${item.slug}" class="recent-card">
+                                <div class="recent-card-thumb">
+                                  ${
+                                    item.thumbnail || item.bannerImage
+                                      ? `<img src="${item.thumbnail || item.bannerImage}" alt="${item.title || "Blog"}" />`
+                                      : `<div class="recent-thumb-fallback">📖</div>`
+                                  }
+                                </div>
+                                <div class="recent-card-body">
+                                  <h4 class="recent-card-title">${item.title || "Untitled Article"}</h4>
+                                </div>
+                              </a>
+                            `,
+                          )
+                          .join("")}
+                      </div>
+                    `
+                    : `
+                      <p class="no-recent">No recent posts available.</p>
+                    `
+                }
+              </div>
+            </aside>
 
-            ${
-              article.subtitle
-                ? `
-                  <div class="subtitle">
-                    ${article.subtitle}
-                  </div>
-                `
-                : ""
-            }
-
-            <div class="meta">
+            <!-- Right Side: Main Blog Content Card -->
+            <main class="blog-card">
 
               ${
-                article.author?.name
-                  ? `<span>✍ ${article.author.name}</span>`
-                  : ""
-              }
-
-              ${article.readTime ? `<span>⏱ ${article.readTime}</span>` : ""}
-
-              ${
-                article.publishedDate
+                article.category
                   ? `
-                    <span>
-                      📅 ${new Date(article.publishedDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                    </span>
+                    <div class="blog-category">
+                      ${article.category}
+                    </div>
                   `
                   : ""
               }
 
-            </div>
+              <h1 class="blog-title">
+                ${article.title || ""}
+              </h1>
 
-            ${
-              article.bannerImage || article.thumbnail
-                ? `
-                  <div class="banner-wrapper">
-                    <img
-                      class="banner"
-                      src="${article.bannerImage || article.thumbnail}"
-                      alt="${article.title || "Blog"}"
-                    />
-                  </div>
-                `
-                : ""
-            }
+              ${
+                article.subtitle
+                  ? `
+                    <div class="subtitle">
+                      ${article.subtitle}
+                    </div>
+                  `
+                  : ""
+              }
 
-            ${
-              article.summary
-                ? `
-                  <section class="summary">
+              <div class="meta">
 
-                    <h2>
-                      Overview
-                    </h2>
+                ${
+                  article.author?.name
+                    ? `<span>✍ ${article.author.name}</span>`
+                    : ""
+                }
 
-                    <p>
-                      ${article.summary}
-                    </p>
+                ${article.readTime ? `<span>⏱ ${article.readTime}</span>` : ""}
 
-                  </section>
-                `
-                : ""
-            }
+                ${
+                  article.publishedDate
+                    ? `
+                      <span>
+                        📅 ${new Date(article.publishedDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                      </span>
+                    `
+                    : ""
+                }
 
-            ${
-              article.author
-                ? `
-                  <div class="author">
+              </div>
 
-                    ${
-                      article.author.profilePic
-                        ? `
-                          <img
-                            src="${article.author.profilePic}"
-                            alt="${article.author.name || "Author"}"
-                          />
-                        `
-                        : ""
-                    }
+              ${
+                article.bannerImage || article.thumbnail
+                  ? `
+                    <div class="banner-wrapper">
+                      <img
+                        class="banner"
+                        src="${article.bannerImage || article.thumbnail}"
+                        alt="${article.title || "Blog"}"
+                      />
+                    </div>
+                  `
+                  : ""
+              }
 
-                    <div>
+              ${
+                article.summary
+                  ? `
+                    <section class="summary">
 
-                      <div class="author-name">
-                        ${article.author.name || ""}
-                      </div>
+                      <h2>
+                        Overview
+                      </h2>
 
-                      <div class="author-designation">
-                        ${article.author.designation || ""}
+                      <p>
+                        ${article.summary}
+                      </p>
+
+                    </section>
+                  `
+                  : ""
+              }
+
+              ${
+                article.author
+                  ? `
+                    <div class="author">
+
+                      ${
+                        article.author.profilePic
+                          ? `
+                            <img
+                              src="${article.author.profilePic}"
+                              alt="${article.author.name || "Author"}"
+                            />
+                          `
+                          : ""
+                      }
+
+                      <div>
+
+                        <div class="author-name">
+                          ${article.author.name || ""}
+                        </div>
+
+                        <div class="author-designation">
+                          ${article.author.designation || ""}
+                        </div>
+
                       </div>
 
                     </div>
+                  `
+                  : ""
+              }
 
-                  </div>
-                `
-                : ""
-            }
+              ${
+                article.mainContent
+                  ? `
+                    <section class="section">
 
-            ${
-              article.mainContent
-                ? `
-                  <section class="section">
+                      <h2 class="section-title">
+                        Article
+                      </h2>
 
-                    <h2 class="section-title">
-                      Article
-                    </h2>
+                      <div class="content">
+                        ${article.mainContent}
+                      </div>
 
-                    <div class="content">
-                      ${article.mainContent}
-                    </div>
+                    </section>
+                  `
+                  : ""
+              }
 
-                  </section>
-                `
-                : ""
-            }
+              ${
+                article.keyTakeaways?.length
+                  ? `
+                    <section class="section">
 
-            ${
-              article.keyTakeaways?.length
-                ? `
-                  <section class="section">
+                      <h2 class="section-title">
+                        Key Takeaways
+                      </h2>
 
-                    <h2 class="section-title">
-                      Key Takeaways
-                    </h2>
-
-                    ${article.keyTakeaways
-                      .map(
-                        (item, index) => `
-                          <div class="takeaway">
-
-                            <div class="takeaway-number">
-                              ${index + 1}
-                            </div>
-
-                            <div class="takeaway-text">
-                              ${item.point || ""}
-                            </div>
-
-                          </div>
-                        `,
-                      )
-                      .join("")}
-
-                  </section>
-                `
-                : ""
-            }
-
-            ${
-              article.quote?.text
-                ? `
-                  <div class="quote">
-
-                    "${article.quote.text}"
-
-                    ${
-                      article.quote.author
-                        ? `
-                          <span class="quote-author">
-                            — ${article.quote.author}
-                          </span>
-                        `
-                        : ""
-                    }
-
-                  </div>
-                `
-                : ""
-            }
-
-            ${
-              article.tags?.length
-                ? `
-                  <section class="section">
-
-                    <h2 class="section-title">
-                      Tags
-                    </h2>
-
-                    <div class="tags">
-
-                      ${article.tags
+                      ${article.keyTakeaways
                         .map(
-                          (tag) => `
-                            <span class="tag">
-                              ${tag}
-                            </span>
+                          (item, index) => `
+                            <div class="takeaway">
+
+                              <div class="takeaway-number">
+                                ${index + 1}
+                              </div>
+
+                              <div class="takeaway-text">
+                                ${item.point || ""}
+                              </div>
+
+                            </div>
                           `,
                         )
                         .join("")}
 
+                    </section>
+                  `
+                  : ""
+              }
+
+              ${
+                article.quote?.text
+                  ? `
+                    <div class="quote">
+
+                      "${article.quote.text}"
+
+                      ${
+                        article.quote.author
+                          ? `
+                            <span class="quote-author">
+                              — ${article.quote.author}
+                            </span>
+                          `
+                          : ""
+                      }
+
                     </div>
+                  `
+                  : ""
+              }
 
-                  </section>
-                `
-                : ""
-            }
+              ${
+                article.tags?.length
+                  ? `
+                    <section class="section">
 
-          </main>
+                      <h2 class="section-title">
+                        Tags
+                      </h2>
 
-          <!-- Bottom Footer -->
-          <footer class="blog-footer">
+                      <div class="tags">
+
+                        ${article.tags
+                          .map(
+                            (tag) => `
+                              <span class="tag">
+                                ${tag}
+                              </span>
+                            `,
+                          )
+                          .join("")}
+
+                      </div>
+
+                    </section>
+                  `
+                  : ""
+              }
+
+            </main>
+
+          </div>
+        </div>
+
+        <!-- Full Width Footer -->
+        <footer class="full-footer">
+          <div class="footer-container">
             <div class="footer-brand">
               <div class="footer-logo-wrapper">
                 <img src="${NAMAH_ASTRO_LOGO}" alt="NamahAstro Logo" class="footer-logo-img" />
@@ -1195,102 +1171,8 @@ exports.renderBlogPage = async (req, res) => {
                 <a href="#">Contact Us</a>
               </div>
             </div>
-          </footer>
-        </div>
-
-        <!-- Recent Blogs Popup Modal -->
-        <div class="modal-overlay" id="recentBlogsModal" aria-hidden="true">
-          <div class="modal-container">
-            <div class="modal-header">
-              <div class="modal-title-wrapper">
-                <span class="modal-icon">📚</span>
-                <h3 class="modal-title">Recent Blogs</h3>
-              </div>
-              <button type="button" class="modal-close-btn" id="closeRecentModalBtn" aria-label="Close modal">✕</button>
-            </div>
-
-            <div class="modal-body">
-              ${
-                recentBlogs && recentBlogs.length > 0
-                  ? `
-                    <div class="recent-blogs-list">
-                      ${recentBlogs
-                        .map(
-                          (item) => `
-                            <a href="/article/blog/${item.slug}" class="recent-blog-item">
-                              <div class="item-thumb-wrapper">
-                                ${
-                                  item.thumbnail || item.bannerImage
-                                    ? `<img src="${item.thumbnail || item.bannerImage}" alt="${item.title || "Blog"}" class="item-thumb" />`
-                                    : `<div class="item-thumb-placeholder">📖</div>`
-                                }
-                              </div>
-                              <div class="item-info">
-                                <div class="item-meta">
-                                  ${item.category ? `<span class="item-category">${item.category}</span>` : ""}
-                                  ${item.readTime ? `<span class="item-read-time">⏱ ${item.readTime}</span>` : ""}
-                                </div>
-                                <h4 class="item-title">${item.title || "Untitled Article"}</h4>
-                                ${
-                                  item.publishedDate
-                                    ? `<span class="item-date">📅 ${new Date(item.publishedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>`
-                                    : ""
-                                }
-                              </div>
-                            </a>
-                          `,
-                        )
-                        .join("")}
-                    </div>
-                  `
-                  : `
-                    <div class="no-recent-blogs">
-                      <p>No other articles available right now.</p>
-                    </div>
-                  `
-              }
-            </div>
           </div>
-        </div>
-
-        <script>
-          (function() {
-            const modal = document.getElementById('recentBlogsModal');
-            const openBtn = document.getElementById('openRecentModalBtn');
-            const closeBtn = document.getElementById('closeRecentModalBtn');
-
-            function openModal() {
-              if (modal) {
-                modal.classList.add('is-open');
-                document.body.style.overflow = 'hidden';
-              }
-            }
-
-            function closeModal() {
-              if (modal) {
-                modal.classList.remove('is-open');
-                document.body.style.overflow = '';
-              }
-            }
-
-            if (openBtn) openBtn.addEventListener('click', openModal);
-            if (closeBtn) closeBtn.addEventListener('click', closeModal);
-
-            if (modal) {
-              modal.addEventListener('click', function(e) {
-                if (e.target === modal) {
-                  closeModal();
-                }
-              });
-            }
-
-            document.addEventListener('keydown', function(e) {
-              if (e.key === 'Escape' && modal && modal.classList.contains('is-open')) {
-                closeModal();
-              }
-            });
-          })();
-        </script>
+        </footer>
 
       </body>
 
