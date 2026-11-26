@@ -52,38 +52,7 @@ exports.renderBlogPage = async (req, res) => {
     console.log("ARTICLE AUTHOR:", article.author);
     console.log("ARTICLE TAGS:", article.tags);
 
-    // 👇 YOUR EXISTING HTML CODE STARTS HERE
-
-    if (!article) {
-      return res.status(404).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Blog Not Found</title>
-          <meta charset="UTF-8">
-        </head>
-
-        <body style="
-          margin:0;
-          padding:0;
-          font-family:Arial,sans-serif;
-          background:#fafafa;
-          color:#1a1a1a;
-          display:flex;
-          justify-content:center;
-          align-items:center;
-          min-height:100vh;
-        ">
-
-          <div style="text-align:center;">
-            <h1>Blog Not Found</h1>
-            <p>The article you are looking for does not exist.</p>
-          </div>
-
-        </body>
-        </html>
-      `);
-    }
+    // Blog HTML render starts here
 
     const html = `
       <!DOCTYPE html>
@@ -143,27 +112,40 @@ exports.renderBlogPage = async (req, res) => {
             padding: 0;
           }
 
+          html, body {
+            width: 100%;
+            min-height: 100%;
+            overflow-x: hidden;
+          }
+
           body {
-            background-color: #f7f8fa;
+            background-color: #f1f4f9;
             color: #2d3748;
             font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             line-height: 1.8;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            padding: 40px 16px;
           }
 
+          /* Main Unified Frame with Grey Blur Border */
           .page-wrapper {
             max-width: 860px;
-            margin: 40px auto 80px;
-            padding: 0 20px;
+            width: 100%;
+            margin: 0 auto;
+            box-sizing: border-box;
           }
 
           .blog-card {
             background: #ffffff;
-            border-radius: 24px;
-            padding: 50px 48px;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
-            border: 1px solid #edf0f5;
+            border-radius: 20px;
+            padding: 50px 45px;
+            border: 1.5px solid #cbd5e1;
+            box-shadow: 0 0 28px 6px rgba(148, 163, 184, 0.45), 0 12px 40px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
           }
 
           .blog-category {
@@ -177,38 +159,42 @@ exports.renderBlogPage = async (req, res) => {
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 22px;
+            margin-bottom: 20px;
             border: 1px solid #f4e8cb;
           }
 
           h1.blog-title {
-            font-size: 42px;
-            line-height: 1.28;
+            font-size: 38px;
+            line-height: 1.3;
             font-weight: 800;
             margin: 0 0 16px;
-            color: #111827;
+            color: #0f172a;
             letter-spacing: -0.02em;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
           }
 
           .subtitle {
-            font-size: 20px;
-            color: #4b5563;
+            font-size: 19px;
+            color: #475569;
             line-height: 1.6;
-            margin-bottom: 25px;
+            margin-bottom: 24px;
             font-weight: 400;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
           }
 
           .meta {
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 18px;
             flex-wrap: wrap;
-            color: #6b7280;
+            color: #64748b;
             font-size: 14px;
             font-weight: 500;
-            padding-bottom: 25px;
-            margin-bottom: 30px;
-            border-bottom: 1px solid #f1f3f7;
+            padding-bottom: 24px;
+            margin-bottom: 28px;
+            border-bottom: 1px solid #f1f5f9;
           }
 
           .meta span {
@@ -218,104 +204,120 @@ exports.renderBlogPage = async (req, res) => {
           }
 
           .banner-wrapper {
-            margin-bottom: 40px;
+            margin-bottom: 35px;
             overflow: hidden;
-            border-radius: 18px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+            border-radius: 16px;
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.06);
+            width: 100%;
           }
 
           .banner {
             width: 100%;
-            max-height: 500px;
+            max-height: 480px;
             object-fit: cover;
             display: block;
           }
 
           .summary {
-            padding: 28px 32px;
+            padding: 24px 28px;
             border-left: 4px solid #b48a14;
             background: #fdfbf7;
-            border-radius: 0 16px 16px 0;
-            margin-bottom: 40px;
+            border-radius: 0 14px 14px 0;
+            margin-bottom: 35px;
             border-top: 1px solid #f8f1e1;
             border-right: 1px solid #f8f1e1;
             border-bottom: 1px solid #f8f1e1;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
           }
 
           .summary h2 {
             color: #b48a14;
-            font-size: 20px;
+            font-size: 19px;
             font-weight: 700;
             margin-top: 0;
-            margin-bottom: 10px;
-            letter-spacing: -0.01em;
+            margin-bottom: 8px;
           }
 
           .summary p {
-            color: #4a5568;
-            font-size: 16px;
-            line-height: 1.75;
+            color: #475569;
+            font-size: 15.5px;
+            line-height: 1.7;
             margin: 0;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
           }
 
           .author {
             display: flex;
             align-items: center;
             gap: 16px;
-            padding: 20px 24px;
-            background: #fbfcfe;
-            border: 1px solid #eef1f6;
-            border-radius: 16px;
-            margin: 35px 0 45px;
+            padding: 18px 22px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            margin: 30px 0 40px;
           }
 
           .author img {
-            width: 56px;
-            height: 56px;
+            width: 54px;
+            height: 54px;
             border-radius: 50%;
             object-fit: cover;
             border: 2px solid #fdf8eb;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            flex-shrink: 0;
           }
 
           .author-name {
             font-weight: 700;
-            color: #111827;
-            font-size: 16px;
-            margin-bottom: 3px;
+            color: #0f172a;
+            font-size: 15.5px;
+            margin-bottom: 2px;
           }
 
           .author-designation {
-            color: #6b7280;
-            font-size: 14px;
+            color: #64748b;
+            font-size: 13.5px;
           }
 
           .section {
-            margin-top: 45px;
+            margin-top: 40px;
+            width: 100%;
           }
 
           .section-title {
-            color: #111827;
-            font-size: 24px;
+            color: #0f172a;
+            font-size: 22px;
             font-weight: 800;
-            letter-spacing: -0.01em;
-            margin-bottom: 22px;
-            position: relative;
-            padding-bottom: 10px;
+            margin-bottom: 20px;
+            padding-bottom: 8px;
             border-bottom: 2px solid #f4e8cb;
           }
 
-          /* Modern Rich-Text Content Styles */
+          /* STRICT CONTENT CONTAINMENT (Nothing goes outside the frame) */
           .content {
-            font-size: 17.5px;
-            color: #374151;
+            width: 100% !important;
+            max-width: 100% !important;
+            font-size: 17px;
+            color: #334155;
             line-height: 1.85;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
+            box-sizing: border-box !important;
+            word-wrap: break-word !important;
+            overflow-wrap: anywhere !important;
+          }
+
+          .content * {
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            word-wrap: break-word !important;
+            overflow-wrap: anywhere !important;
           }
 
           .content p {
-            margin: 0 0 20px 0;
+            margin: 0 0 18px 0;
+            word-wrap: break-word !important;
+            overflow-wrap: anywhere !important;
           }
 
           .content h1,
@@ -324,47 +326,97 @@ exports.renderBlogPage = async (req, res) => {
           .content h4,
           .content h5,
           .content h6 {
-            color: #111827;
+            color: #0f172a;
             font-weight: 700;
             line-height: 1.35;
-            margin: 36px 0 16px 0;
-            letter-spacing: -0.01em;
+            margin: 30px 0 14px 0;
+            word-wrap: break-word !important;
+            overflow-wrap: anywhere !important;
           }
 
-          .content h1 { font-size: 30px; }
-          .content h2 { font-size: 25px; color: #926f0d; border-bottom: 1px solid #f3e9d2; padding-bottom: 8px; }
-          .content h3 { font-size: 21px; color: #1f2937; }
-          .content h4 { font-size: 18px; }
+          .content h1 { font-size: 28px; }
+          .content h2 { font-size: 23px; color: #926f0d; border-bottom: 1px solid #f3e9d2; padding-bottom: 6px; }
+          .content h3 { font-size: 20px; color: #1e293b; }
+          .content h4 { font-size: 17px; }
 
           .content img {
-            display: block;
-            max-width: 100%;
-            height: auto;
-            border-radius: 14px;
-            margin: 32px auto;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.07);
+            display: block !important;
+            max-width: 100% !important;
+            width: auto !important;
+            height: auto !important;
+            border-radius: 12px;
+            margin: 26px auto !important;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+            object-fit: contain !important;
+            float: none !important;
+            clear: both !important;
+          }
+
+          .content figure {
+            max-width: 100% !important;
+            margin: 26px auto !important;
+            text-align: center !important;
+            clear: both !important;
+          }
+
+          .content figcaption {
+            font-size: 13.5px;
+            color: #64748b;
+            margin-top: 8px;
+            font-style: italic;
+          }
+
+          .content iframe, 
+          .content video, 
+          .content embed {
+            max-width: 100% !important;
+            width: 100% !important;
+            aspect-ratio: 16 / 9;
+            height: auto !important;
+            border-radius: 12px;
+            margin: 22px auto !important;
+            display: block !important;
+          }
+
+          .content table {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            border-collapse: collapse;
+            margin: 22px 0 !important;
+          }
+
+          .content table * {
+            max-width: none !important;
+          }
+
+          .content th, .content td {
+            padding: 10px 14px;
+            border: 1px solid #e2e8f0;
           }
 
           .content ul,
           .content ol {
-            margin: 18px 0 24px 22px;
+            margin: 16px 0 22px 20px;
             padding-left: 10px;
           }
 
           .content li {
-            margin-bottom: 10px;
-            line-height: 1.75;
+            margin-bottom: 8px;
+            line-height: 1.7;
           }
 
           .content blockquote {
-            margin: 30px 0;
-            padding: 20px 26px;
+            margin: 26px 0;
+            padding: 18px 22px;
             background: #fffcf4;
             border-left: 4px solid #b48a14;
-            border-radius: 0 14px 14px 0;
+            border-radius: 0 12px 12px 0;
             font-style: italic;
-            color: #4b5563;
-            font-size: 18px;
+            color: #475569;
+            font-size: 17px;
             border-top: 1px solid #fbf4e3;
             border-right: 1px solid #fbf4e3;
             border-bottom: 1px solid #fbf4e3;
@@ -375,38 +427,43 @@ exports.renderBlogPage = async (req, res) => {
             text-decoration: underline;
             text-underline-offset: 3px;
             font-weight: 600;
-            transition: color 0.15s ease;
+            word-break: break-all;
           }
 
-          .content a:hover {
-            color: #876508;
+          .content pre,
+          .content code {
+            white-space: pre-wrap !important;
+            word-break: break-all !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+            background: #f1f5f9;
+            border-radius: 6px;
           }
 
-          .content strong, .content b {
-            color: #111827;
-            font-weight: 700;
+          .content pre {
+            padding: 14px 18px;
+            margin: 18px 0;
+          }
+
+          .content code {
+            padding: 2px 6px;
+            font-size: 0.9em;
           }
 
           .takeaway {
             display: flex;
             align-items: flex-start;
-            gap: 16px;
-            padding: 18px 22px;
-            background: #fbfcfe;
-            border: 1px solid #eef1f6;
-            border-radius: 14px;
-            margin-bottom: 14px;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-          }
-
-          .takeaway:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            gap: 14px;
+            padding: 16px 20px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            margin-bottom: 12px;
           }
 
           .takeaway-number {
-            width: 32px;
-            height: 32px;
+            width: 30px;
+            height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -414,110 +471,96 @@ exports.renderBlogPage = async (req, res) => {
             background: #b48a14;
             color: #ffffff;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 13.5px;
             flex-shrink: 0;
-            box-shadow: 0 2px 6px rgba(180, 138, 20, 0.3);
+            box-shadow: 0 2px 6px rgba(180, 138, 20, 0.25);
           }
 
           .takeaway-text {
-            color: #374151;
-            font-size: 16px;
-            line-height: 1.65;
+            color: #334155;
+            font-size: 15.5px;
+            line-height: 1.6;
             padding-top: 3px;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
           }
 
           .quote {
-            margin: 45px 0;
-            padding: 32px 36px;
+            margin: 40px 0;
+            padding: 28px 30px;
             background: #fffcf4;
-            border-radius: 18px;
+            border-radius: 16px;
             border-left: 5px solid #b48a14;
-            font-size: 21px;
+            font-size: 19px;
             line-height: 1.6;
             font-style: italic;
-            color: #1f2937;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+            color: #1e293b;
             border-top: 1px solid #f8f1df;
             border-right: 1px solid #f8f1df;
             border-bottom: 1px solid #f8f1df;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
           }
 
           .quote-author {
             display: block;
-            margin-top: 14px;
+            margin-top: 12px;
             color: #b48a14;
-            font-size: 15px;
+            font-size: 14.5px;
             font-style: normal;
             font-weight: 600;
           }
 
           .tags {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
-            margin-top: 12px;
+            margin-top: 10px;
           }
 
           .tag {
-            padding: 7px 16px;
+            padding: 6px 14px;
             border-radius: 50px;
-            background: #f4f5f8;
-            color: #4b5563;
-            font-size: 13.5px;
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 13px;
             font-weight: 500;
-            border: 1px solid #e5e8ee;
-            transition: all 0.15s ease;
-          }
-
-          .tag:hover {
-            background: #eceef3;
-            color: #111827;
+            border: 1px solid #e2e8f0;
           }
 
           @media (max-width: 768px) {
-            .page-wrapper {
-              margin: 15px auto 40px;
-              padding: 0 12px;
+            body {
+              padding: 16px 8px;
             }
 
             .blog-card {
-              padding: 30px 20px;
+              padding: 26px 16px;
               border-radius: 18px;
+              border: 1px solid #cbd5e1;
+              box-shadow: 0 0 20px rgba(100, 116, 139, 0.2);
             }
 
             h1.blog-title {
-              font-size: 28px;
+              font-size: 25px;
               line-height: 1.3;
             }
 
             .subtitle {
-              font-size: 17px;
-              margin-bottom: 20px;
-            }
-
-            .meta {
-              gap: 14px;
-              font-size: 13px;
-              margin-bottom: 24px;
-              padding-bottom: 18px;
+              font-size: 16px;
+              margin-bottom: 18px;
             }
 
             .summary {
-              padding: 20px 22px;
+              padding: 18px 18px;
             }
 
             .content {
-              font-size: 16px;
-              line-height: 1.8;
+              font-size: 15.5px;
             }
 
-            .content h1 { font-size: 24px; }
-            .content h2 { font-size: 21px; }
-            .content h3 { font-size: 18px; }
-
             .quote {
-              padding: 24px 22px;
-              font-size: 18px;
+              padding: 20px 18px;
+              font-size: 17px;
             }
           }
 
